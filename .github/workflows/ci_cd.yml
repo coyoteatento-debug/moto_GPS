@@ -1,0 +1,317 @@
+# ══════════════════════════════════════════════════════════════
+# MotoGPS — CI/CD Pipeline
+# ══════════════════════════════════════════════════════════════
+#
+# JOBS:
+#   1. validate   → Analiza código (flutter analyze + test)
+#   2. build_debug  → APK debug en cada push a cualquier rama
+#   3. build_release → APK + AAB firmados solo en push a main/tags
+#
+# ARTEFACTOS GENERADOS:
+#   - app-debug.apk         (build_debug)
+#   - app-release.apk       (build_release)
+#   - app-release.aab       (build_release — para Play Store)
+#
+# SECRETS REQUERIDOS (solo para release):
+#   - KEYSTORE_BASE64        → keystore.jks codificado en base64
+#   - KEYSTORE_PASSWORD      → contraseña del keystore
+#   - KEY_ALIAS              → alias de la clave
+#   - KEY_PASSWORD           → contraseña de la clave
+# ══════════════════════════════════════════════════════════════
+
+name: MotoGPS CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+      - 'fix/**'
+    tags:
+      - 'v*.*.*'          # v1.0.0, v1.2.3, etc.
+  pull_request:
+    branches:
+      - main
+      - develop
+
+# Evita builds duplicados en PRs
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: '3.22.0'
+  JAVA_VERSION: '17'
+
+# ──────────────────────────────────────────────────────────────
+# JOB 1: VALIDACIÓN — Análisis estático + tests
+# Corre en TODOS los eventos (push, PR)
+# ──────────────────────────────────────────────────────────────
+jobs:
+  validate:
+    name: 🔍 Análisis y Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+
+      - name: ☕ Configurar Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: 🐦 Configurar Flutter ${{ env.FLUTTER_VERSION }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true                  # Cachea el SDK entre runs
+
+      - name: 📦 Instalar dependencias
+        run: flutter pub get
+
+      - name: 🔧 Generar código Drift (build_runner)
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: 🔍 Analizar código (flutter analyze)
+        run: flutter analyze --no-fatal-infos
+
+      - name: 🧪 Ejecutar tests unitarios
+        run: flutter test --coverage
+
+      - name: 📊 Subir cobertura (opcional)
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          file: coverage/lcov.info
+          fail_ci_if_error: false      # No falla el build si codecov falla
+
+  # ──────────────────────────────────────────────────────────────
+  # JOB 2: BUILD DEBUG — APK de desarrollo
+  # Corre en push a cualquier rama (excepto PRs)
+  # ──────────────────────────────────────────────────────────────
+  build_debug:
+    name: 🔨 Build APK Debug
+    runs-on: ubuntu-latest
+    needs: validate               # Solo si validate pasó
+    timeout-minutes: 30
+    if: github.event_name == 'push'
+
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+
+      - name: ☕ Configurar Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: 🐦 Configurar Flutter ${{ env.FLUTTER_VERSION }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      # Cachear dependencias de pub para acelerar builds
+      - name: 🗄️ Cachear pub dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            .dart_tool
+          key: pub-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
+          restore-keys: |
+            pub-${{ runner.os }}-
+
+      # Cachear gradle para acelerar compilación Android
+      - name: 🗄️ Cachear Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: 📦 Instalar dependencias
+        run: flutter pub get
+
+      - name: 🔧 Generar código Drift
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: 🏗️ Build APK Debug
+        run: flutter build apk --debug --flavor debug || flutter build apk --debug
+
+      - name: 📤 Subir APK Debug como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-debug-${{ github.sha }}
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 7           # Guardar 7 días
+
+  # ──────────────────────────────────────────────────────────────
+  # JOB 3: BUILD RELEASE — APK + AAB firmados
+  # Solo en push a main O en tags v*.*.*
+  # ──────────────────────────────────────────────────────────────
+  build_release:
+    name: 🚀 Build Release (APK + AAB)
+    runs-on: ubuntu-latest
+    needs: validate
+    timeout-minutes: 45
+    if: |
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+
+      - name: ☕ Configurar Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: 🐦 Configurar Flutter ${{ env.FLUTTER_VERSION }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - name: 🗄️ Cachear pub dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            .dart_tool
+          key: pub-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
+          restore-keys: |
+            pub-${{ runner.os }}-
+
+      - name: 🗄️ Cachear Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: 📦 Instalar dependencias
+        run: flutter pub get
+
+      - name: 🔧 Generar código Drift
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      # ── FIRMA DEL APK ────────────────────────────────────
+      # Decodifica el keystore desde el secret de GitHub
+      - name: 🔑 Decodificar Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/keystore.jks
+          echo "Keystore decodificado: $(ls -lh android/app/keystore.jks)"
+
+      # Crear key.properties para que Gradle lo lea
+      - name: 📝 Crear key.properties
+        run: |
+          cat > android/key.properties << EOF
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          storeFile=keystore.jks
+          EOF
+          echo "key.properties creado."
+
+      # ── BUILD APK RELEASE ────────────────────────────────
+      - name: 🏗️ Build APK Release
+        run: |
+          flutter build apk \
+            --release \
+            --obfuscate \
+            --split-debug-info=build/debug-info \
+            --target-platform android-arm64
+
+      # ── BUILD APP BUNDLE (AAB) — Para Play Store ─────────
+      - name: 🏗️ Build App Bundle Release (AAB)
+        run: |
+          flutter build appbundle \
+            --release \
+            --obfuscate \
+            --split-debug-info=build/debug-info
+
+      # ── OBTENER VERSIÓN ──────────────────────────────────
+      - name: 🏷️ Obtener versión del pubspec
+        id: version
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | sed 's/version: //')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Versión: $VERSION"
+
+      # ── RENOMBRAR ARTEFACTOS CON VERSIÓN ─────────────────
+      - name: 📋 Renombrar artefactos con versión
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          COMMIT="${{ github.sha }}"
+          SHORT_SHA="${COMMIT:0:7}"
+
+          cp build/app/outputs/flutter-apk/app-release.apk \
+             build/app/outputs/flutter-apk/MotoGPS-${VERSION}-${SHORT_SHA}.apk
+
+          cp build/app/outputs/bundle/release/app-release.aab \
+             build/app/outputs/bundle/release/MotoGPS-${VERSION}-${SHORT_SHA}.aab
+
+          echo "APK: MotoGPS-${VERSION}-${SHORT_SHA}.apk"
+          echo "AAB: MotoGPS-${VERSION}-${SHORT_SHA}.aab"
+
+      # ── SUBIR ARTEFACTOS ─────────────────────────────────
+      - name: 📤 Subir APK Release
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-release-${{ steps.version.outputs.version }}
+          path: build/app/outputs/flutter-apk/MotoGPS-*.apk
+          retention-days: 30
+
+      - name: 📤 Subir AAB Release
+        uses: actions/upload-artifact@v4
+        with:
+          name: aab-release-${{ steps.version.outputs.version }}
+          path: build/app/outputs/bundle/release/MotoGPS-*.aab
+          retention-days: 30
+
+      - name: 📤 Subir debug-info (para desobfuscar crashes)
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-info-${{ steps.version.outputs.version }}
+          path: build/debug-info/
+          retention-days: 90          # Guardar más tiempo para análisis de crashes
+
+      # ── CREAR GITHUB RELEASE (solo en tags v*.*.*) ───────
+      - name: 🎉 Crear GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: 'MotoGPS ${{ steps.version.outputs.version }}'
+          draft: false
+          prerelease: false
+          generate_release_notes: true   # Auto-genera notas desde commits
+          files: |
+            build/app/outputs/flutter-apk/MotoGPS-*.apk
+            build/app/outputs/bundle/release/MotoGPS-*.aab
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── LIMPIAR KEYSTORE (seguridad) ─────────────────────
+      - name: 🧹 Limpiar keystore del runner
+        if: always()                  # Siempre limpiar, incluso si falla el build
+        run: |
+          rm -f android/app/keystore.jks
+          rm -f android/key.properties
+          echo "Keystore eliminado del runner."
