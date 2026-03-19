@@ -84,11 +84,16 @@ jobs:
         run: flutter test --coverage
 
       - name: 📊 Subir cobertura (opcional)
-        uses: codecov/codecov-action@v4
-        if: always()
-        with:
-          file: coverage/lcov.info
-          fail_ci_if_error: false      # No falla el build si codecov falla
+  uses: codecov/codecov-action@v4
+  if: false
+  with:
+    file: coverage/lcov.info
+    fail_ci_if_error: false
+```
+
+> Solo cambia `if: always()` por `if: false` — eso deshabilita ese paso completamente.
+
+---
 
   # ──────────────────────────────────────────────────────────────
   # JOB 2: BUILD DEBUG — APK de desarrollo
