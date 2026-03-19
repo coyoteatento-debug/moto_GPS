@@ -42,10 +42,12 @@ void onBackgroundServiceStart(ServiceInstance service) async {
     }
 
     try {
-      final Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.bestForNavigation,
-        timeLimit: const Duration(seconds: 5),
-      );
+     final Position position = await Geolocator.getCurrentPosition(
+  locationSettings: const LocationSettings(
+    accuracy: LocationAccuracy.bestForNavigation,
+    timeLimit: Duration(seconds: 5),
+  ),
+);
 
       final double speedKmh = (position.speed * 3.6).clamp(0.0, 350.0);
 
