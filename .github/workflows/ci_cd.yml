@@ -208,5 +208,3 @@ jobs:
           rm -f android/app/keystore.jks
           rm -f android/key.properties
 ```
-
----
