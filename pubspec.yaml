@@ -1,0 +1,33 @@
+name: moto_gps
+description: Aplicación de navegación inteligente para motociclistas con zoom dinámico.
+publish_to: 'none' # Evita que se publique en pub.dev por accidente
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Librería principal de Mapbox para los mapas
+  mapbox_maps_flutter: ^2.0.0
+  
+  # Librería para obtener la ubicación y velocidad por GPS
+  geolocator: ^10.1.0
+  
+  # Librería para gestionar los permisos de la cámara y GPS
+  permission_handler: ^11.0.0
+
+  # Para iconos modernos de Android/iOS
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  # Si más adelante agregas imágenes o fuentes, irán aquí debajo.
