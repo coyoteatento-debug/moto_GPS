@@ -1,41 +1,39 @@
-buildscript {
-    ext.kotlin_version = '1.9.22' // Subimos a la 1.9.22 para que sea compatible con Flutter 3.41
-    repositories {
-        google()
-        mavenCentral()
-    }
-    dependencies {
-        classpath 'com.android.tools.build:gradle:8.2.1' // Versión alineada con el servidor
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-    }
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
 }
 
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
-        maven {
-            url 'https://api.mapbox.com/downloads/v2/releases/maven'
-            authentication {
-                basic(BasicAuthentication)
-            }
-            credentials {
-                // El token viene de gradle.properties
-                username = "mapbox"
-                password = project.properties['MAPBOX_DOWNLOADS_TOKEN'] ?: ""
-            }
+android {
+    namespace "com.example.moto_gps"
+    compileSdk 34
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    defaultConfig {
+        applicationId "com.example.moto_gps"
+        minSdkVersion 21
+        targetSdkVersion 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false   // ✅ Debe coincidir con minifyEnabled
+            signingConfig signingConfigs.debug
         }
     }
 }
 
-rootProject.buildDir = '../build'
-subprojects {
-    project.buildDir = "${rootProject.buildDir}/${project.name}"
-}
-subprojects {
-    project.evaluationDependsOn(':app')
-}
-
-tasks.register("clean", Delete) {
-    delete rootProject.buildDir
+flutter {
+    source '../..'
 }
