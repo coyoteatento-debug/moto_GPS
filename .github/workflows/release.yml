@@ -42,6 +42,7 @@ jobs:
       - name: Install dependencies
         run: |
           flutter clean
+          flutter pub upgrade   # ← Cambia pub get por pub upgrade
           flutter pub get
 
       - name: Build APK Release
