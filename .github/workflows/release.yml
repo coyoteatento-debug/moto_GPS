@@ -30,6 +30,7 @@ jobs:
       # ✅ CRÍTICO: Escribir el token de Mapbox donde Gradle lo espera
       - name: Configure Mapbox token
         run: |
+          mkdir -p ~/.gradle
           echo "MAPBOX_DOWNLOADS_TOKEN=${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}" >> ~/.gradle/gradle.properties
           echo "sdk.dir=$ANDROID_HOME" >> android/local.properties
 
