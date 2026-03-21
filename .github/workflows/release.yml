@@ -21,6 +21,12 @@ jobs:
         with:
           flutter-version: '3.41.5' # La versión que vimos en tus logs
           channel: 'stable'
+          
+      - name: Clean and Build
+        run: |
+          flutter clean
+          flutter pub get
+          flutter build apk --release
 
       - name: Install dependencies
         run: flutter pub get
