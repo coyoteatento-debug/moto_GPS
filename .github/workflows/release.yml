@@ -32,15 +32,36 @@ jobs:
         run: |
           mkdir -p ~/.gradle
           echo "MAPBOX_DOWNLOADS_TOKEN=${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}" >> ~/.gradle/gradle.properties
+          FLUTTER_SDK=$(dirname $(dirname $(which flutter)))
           echo "sdk.dir=$ANDROID_HOME" >> android/local.properties
-          echo "flutter.sdk=$(which flutter | sed 's|/bin/flutter||')" >> android/local.properties
+          echo "flutter.sdk=$FLUTTER_SDK" >> android/local.properties
+
+      - name: Generate settings.gradle    # ✅ NUEVO — genera el archivo con rutas correctas
+        run: |
+          FLUTTER_SDK=$(dirname $(dirname $(which flutter)))
+          cat > android/settings.gradle << EOF
+          pluginManagement {
+              includeBuild("$FLUTTER_SDK/packages/flutter_tools/gradle")
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          plugins {
+              id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+              id "com.android.application" version "8.2.1" apply false
+              id "org.jetbrains.kotlin.android" version "1.9.22" apply false
+          }
+          include ":app"
+          EOF
 
       - name: Fix AndroidX
         run: |
           echo "android.useAndroidX=true" >> android/gradle.properties
           echo "android.enableJetifier=true" >> android/gradle.properties
 
-      - name: Delete auto-generated files  # ✅ NUEVO
+      - name: Delete auto-generated files
         run: |
           rm -f android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
           rm -f .flutter-plugins
