@@ -21,14 +21,19 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.5'  # ✅ versión real verificada
           channel: 'stable'
           cache: true
-    
-      - name: Show Flutter version
-        run: flutter --version  # ✅ Para saber qué versión instaló
 
-      - name: Fix AndroidX compatibility
+      - name: Flutter version
+        run: flutter --version
+
+      # ✅ CRÍTICO: Escribir el token de Mapbox donde Gradle lo espera
+      - name: Configure Mapbox token
+        run: |
+          echo "MAPBOX_DOWNLOADS_TOKEN=${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}" >> ~/.gradle/gradle.properties
+          echo "sdk.dir=$ANDROID_HOME" >> android/local.properties
+
+      - name: Fix AndroidX
         run: |
           echo "android.useAndroidX=true" >> android/gradle.properties
           echo "android.enableJetifier=true" >> android/gradle.properties
@@ -37,14 +42,9 @@ jobs:
         run: |
           flutter clean
           flutter pub get
-        env:
-          MAPBOX_DOWNLOADS_TOKEN: ${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}  # ✅ Token aquí también
 
       - name: Build APK Release
-        run: |
-          flutter build apk --release 2>&1 | head -n 100
-        env:
-          MAPBOX_DOWNLOADS_TOKEN: ${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}
+        run: flutter build apk --release
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
