@@ -1,44 +1,48 @@
 import 'package:flutter/material.dart';
-import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;  // ✅ alias
+import 'package:geolocator/geolocator.dart';  // ✅ sin alias, tiene prioridad
 
 void main() => runApp(const MaterialApp(home: MotoGPSApp()));
 
 class MotoGPSApp extends StatefulWidget {
   const MotoGPSApp({super.key});
-
   @override
   State<MotoGPSApp> createState() => _MotoGPSAppState();
 }
 
 class _MotoGPSAppState extends State<MotoGPSApp> {
-  MapboxMap? mapboxMap;
+  mapbox.MapboxMap? mapboxMap;  // ✅ prefijo mapbox
   double _currentSpeed = 0.0;
 
   double _calculateDynamicZoom(double speed) {
-    if (speed < 20) return 16.0; 
-    if (speed < 80) return 14.0; 
-    return 12.0; 
+    if (speed < 20) return 16.0;
+    if (speed < 80) return 14.0;
+    return 12.0;
   }
 
-  void _onMapCreated(MapboxMap map) {
+  void _onMapCreated(mapbox.MapboxMap map) {  // ✅ prefijo mapbox
     mapboxMap = map;
     _startLocationTracking();
   }
 
   void _startLocationTracking() {
     Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
+      locationSettings: const LocationSettings(       // ✅ geolocator (sin prefijo)
+        accuracy: LocationAccuracy.high,              // ✅ geolocator (sin prefijo)
         distanceFilter: 5,
       ),
-    ).listen((Position position) {
+    ).listen((Position position) {                    // ✅ geolocator (sin prefijo)
       if (mounted) {
         setState(() {
-          _currentSpeed = position.speed * 3.6; 
+          _currentSpeed = position.speed * 3.6;
         });
-        mapboxMap?.setCamera(CameraOptions(
-          center: Point(coordinates: Position(position.longitude, position.latitude)).toJson(),
+        mapboxMap?.setCamera(mapbox.CameraOptions(    // ✅ prefijo mapbox
+          center: mapbox.Point(                       // ✅ prefijo mapbox
+            coordinates: mapbox.Position(            // ✅ prefijo mapbox
+              position.longitude,
+              position.latitude,
+            ),
+          ).toJson(),
           zoom: _calculateDynamicZoom(_currentSpeed),
         ));
       }
@@ -50,7 +54,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     return Scaffold(
       body: Stack(
         children: [
-          MapWidget(
+          mapbox.MapWidget(                           // ✅ prefijo mapbox
             key: const ValueKey("mapWidget"),
             onMapCreated: _onMapCreated,
           ),
@@ -67,7 +71,11 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
                 children: [
                   Text(
                     "${_currentSpeed.toStringAsFixed(0)}",
-                    style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 40,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const Text("km/h", style: TextStyle(color: Colors.white70)),
                 ],
