@@ -21,7 +21,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.29.2'  # ✅ Versión estable sin el bug
+          flutter-version: '3.29.2'
           channel: 'stable'
           cache: true
 
@@ -39,10 +39,15 @@ jobs:
           echo "android.useAndroidX=true" >> android/gradle.properties
           echo "android.enableJetifier=true" >> android/gradle.properties
 
+      - name: Delete auto-generated files  # ✅ NUEVO
+        run: |
+          rm -f android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+          rm -f .flutter-plugins
+          rm -f .flutter-plugins-dependencies
+
       - name: Install dependencies
         run: |
           flutter clean
-          flutter pub upgrade   # ← Cambia pub get por pub upgrade
           flutter pub get
 
       - name: Build APK Release
