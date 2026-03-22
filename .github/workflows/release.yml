@@ -25,6 +25,12 @@ jobs:
           channel: 'stable'
           cache: true
 
+      # ✅ Limpiar cache de Gradle para evitar transforms corruptas
+      - name: Clean Gradle cache
+        run: |
+          rm -rf ~/.gradle/caches/transforms-3
+          rm -rf ~/.gradle/caches/modules-2
+
       - name: Flutter version
         run: flutter --version
 
