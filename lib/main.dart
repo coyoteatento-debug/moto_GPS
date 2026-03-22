@@ -6,7 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 void main() {
   // ✅ Token de Mapbox para mostrar el mapa
   mapbox.MapboxOptions.setAccessToken(
-    "TU_MAPBOX_PUBLIC_TOKEN_AQUI"
+    "pk.eyJ1IjoiY295b3RlYXRlbnRvMjIiLCJhIjoiY21tejd3MjNvMDViOTJycTRhajIyejM4MCJ9.eevGvjW-uA4r3VtYWRliaQ"
   );
   runApp(const MaterialApp(home: MotoGPSApp()));
 }
