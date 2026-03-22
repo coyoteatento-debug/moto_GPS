@@ -1,39 +1,27 @@
-plugins {
-    id "com.android.application"
-    id "kotlin-android"
-    id "dev.flutter.flutter-gradle-plugin"
-}
-
-android {
-    namespace "com.example.moto_gps"
-    compileSdk 34
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = '17'
-    }
-
-    defaultConfig {
-        applicationId "com.example.moto_gps"
-        minSdkVersion 21
-        targetSdkVersion 34
-        versionCode 1
-        versionName "1.0"
-    }
-
-    buildTypes {
-        release {
-            minifyEnabled false
-            shrinkResources false   // ✅ Debe coincidir con minifyEnabled
-            signingConfig signingConfigs.debug
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        maven {
+            url 'https://api.mapbox.com/downloads/v2/releases/maven'
+            authentication {
+                basic(BasicAuthentication)
+            }
+            credentials {
+                username = "mapbox"
+                password = project.properties['MAPBOX_DOWNLOADS_TOKEN'] ?: ""
+            }
         }
     }
 }
 
-flutter {
-    source '../..'
+rootProject.buildDir = '../build'
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+}
+subprojects {
+    project.evaluationDependsOn(':app')
+}
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
 }
