@@ -10,10 +10,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4        # ✅ v3 → v4
 
       - name: Setup Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4      # ✅ v3 → v4
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -25,28 +25,25 @@ jobs:
           channel: 'stable'
           cache: true
 
-      # ✅ Limpiar cache de Gradle para evitar transforms corruptas
-      - name: Clean Gradle cache
-        run: |
-          rm -rf ~/.gradle/caches/transforms-3
-          rm -rf ~/.gradle/caches/modules-2
-
       - name: Flutter version
         run: flutter --version
 
-      - name: Configure local.properties   # ✅ CLAVE: usa $FLUTTER_ROOT
+      - name: Configure local.properties
         run: |
           mkdir -p ~/.gradle
           echo "MAPBOX_DOWNLOADS_TOKEN=${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}" >> ~/.gradle/gradle.properties
           echo "sdk.dir=$ANDROID_HOME" >> android/local.properties
           echo "flutter.sdk=$FLUTTER_ROOT" >> android/local.properties
-          echo "--- Verificando local.properties ---"
-          cat android/local.properties
 
       - name: Fix AndroidX
         run: |
           echo "android.useAndroidX=true" >> android/gradle.properties
-          echo "android.enableJetifier=true" >> android/gradle.properties
+          echo "android.enableJetifier=false" >> android/gradle.properties
+
+      - name: Clean Gradle cache
+        run: |
+          rm -rf ~/.gradle/caches/transforms-3
+          rm -rf ~/.gradle/caches/modules-2
 
       - name: Delete auto-generated files
         run: |
@@ -67,7 +64,7 @@ jobs:
           JAVA_TOOL_OPTIONS: "-Xmx4g"
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4  # ✅ ya estaba en v4
         with:
           name: release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
