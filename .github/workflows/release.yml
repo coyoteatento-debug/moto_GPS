@@ -28,13 +28,14 @@ jobs:
       - name: Flutter version
         run: flutter --version
 
-      - name: Configure Mapbox token
+      - name: Configure local.properties   # ✅ CLAVE: usa $FLUTTER_ROOT
         run: |
           mkdir -p ~/.gradle
           echo "MAPBOX_DOWNLOADS_TOKEN=${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}" >> ~/.gradle/gradle.properties
-          FLUTTER_SDK=$(dirname $(dirname $(which flutter)))
           echo "sdk.dir=$ANDROID_HOME" >> android/local.properties
-          echo "flutter.sdk=$FLUTTER_SDK" >> android/local.properties
+          echo "flutter.sdk=$FLUTTER_ROOT" >> android/local.properties
+          echo "--- Verificando local.properties ---"
+          cat android/local.properties
 
       - name: Fix AndroidX
         run: |
