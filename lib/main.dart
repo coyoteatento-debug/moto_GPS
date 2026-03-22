@@ -5,7 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 void main() {
   mapbox.MapboxOptions.setAccessToken(
-    "pk.eyJ1IjoiY295b3RlYXRlbnRvLWRlYnVnIiwiYSI6ImNtOGg2aWNndzBiNXMyaXB1NWlzYnFsb3gifQ.eevGvjW-uA4r3VtYWRliaQ"
+    "pk.eyJ1IjoiY295b3RlYXRlbnRvMjIiLCJhIjoiY21tejd3MjNvMDViOTJycTRhajIyejM4MCJ9.eevGvjW-uA4r3VtYWRliaQ"
   );
   runApp(const MaterialApp(home: MotoGPSApp()));
 }
