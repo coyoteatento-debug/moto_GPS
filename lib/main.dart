@@ -21,6 +21,7 @@ void main() async {
   runApp(const MaterialApp(home: MotoGPSApp()));
 }
 
+// ── Modelo de lugar ───────────────────────────────────────
 class PlaceItem {
   final String name;
   final double lat;
@@ -33,6 +34,7 @@ class PlaceItem {
       PlaceItem(name: j['name'], lat: j['lat'], lng: j['lng']);
 }
 
+// ── Modelo de lista ───────────────────────────────────────
 class PlaceList {
   String id;
   String name;
@@ -78,8 +80,8 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
   mapbox.PointAnnotation? destinationAnnotation;
 
   // ── Imágenes cacheadas ────────────────────────────────
-  Uint8List? pinImage;    // ✅ marcador de destino
-  Uint8List? motoImage;   // ✅ ícono de posición actual
+  Uint8List? pinImage;
+  Uint8List? motoImage;
 
   // ── Estado general ────────────────────────────────────
   double _currentSpeed = 0.0;
@@ -104,11 +106,56 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
   List<PlaceList> _placeLists = [];
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  // ── POIs ──────────────────────────────────────────────
+  bool _poisVisible = true;
+  bool _poiLoading  = false;
+  String _currentCity = '';
+  mapbox.CoordinateBounds? _lastFetchedBounds;
+
+  static const List<Map<String, String>> _poiCategories = [
+    {
+      'id':    'fuel',
+      'query': 'amenity=fuel',
+      'icon':  'fuel',
+      'label': 'Gasolineras',
+    },
+    {
+      'id':    'restaurant',
+      'query': 'amenity=restaurant',
+      'icon':  'restaurant',
+      'label': 'Restaurantes',
+    },
+    {
+      'id':    'hotel',
+      'query': 'tourism=hotel',
+      'icon':  'lodging',
+      'label': 'Hoteles',
+    },
+    {
+      'id':    'mall',
+      'query': 'shop=mall',
+      'icon':  'shop',
+      'label': 'Centros comerciales',
+    },
+    {
+      'id':    'marketplace',
+      'query': 'amenity=marketplace',
+      'icon':  'shop',
+      'label': 'Plazas comerciales',
+    },
+    {
+      'id':    'hospital',
+      'query': 'amenity=hospital',
+      'icon':  'hospital',
+      'label': 'Hospitales',
+    },
+  ];
+
   // ─────────────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
-    _loadImages();        // ✅ carga y redimensiona los PNGs
+    _loadImages();
     _requestPermissions();
     _loadLists();
   }
@@ -119,32 +166,31 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     super.dispose();
   }
 
-  // ── Redimensiona imagen a targetWidth px ──────────────
+  // ── Redimensiona imagen ───────────────────────────────
   Future<Uint8List> _resizeImage(Uint8List data, int targetWidth) async {
     final codec = await ui.instantiateImageCodec(
       data,
       targetWidth: targetWidth,
     );
-    final frame = await codec.getNextFrame();
+    final frame    = await codec.getNextFrame();
     final byteData = await frame.image.toByteData(
       format: ui.ImageByteFormat.png,
     );
     return byteData!.buffer.asUint8List();
   }
 
-  // ── Carga ambas imágenes una sola vez ─────────────────
+  // ── Carga imágenes una sola vez ───────────────────────
   Future<void> _loadImages() async {
     final ByteData pinData  = await rootBundle.load('assets/moto_pin.png');
     final ByteData motoData = await rootBundle.load('assets/moto.png');
 
-    // ✅ Redimensiona para evitar íconos gigantes
     final Uint8List pinResized  = await _resizeImage(
       pinData.buffer.asUint8List(),
-      120,   // px — pin de destino
+      120,
     );
     final Uint8List motoResized = await _resizeImage(
       motoData.buffer.asUint8List(),
-      100,   // px — ícono de moto
+      100,
     );
 
     setState(() {
@@ -280,8 +326,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
                     Navigator.pop(ctx);
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                          content:
-                              Text('Este lugar ya está en la lista')),
+                          content: Text('Este lugar ya está en la lista')),
                     );
                     return;
                   }
@@ -377,6 +422,211 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     mapboxMap = map;
     annotationManager =
         await map.annotations.createPointAnnotationManager();
+
+    // ✅ Recargar POIs cada vez que la cámara termina de moverse
+    map.setOnCameraChangeListener((state) async {
+      if (_poisVisible && !_poiLoading) {
+        await _detectAndLoadCityPOIs();
+      }
+    });
+  }
+
+  // ── POIs — detectar ciudad y cargar ───────────────────
+  Future<void> _detectAndLoadCityPOIs() async {
+    if (!_poisVisible || mapboxMap == null) return;
+    if (_poiLoading) return;
+
+    try {
+      final bounds = await mapboxMap!.coordinateBoundsForCamera(
+        await mapboxMap!.getCameraState(),
+      );
+
+      // Evitar refetch si los bounds no cambiaron
+      if (_lastFetchedBounds != null &&
+          _boundsAreSimilar(bounds, _lastFetchedBounds!)) return;
+      _lastFetchedBounds = bounds;
+
+      setState(() => _poiLoading = true);
+
+      final swLat = bounds.southwest.coordinates.lat.toDouble();
+      final swLng = bounds.southwest.coordinates.lng.toDouble();
+      final neLat = bounds.northeast.coordinates.lat.toDouble();
+      final neLng = bounds.northeast.coordinates.lng.toDouble();
+
+      // Detectar ciudad actual
+      if (_currentPosition != null) {
+        await _detectCurrentCity(
+          _currentPosition!.latitude,
+          _currentPosition!.longitude,
+        );
+      }
+
+      await _fetchPOIsForBounds(
+        swLat: swLat,
+        swLng: swLng,
+        neLat: neLat,
+        neLng: neLng,
+      );
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _poiLoading = false);
+    }
+  }
+
+  // ── Comparar bounds ───────────────────────────────────
+  bool _boundsAreSimilar(
+    mapbox.CoordinateBounds a,
+    mapbox.CoordinateBounds b,
+  ) {
+    const threshold = 0.01;
+    return (a.southwest.coordinates.lat.toDouble() -
+                b.southwest.coordinates.lat.toDouble()).abs() < threshold &&
+           (a.southwest.coordinates.lng.toDouble() -
+                b.southwest.coordinates.lng.toDouble()).abs() < threshold &&
+           (a.northeast.coordinates.lat.toDouble() -
+                b.northeast.coordinates.lat.toDouble()).abs() < threshold &&
+           (a.northeast.coordinates.lng.toDouble() -
+                b.northeast.coordinates.lng.toDouble()).abs() < threshold;
+  }
+
+  // ── Detectar ciudad actual ────────────────────────────
+  Future<void> _detectCurrentCity(double lat, double lng) async {
+    try {
+      final url = Uri.parse(
+        'https://api.mapbox.com/geocoding/v5/mapbox.places/'
+        '$lng,$lat.json'
+        '?types=place&access_token=$_mapboxToken&language=es&limit=1',
+      );
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data     = json.decode(response.body);
+        final features = data['features'] as List;
+        if (features.isNotEmpty && mounted) {
+          final city = features[0]['text'] as String;
+          if (city != _currentCity) {
+            setState(() => _currentCity = city);
+            _lastFetchedBounds = null; // forzar recarga al cambiar ciudad
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  // ── Fetch POIs por bounding box ───────────────────────
+  Future<void> _fetchPOIsForBounds({
+    required double swLat,
+    required double swLng,
+    required double neLat,
+    required double neLng,
+  }) async {
+    final bbox = '$swLat,$swLng,$neLat,$neLng';
+
+    // Cargar todas las categorías en paralelo
+    await Future.wait(
+      _poiCategories.map((category) async {
+        final query = '''
+[out:json][timeout:25];
+(
+  node[${category['query']}]($bbox);
+  way[${category['query']}]($bbox);
+  relation[${category['query']}]($bbox);
+);
+out center;
+''';
+        try {
+          final response = await http.post(
+            Uri.parse('https://overpass-api.de/api/interpreter'),
+            body: query,
+          );
+
+          if (response.statusCode != 200) return;
+
+          final data     = json.decode(response.body);
+          final elements = data['elements'] as List;
+
+          final features = elements.map((e) {
+            final pLat = e['type'] == 'node'
+                ? e['lat'] as double
+                : (e['center']?['lat'] as double? ?? 0.0);
+            final pLng = e['type'] == 'node'
+                ? e['lon'] as double
+                : (e['center']?['lon'] as double? ?? 0.0);
+            final name =
+                (e['tags']?['name'] as String?) ?? category['label']!;
+
+            return {
+              'type': 'Feature',
+              'geometry': {
+                'type': 'Point',
+                'coordinates': [pLng, pLat],
+              },
+              'properties': {
+                'name': name,
+                'category': category['id'],
+              },
+            };
+          }).toList();
+
+          await _updatePoiLayer(
+            sourceId: 'poi-${category['id']}-source',
+            layerId:  'poi-${category['id']}-layer',
+            iconName: category['icon']!,
+            geoJson:  json.encode({
+              'type': 'FeatureCollection',
+              'features': features,
+            }),
+          );
+        } catch (_) {}
+      }),
+    );
+  }
+
+  // ── Crear o actualizar SymbolLayer ────────────────────
+  Future<void> _updatePoiLayer({
+    required String sourceId,
+    required String layerId,
+    required String iconName,
+    required String geoJson,
+  }) async {
+    if (mapboxMap == null) return;
+    try {
+      final style = await mapboxMap!.style;
+      try { await style.removeStyleLayer(layerId);  } catch (_) {}
+      try { await style.removeStyleSource(sourceId); } catch (_) {}
+
+      await style.addSource(mapbox.GeoJsonSource(
+        id:   sourceId,
+        data: geoJson,
+      ));
+
+      await style.addLayer(mapbox.SymbolLayer(
+        id:               layerId,
+        sourceId:         sourceId,
+        iconImage:        iconName,
+        iconSize:         1.2,
+        iconAllowOverlap: false,
+        textField:        '{name}',
+        textSize:         10.0,
+        textOffset:       [0.0, 1.8],
+        textAllowOverlap: false,
+        textOptional:     true,
+      ));
+    } catch (_) {}
+  }
+
+  // ── Limpiar todos los POIs ────────────────────────────
+  Future<void> _clearPOIs() async {
+    if (mapboxMap == null) return;
+    try {
+      final style = await mapboxMap!.style;
+      for (final category in _poiCategories) {
+        try {
+          await style.removeStyleLayer('poi-${category['id']}-layer');
+          await style.removeStyleSource('poi-${category['id']}-source');
+        } catch (_) {}
+      }
+      _lastFetchedBounds = null;
+    } catch (_) {}
   }
 
   // ── Utilidades de ruta ────────────────────────────────
@@ -398,9 +648,9 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     int closestIndex = 0;
     for (int i = 0; i < _routeCoordinates.length; i++) {
       final coord = _routeCoordinates[i];
-      final dist = _distanceBetween(lat, lng, coord[1], coord[0]);
+      final dist  = _distanceBetween(lat, lng, coord[1], coord[0]);
       if (dist < minDist) {
-        minDist = dist;
+        minDist      = dist;
         closestIndex = i;
       }
     }
@@ -412,20 +662,20 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     double minDist = double.infinity;
     List<double> snappedPoint = [lng, lat];
     for (int i = 0; i < _routeCoordinates.length - 1; i++) {
-      final a = _routeCoordinates[i];
-      final b = _routeCoordinates[i + 1];
+      final a   = _routeCoordinates[i];
+      final b   = _routeCoordinates[i + 1];
       final abX = b[0] - a[0];
       final abY = b[1] - a[1];
       final apX = lng - a[0];
       final apY = lat - a[1];
       final ab2 = abX * abX + abY * abY;
       if (ab2 == 0) continue;
-      final t = ((apX * abX + apY * abY) / ab2).clamp(0.0, 1.0);
+      final t       = ((apX * abX + apY * abY) / ab2).clamp(0.0, 1.0);
       final projLng = a[0] + t * abX;
       final projLat = a[1] + t * abY;
-      final dist = _distanceBetween(lat, lng, projLat, projLng);
+      final dist    = _distanceBetween(lat, lng, projLat, projLng);
       if (dist < minDist) {
-        minDist = dist;
+        minDist      = dist;
         snappedPoint = [projLng, projLat];
       }
     }
@@ -434,11 +684,11 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
 
   double _bearingBetween(
       double lat1, double lng1, double lat2, double lng2) {
-    final dLng = (lng2 - lng1) * pi / 180;
+    final dLng  = (lng2 - lng1) * pi / 180;
     final lat1R = lat1 * pi / 180;
     final lat2R = lat2 * pi / 180;
-    final y = sin(dLng) * cos(lat2R);
-    final x = cos(lat1R) * sin(lat2R) -
+    final y     = sin(dLng) * cos(lat2R);
+    final x     = cos(lat1R) * sin(lat2R) -
         sin(lat1R) * cos(lat2R) * cos(dLng);
     return (atan2(y, x) * 180 / pi + 360) % 360;
   }
@@ -484,10 +734,10 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     final lat = context.point.coordinates.lat.toDouble();
     final lng = context.point.coordinates.lng.toDouble();
     setState(() {
-      _tappedLat = lat;
-      _tappedLng = lng;
+      _tappedLat     = lat;
+      _tappedLng     = lng;
       _showTapConfirm = true;
-      _searchResults = [];
+      _searchResults  = [];
     });
     _addDestinationMarker(lat, lng);
     mapboxMap?.flyTo(
@@ -495,8 +745,8 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         center: mapbox.Point(
           coordinates: mapbox.Position(lng, lat),
         ),
-        zoom: 16.0,
-        pitch: 0.0,
+        zoom:    16.0,
+        pitch:   0.0,
         bearing: 0.0,
       ),
       mapbox.MapAnimationOptions(duration: 800, startDelay: 0),
@@ -511,9 +761,9 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
       '?access_token=$_mapboxToken&language=es&limit=1',
     );
     String placeName = 'Destino seleccionado';
-    final response = await http.get(url);
+    final response   = await http.get(url);
     if (response.statusCode == 200) {
-      final data = json.decode(response.body);
+      final data     = json.decode(response.body);
       final features = data['features'] as List;
       if (features.isNotEmpty) {
         placeName = features[0]['place_name'] as String;
@@ -522,10 +772,10 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     setState(() {
       _selectedPlace = {
         'name': placeName,
-        'lat': _tappedLat,
-        'lng': _tappedLng,
+        'lat':  _tappedLat,
+        'lng':  _tappedLng,
       };
-      _showTapConfirm = false;
+      _showTapConfirm       = false;
       _searchController.text = placeName;
     });
     await _getRoute(_tappedLat!, _tappedLng!);
@@ -538,33 +788,31 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     }
     setState(() {
       _showTapConfirm = false;
-      _tappedLat = null;
-      _tappedLng = null;
+      _tappedLat      = null;
+      _tappedLng      = null;
     });
   }
 
-  // ── Marcador de moto — imagen cacheada + rotación ─────
+  // ── Marcador moto ─────────────────────────────────────
   Future<void> _updateMotoMarker(
       double lat, double lng, double bearing) async {
     if (annotationManager == null || motoImage == null) return;
 
     if (motoAnnotation == null) {
-      // Primera vez: crear
       motoAnnotation = await annotationManager!.create(
         mapbox.PointAnnotationOptions(
           geometry: mapbox.Point(
               coordinates: mapbox.Position(lng, lat)),
-          image: motoImage,
-          iconSize: 1.2,                          // ✅ tamaño real del resize
-          iconAnchor: mapbox.IconAnchor.CENTER,
-          iconRotate: bearing,                    // ✅ rotación
+          image:       motoImage,
+          iconSize:    1.2,
+          iconAnchor:  mapbox.IconAnchor.CENTER,
+          iconRotate:  bearing,
         ),
       );
     } else {
-      // Siguientes: solo actualizar posición y rotación
       motoAnnotation!.geometry =
           mapbox.Point(coordinates: mapbox.Position(lng, lat));
-      motoAnnotation!.iconRotate = bearing;       // ✅ rota en tiempo real
+      motoAnnotation!.iconRotate = bearing;
       await annotationManager!.update(motoAnnotation!);
     }
   }
@@ -573,7 +821,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
   void _startLocationTracking() {
     Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.bestForNavigation,
+        accuracy:       LocationAccuracy.bestForNavigation,
         distanceFilter: 2,
       ),
     ).listen((Position position) {
@@ -585,8 +833,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
       });
 
       if (_navigating && _routeCoordinates.isNotEmpty) {
-        final snapped =
-            _snapToRoute(position.latitude, position.longitude);
+        final snapped    = _snapToRoute(position.latitude, position.longitude);
         final snappedLng = snapped[0];
         final snappedLat = snapped[1];
         final closestIdx = _findClosestPointIndex(
@@ -594,10 +841,9 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
 
         double routeBearing = position.heading;
         if (closestIdx < _routeCoordinates.length - 1) {
-          final curr = _routeCoordinates[closestIdx];
-          final next = _routeCoordinates[closestIdx + 1];
-          routeBearing =
-              _bearingBetween(curr[1], curr[0], next[1], next[0]);
+          final curr  = _routeCoordinates[closestIdx];
+          final next  = _routeCoordinates[closestIdx + 1];
+          routeBearing = _bearingBetween(curr[1], curr[0], next[1], next[0]);
         }
 
         _updateMotoMarker(snappedLat, snappedLng, routeBearing);
@@ -606,11 +852,10 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         mapboxMap?.flyTo(
           mapbox.CameraOptions(
             center: mapbox.Point(
-                coordinates:
-                    mapbox.Position(snappedLng, snappedLat)),
-            zoom: 17.0,
+                coordinates: mapbox.Position(snappedLng, snappedLat)),
+            zoom:    17.0,
             bearing: routeBearing,
-            pitch: 50.0,
+            pitch:   50.0,
           ),
           mapbox.MapAnimationOptions(duration: 1000, startDelay: 0),
         );
@@ -622,7 +867,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
             center: mapbox.Point(
                 coordinates: mapbox.Position(
                     position.longitude, position.latitude)),
-            zoom: _calculateDynamicZoom(_currentSpeed),
+            zoom:    _calculateDynamicZoom(_currentSpeed),
             bearing: position.heading,
           ));
         }
@@ -643,14 +888,14 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     );
     final response = await http.get(url);
     if (response.statusCode == 200) {
-      final data = json.decode(response.body);
+      final data     = json.decode(response.body);
       final features = data['features'] as List;
       setState(() {
         _searchResults = features
             .map((f) => {
                   'name': f['place_name'] as String,
-                  'lng': f['center'][0] as double,
-                  'lat': f['center'][1] as double,
+                  'lng':  f['center'][0] as double,
+                  'lat':  f['center'][1] as double,
                 })
             .toList();
       });
@@ -668,16 +913,16 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     );
     final response = await http.get(url);
     if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      final routes = data['routes'] as List;
+      final data        = json.decode(response.body);
+      final routes      = data['routes'] as List;
       if (routes.isEmpty) return;
-      final route = routes[0];
-      final geometry = route['geometry'];
-      final distanceKm =
+      final route       = routes[0];
+      final geometry    = route['geometry'];
+      final distanceKm  =
           ((route['distance'] as double) / 1000).toStringAsFixed(1);
       final durationMin =
           ((route['duration'] as double) / 60).round();
-      final coords = (geometry['coordinates'] as List)
+      final coords      = (geometry['coordinates'] as List)
           .map((c) => [c[0] as double, c[1] as double])
           .toList();
       setState(() {
@@ -698,16 +943,16 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
       await style.removeStyleSource('route-source');
     } catch (_) {}
     await style.addSource(mapbox.GeoJsonSource(
-      id: 'route-source',
+      id:   'route-source',
       data: json.encode({'type': 'Feature', 'geometry': geometry}),
     ));
     await style.addLayer(mapbox.LineLayer(
-      id: 'route-layer',
-      sourceId: 'route-source',
+      id:        'route-layer',
+      sourceId:  'route-source',
       lineColor: 0xFF1976D2,
       lineWidth: 6.0,
-      lineCap: mapbox.LineCap.ROUND,
-      lineJoin: mapbox.LineJoin.ROUND,
+      lineCap:   mapbox.LineCap.ROUND,
+      lineJoin:  mapbox.LineJoin.ROUND,
     ));
   }
 
@@ -721,9 +966,9 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
             (_currentPosition!.latitude + destLat) / 2,
           ),
         ),
-        zoom: 12.0,
+        zoom:    12.0,
         bearing: 0.0,
-        pitch: 0.0,
+        pitch:   0.0,
       ),
       mapbox.MapAnimationOptions(duration: 1500, startDelay: 0),
     );
@@ -732,20 +977,19 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
   void _goToPlace(double lat, double lng, String name) async {
     Navigator.of(context).popUntil((route) => route.isFirst);
     setState(() {
-      _searchResults    = [];
+      _searchResults         = [];
       _searchController.text = name;
-      _selectedPlace    = {'name': name, 'lat': lat, 'lng': lng};
-      _routeDrawn       = false;
-      _navigating       = false;
-      _showTapConfirm   = false;
-      _routeCoordinates = [];
+      _selectedPlace         = {'name': name, 'lat': lat, 'lng': lng};
+      _routeDrawn            = false;
+      _navigating            = false;
+      _showTapConfirm        = false;
+      _routeCoordinates      = [];
     });
     FocusScope.of(context).unfocus();
     await _addDestinationMarker(lat, lng);
     await _getRoute(lat, lng);
   }
 
-  // ── Marcador de destino — imagen cacheada ─────────────
   Future<void> _addDestinationMarker(double lat, double lng) async {
     if (annotationManager == null) return;
     if (destinationAnnotation != null) {
@@ -754,11 +998,11 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     }
     destinationAnnotation = await annotationManager!.create(
       mapbox.PointAnnotationOptions(
-        geometry: mapbox.Point(
+        geometry:   mapbox.Point(
           coordinates: mapbox.Position(lng, lat),
         ),
-        image: pinImage,                          // ✅ imagen cacheada
-        iconSize: 1.2,                            // ✅ tamaño real del resize
+        image:      pinImage,
+        iconSize:   1.2,
         iconAnchor: mapbox.IconAnchor.BOTTOM,
       ),
     );
@@ -799,9 +1043,9 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
               coordinates: mapbox.Position(
                   _currentPosition!.longitude,
                   _currentPosition!.latitude)),
-          zoom: 17.0,
+          zoom:    17.0,
           bearing: _currentPosition!.heading,
-          pitch: 50.0,
+          pitch:   50.0,
         ),
         mapbox.MapAnimationOptions(duration: 1500, startDelay: 0),
       );
@@ -900,8 +1144,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue[700],
                         foregroundColor: Colors.white,
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 14),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
                       ),
@@ -916,6 +1159,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
       body: Stack(
         children: [
 
+          // ── Mapa principal ───────────────────────────
           SizedBox.expand(
             child: mapbox.MapWidget(
               key: const ValueKey("mapWidget"),
@@ -927,7 +1171,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
             ),
           ),
 
-          // Botón menú
+          // ── Botón menú ───────────────────────────────
           if (!_navigating)
             Positioned(
               top: 50,
@@ -952,7 +1196,75 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
               ),
             ),
 
-          // Barra de búsqueda
+          // ── Botón toggle POIs + nombre ciudad ────────
+          if (!_navigating)
+            Positioned(
+              top: 108,
+              left: 16,
+              child: Column(
+                children: [
+                  GestureDetector(
+                    onTap: () async {
+                      setState(() => _poisVisible = !_poisVisible);
+                      if (_poisVisible) {
+                        _lastFetchedBounds = null;
+                        await _detectAndLoadCityPOIs();
+                      } else {
+                        await _clearPOIs();
+                      }
+                    },
+                    child: Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: _poisVisible
+                            ? Colors.blue[700]
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: const [
+                          BoxShadow(
+                              color: Colors.black26,
+                              blurRadius: 8,
+                              offset: Offset(0, 2))
+                        ],
+                      ),
+                      child: _poiLoading
+                          ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Icon(
+                              Icons.place,
+                              color: _poisVisible
+                                  ? Colors.white
+                                  : Colors.black54,
+                            ),
+                    ),
+                  ),
+                  // Nombre de la ciudad
+                  if (_currentCity.isNotEmpty && _poisVisible)
+                    Container(
+                      margin: const EdgeInsets.only(top: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        _currentCity,
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 10),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+          // ── Barra de búsqueda ────────────────────────
           if (!_navigating)
             Positioned(
               top: 50,
@@ -975,9 +1287,9 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
                       controller: _searchController,
                       onChanged: _searchPlaces,
                       decoration: InputDecoration(
-                        hintText: '🔍  Buscar lugar...',
+                        hintText:  '🔍  Buscar lugar...',
                         hintStyle: const TextStyle(color: Colors.grey),
-                        border: InputBorder.none,
+                        border:    InputBorder.none,
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 14),
                         suffixIcon: _searchController.text.isNotEmpty
@@ -1006,7 +1318,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
                       ),
                       child: ListView.separated(
                         shrinkWrap: true,
-                        padding: EdgeInsets.zero,
+                        padding:   EdgeInsets.zero,
                         itemCount: _searchResults.length,
                         separatorBuilder: (_, __) =>
                             const Divider(height: 1),
@@ -1016,7 +1328,8 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
                             leading: const Icon(Icons.location_on,
                                 color: Colors.blue),
                             title: Text(place['name'],
-                                style: const TextStyle(fontSize: 13),
+                                style:
+                                    const TextStyle(fontSize: 13),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis),
                             trailing: IconButton(
@@ -1026,8 +1339,8 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
                               onPressed: () => _addPlaceToList(
                                 PlaceItem(
                                   name: place['name'],
-                                  lat: place['lat'],
-                                  lng: place['lng'],
+                                  lat:  place['lat'],
+                                  lng:  place['lng'],
                                 ),
                               ),
                             ),
@@ -1043,7 +1356,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
               ),
             ),
 
-          // Confirmar tap
+          // ── Confirmar tap ────────────────────────────
           if (_showTapConfirm && !_navigating)
             Positioned(
               bottom: 30,
@@ -1069,7 +1382,8 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
                     const SizedBox(height: 8),
                     const Text('¿Ir a este lugar?',
                         style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 16)),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16)),
                     const SizedBox(height: 4),
                     Text(
                       'Lat: ${_tappedLat?.toStringAsFixed(5)}'
@@ -1086,10 +1400,11 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
                             icon: const Icon(Icons.close,
                                 color: Colors.red),
                             label: const Text('Cancelar',
-                                style: TextStyle(color: Colors.red)),
+                                style:
+                                    TextStyle(color: Colors.red)),
                             style: OutlinedButton.styleFrom(
-                              side:
-                                  const BorderSide(color: Colors.red),
+                              side: const BorderSide(
+                                  color: Colors.red),
                               padding: const EdgeInsets.symmetric(
                                   vertical: 12),
                               shape: RoundedRectangleBorder(
@@ -1125,7 +1440,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
               ),
             ),
 
-          // Panel de ruta
+          // ── Panel de ruta ────────────────────────────
           if (_routeDrawn && !_navigating && !_showTapConfirm)
             Positioned(
               bottom: 30,
@@ -1148,7 +1463,8 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
                   children: [
                     Text(_selectedPlace?['name'] ?? '',
                         style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 14),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center),
@@ -1159,9 +1475,11 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
                         const Icon(Icons.directions_bike,
                             color: Colors.blue, size: 18),
                         const SizedBox(width: 6),
-                        Text('$_routeDistance  •  $_routeDuration',
+                        Text(
+                            '$_routeDistance  •  $_routeDuration',
                             style: TextStyle(
-                                color: Colors.grey[700], fontSize: 14)),
+                                color: Colors.grey[700],
+                                fontSize: 14)),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -1170,8 +1488,8 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
                         if (_selectedPlace != null) {
                           _addPlaceToList(PlaceItem(
                             name: _selectedPlace!['name'],
-                            lat: _selectedPlace!['lat'],
-                            lng: _selectedPlace!['lng'],
+                            lat:  _selectedPlace!['lat'],
+                            lng:  _selectedPlace!['lng'],
                           ));
                         }
                       },
@@ -1189,10 +1507,11 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
                             icon: const Icon(Icons.close,
                                 color: Colors.red),
                             label: const Text('Cancelar',
-                                style: TextStyle(color: Colors.red)),
+                                style:
+                                    TextStyle(color: Colors.red)),
                             style: OutlinedButton.styleFrom(
-                              side:
-                                  const BorderSide(color: Colors.red),
+                              side: const BorderSide(
+                                  color: Colors.red),
                               padding: const EdgeInsets.symmetric(
                                   vertical: 12),
                               shape: RoundedRectangleBorder(
@@ -1229,7 +1548,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
               ),
             ),
 
-          // Panel navegando
+          // ── Panel navegando ──────────────────────────
           if (_navigating)
             Positioned(
               bottom: 30,
@@ -1255,13 +1574,15 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
                               fontWeight: FontWeight.bold),
                         ),
                         const Text("km/h",
-                            style: TextStyle(color: Colors.white70)),
+                            style:
+                                TextStyle(color: Colors.white70)),
                       ],
                     ),
                   ),
                   ElevatedButton.icon(
                     onPressed: _cancelRoute,
-                    icon: const Icon(Icons.close, color: Colors.white),
+                    icon: const Icon(Icons.close,
+                        color: Colors.white),
                     label: const Text('Salir',
                         style: TextStyle(color: Colors.white)),
                     style: ElevatedButton.styleFrom(
@@ -1276,7 +1597,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
               ),
             ),
 
-          // Velocímetro modo libre
+          // ── Velocímetro modo libre ───────────────────
           if (!_navigating && !_routeDrawn && !_showTapConfirm)
             Positioned(
               bottom: 30,
@@ -1382,13 +1703,13 @@ class _PlaceListScreenState extends State<PlaceListScreen> {
                   Text('📭', style: TextStyle(fontSize: 48)),
                   SizedBox(height: 12),
                   Text('No hay lugares en esta lista',
-                      style:
-                          TextStyle(color: Colors.grey, fontSize: 16)),
+                      style: TextStyle(
+                          color: Colors.grey, fontSize: 16)),
                   SizedBox(height: 8),
                   Text(
                     'Busca un lugar en el mapa y toca 🔖 para guardarlo aquí',
-                    style:
-                        TextStyle(color: Colors.grey, fontSize: 13),
+                    style: TextStyle(
+                        color: Colors.grey, fontSize: 13),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -1396,7 +1717,8 @@ class _PlaceListScreenState extends State<PlaceListScreen> {
             )
           : ListView.separated(
               itemCount: widget.placeList.places.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (_, __) =>
+                  const Divider(height: 1),
               itemBuilder: (_, i) {
                 final place = widget.placeList.places[i];
                 return ListTile(
@@ -1418,13 +1740,15 @@ class _PlaceListScreenState extends State<PlaceListScreen> {
                       IconButton(
                         icon: const Icon(Icons.navigation,
                             color: Colors.blue),
-                        onPressed: () => widget.onNavigate(place),
+                        onPressed: () =>
+                            widget.onNavigate(place),
                       ),
                       IconButton(
                         icon: const Icon(Icons.delete_outline,
                             color: Colors.red),
                         onPressed: () {
-                          setState(() => widget.onDelete(place));
+                          setState(
+                              () => widget.onDelete(place));
                         },
                       ),
                     ],
