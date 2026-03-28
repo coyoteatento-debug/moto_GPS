@@ -1,7 +1,6 @@
 name: moto_gps
 description: Aplicación de navegación inteligente para motociclistas con zoom dinámico.
 publish_to: 'none'
-
 version: 1.0.0+1
 
 environment:
@@ -10,10 +9,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
   mapbox_maps_flutter: ^2.0.0
   geolocator: ^13.0.0
-  permission_handler: ^11.3.1  # ← versión estable real
+  permission_handler: ^11.3.1
   cupertino_icons: ^1.0.6
 
 dev_dependencies:
@@ -23,3 +21,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # ✅ SECCIÓN AGREGADA - Assets del proyecto
+  assets:
+    - assets/moto_pin.png
