@@ -1376,73 +1376,74 @@ out center;
                       ),
                       child: ListView.separated(
                         shrinkWrap: true,
-                        padding:   EdgeInsets.zero,
+                        padding: EdgeInsets.zero,
                         itemCount: _searchResults.length,
-                        separatorBuilder: (_, __) =>
-                            const Divider(height: 1),
+                        separatorBuilder: (_, __) => const Divider(height: 1),
                         itemBuilder: (context, index) {
-  final place   = _searchResults[index];
-  final distKm  = place['distKm'] as double?;
-  final distText = distKm != null
-      ? distKm < 1
-          ? '${(distKm * 1000).toStringAsFixed(0)} m'
-          : '${distKm.toStringAsFixed(1)} km'
-      : '';
+                          final place   = _searchResults[index];
+                          final distKm  = place['distKm'] as double?;
+                          final distText = distKm != null
+                              ? distKm < 1
+                                  ? '${(distKm * 1000).toStringAsFixed(0)} m'
+                                  : '${distKm.toStringAsFixed(1)} km'
+                              : '';
 
-  return ListTile(
-    leading: const Icon(Icons.location_on, color: Colors.blue),
-    title: Text(
-      place['short'],                        // ✅ nombre corto
-      style: const TextStyle(
-          fontSize: 13, fontWeight: FontWeight.w600),
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-    ),
-    subtitle: Text(
-      place['name'],                         // ✅ dirección completa
-      style: const TextStyle(fontSize: 11, color: Colors.grey),
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-    ),
-    trailing: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // ✅ Distancia
-        if (distText.isNotEmpty)
-          Container(
-            margin: const EdgeInsets.only(right: 4),
-            padding: const EdgeInsets.symmetric(
-                horizontal: 6, vertical: 3),
-            decoration: BoxDecoration(
-              color: Colors.blue[50],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              distText,
-              style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.blue[700],
-                  fontWeight: FontWeight.w600),
-            ),
-          ),
-        // ✅ Guardar en lista
-        IconButton(
-          icon: const Icon(Icons.bookmark_add_outlined,
-              color: Colors.orange),
-          onPressed: () => _addPlaceToList(
-            PlaceItem(
-              name: place['name'],
-              lat:  place['lat'],
-              lng:  place['lng'],
-            ),
-          ),
-        ),
-      ],
-    ),
-    onTap: () => _goToPlace(
-        place['lat'], place['lng'], place['name']),
-  );
-},
+                          return ListTile(
+                            leading: const Icon(Icons.location_on, color: Colors.blue),
+                            title: Text(
+                              place['short'] ?? place['name'],
+                              style: const TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.w600),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              place['name'],
+                              style: const TextStyle(
+                                  fontSize: 11, color: Colors.grey),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (distText.isNotEmpty)
+                                  Container(
+                                    margin: const EdgeInsets.only(right: 4),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue[50],
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      distText,
+                                      style: TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.blue[700],
+                                          fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                               IconButton(
+                                 icon: const Icon(
+                                     Icons.bookmark_add_outlined,
+                                     color: Colors.orange),
+                                 onPressed: () => _addPlaceToList(
+                                   PlaceItem(
+                                     name: place['name'],
+                                     lat:  place['lat'],
+                                     lng:  place['lng'],
+                                   ),
+                                 ),
+                               ),
+                             ],
+                           ),
+                           onTap: () => _goToPlace(
+                               place['lat'], place['lng'], place['name']),
+                         );
+                       },
+                     ),
+                   ),
           // ── Confirmar tap ────────────────────────────
           if (_showTapConfirm && !_navigating)
             Positioned(
