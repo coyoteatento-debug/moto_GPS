@@ -25,3 +25,4 @@ flutter:
   # ✅ SECCIÓN AGREGADA - Assets del proyecto
   assets:
     - assets/moto_pin.png
+    - assets/moto.png        # ✅ AGREGA ESTA LÍNEA
