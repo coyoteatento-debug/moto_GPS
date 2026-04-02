@@ -1339,24 +1339,26 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         children: [
           // ── Mapa ──────────────────────────────────────────────────────────
           // Fix v2.20.0: MapWidget ocupa todo el espacio sin necesitar SizedBox.expand
-          mapbox.MapWidget(
-            key: const ValueKey("mapWidget"),
-            onMapCreated: _onMapCreated,
-            styleUri: mapbox.MapboxStyles.STANDARD,
-            onTapListener: _onMapTap,
-            cameraOptions: mapbox.CameraOptions(zoom: 15.0, pitch: 0.0),
-            // Fix v2.20.0: sin 'async' — el tipo es void Function(CameraChangedEventData)
-            onCameraChangeListener: (state) {
-              if (_poisVisible && !_poiLoading) {
-                _detectAndLoadCityPOIs();
-              }
-            },
-            onScrollListener: mapbox.OnScrollListener((coordinate) {
-              if (mounted && _followUser) {
-                setState(() => _followUser = false);
-              }
-            }),
-          ),
+          Listener(
+              onPointerMove: (_) {
+                if (mounted && _followUser) {
+                  setState(() => _followUser = false);
+                }
+              },
+              child: mapbox.MapWidget(
+                key: const ValueKey("mapWidget"),
+                onMapCreated: _onMapCreated,
+                styleUri: mapbox.MapboxStyles.STANDARD,
+                onTapListener: _onMapTap,
+                cameraOptions: mapbox.CameraOptions(zoom: 15.0, pitch: 0.0),
+                // Fix v2.20.0: sin 'async' — el tipo es void Function(CameraChangedEventData)
+                onCameraChangeListener: (state) {
+                  if (_poisVisible && !_poiLoading) {
+                    _detectAndLoadCityPOIs();
+                  }
+                },
+              ),
+            ),
               // ── Botón centrar ubicación ───────────────────────────────────────
           if (!_followUser && !_navigating)
             Positioned(
