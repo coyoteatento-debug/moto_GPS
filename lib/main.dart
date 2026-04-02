@@ -104,6 +104,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
   final Map<String, List<Map<String, dynamic>>> _poiData = {}; // para tap detection
   Map<String, dynamic>? _tappedPoi;
   bool _showPoiPanel = false;
+  bool _followUser = true; // controla si la cámara sigue al usuario
 
   // ── NUEVO: 12 categorías con emoji + color (antes solo 6) ────────────────
   // FIX #1: Usamos IDs de iconos PROPIOS ('poi-xxx') en lugar de iconos
@@ -1135,7 +1136,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
       } else {
         _updateMotoMarker(
             position.latitude, position.longitude, position.heading);
-        if (!_routeDrawn && !_showTapConfirm) {
+        if (!_routeDrawn && !_showTapConfirm && _followUser) {
           mapboxMap?.setCamera(mapbox.CameraOptions(
             center: mapbox.Point(
                 coordinates: mapbox.Position(
@@ -1309,7 +1310,10 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
   }
 
   void _startNavigation() {
-    setState(() => _navigating = true);
+    setState(() {
+      _navigating = true;
+      _followUser = true;
+    });
     if (_currentPosition != null) {
       mapboxMap?.flyTo(
         mapbox.CameraOptions(
@@ -1344,11 +1348,41 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
             // Fix v2.20.0: sin 'async' — el tipo es void Function(CameraChangedEventData)
             onCameraChangeListener: (state) {
               if (_poisVisible && !_poiLoading) {
-                _detectAndLoadCityPOIs(); // Fire-and-forget, sin await
+                _detectAndLoadCityPOIs();
               }
             },
-          ),
+            onScrollListener: mapbox.OnScrollListener((coordinate) {
+              if (mounted && _followUser) {
+                setState(() => _followUser = false);
+              }
+            }),
 
+              // ── Botón centrar ubicación ───────────────────────────────────────
+          if (!_followUser && !_navigating)
+            Positioned(
+              bottom: 140,
+              right: 16,
+              child: FloatingActionButton.small(
+                heroTag: 'centerBtn',
+                backgroundColor: Colors.white,
+                elevation: 4,
+                onPressed: () {
+                  setState(() => _followUser = true);
+                  if (_currentPosition != null) {
+                    mapboxMap?.setCamera(mapbox.CameraOptions(
+                      center: mapbox.Point(
+                          coordinates: mapbox.Position(
+                              _currentPosition!.longitude,
+                              _currentPosition!.latitude)),
+                      zoom: _calculateDynamicZoom(_currentSpeed),
+                      bearing: _currentPosition!.heading,
+                    ));
+                  }
+                },
+                child: const Icon(Icons.my_location, color: Colors.blue),
+              ),
+            ),
+              
           // ── Botón menú ────────────────────────────────────────────────────
           if (!_navigating)
             Positioned(
