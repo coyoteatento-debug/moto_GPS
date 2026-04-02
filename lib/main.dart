@@ -1356,7 +1356,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
                 setState(() => _followUser = false);
               }
             }),
-
+          ),
               // ── Botón centrar ubicación ───────────────────────────────────────
           if (!_followUser && !_navigating)
             Positioned(
