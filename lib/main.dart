@@ -74,7 +74,6 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
   Uint8List? motoImage;
 
   double _currentSpeed = 0.0;
-  Timer? _poiDebounce;
   Position? _currentPosition;
 
   final TextEditingController _searchController = TextEditingController();
@@ -696,17 +695,12 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
       final catElements = byCategory[catId]!;
 
       final features = catElements.map((e) {
-        final element = e as Map<String, dynamic>; // Agregamos este cast
-        
-        // Usamos 'as num' para que acepte int o double sin romper
-        final pLat = element['type'] == 'node'
-            ? (element['lat'] as num).toDouble()
-            : ((element['center'] as Map<String, dynamic>?)?['lat'] as num? ?? 0.0).toDouble();
-            
-        final pLng = element['type'] == 'node'
-            ? (element['lon'] as num).toDouble()
-            : ((element['center'] as Map<String, dynamic>?)?['lon'] as num? ?? 0.0).toDouble();
-
+        final pLat = e['type'] == 'node'
+            ? e['lat'] as double
+            : (e['center']?['lat'] as double? ?? 0.0);
+        final pLng = e['type'] == 'node'
+            ? e['lon'] as double
+            : (e['center']?['lon'] as double? ?? 0.0);
         return {
           'type': 'Feature',
           'geometry': {
@@ -714,7 +708,8 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
             'coordinates': [pLng, pLat],
           },
           'properties': {
-            'name': (element['tags'] as Map<String, dynamic>?)?['name']?.toString() ?? (cat['label'] as String),
+            'name':
+                (e['tags']?['name'] as String?) ?? (cat['label'] as String),
             'category': catId,
             'label': cat['label'],
             'emoji': cat['emoji'],
@@ -731,24 +726,18 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
 
       cacheEntry['$cacheKey-$catId'] = geoJson;
 
-      // Actualización de caché y datos de tap
-      _poiData[catId] = features.map((f) {
-        // IMPORTANTE: f es 'Object?', debemos decirle a Dart que es un Mapa
-        final feature = f as Map<String, dynamic>;
-        final geometry = feature['geometry'] as Map<String, dynamic>;
-        final coords = geometry['coordinates'] as List<dynamic>;
-        final props = feature['properties'] as Map<String, dynamic>;
-
-        return {
-          'lat': (coords[1] as num).toDouble(),
-          'lng': (coords[0] as num).toDouble(),
-          'name': props['name'],
-          'category': catId,
-          'label': props['label'],
-          'emoji': props['emoji'],
-          'color': cat['color'],
-        };
-      }).toList();
+      // NUEVO: Guardar coordenadas en memoria para detección de tap
+      _poiData[catId] = features
+          .map((f) => {
+                'lat': (f['geometry']['coordinates'][1] as double),
+                'lng': (f['geometry']['coordinates'][0] as double),
+                'name': f['properties']['name'],
+                'category': catId,
+                'label': cat['label'],
+                'emoji': cat['emoji'],
+                'color': cat['color'],
+              })
+          .toList();
 
       await _updatePoiLayer(
         sourceId: 'poi-$catId-source',
@@ -787,44 +776,38 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
   // FIX #1: iconImage ahora usa 'poi-xxx' (íconos registrados por nosotros).
   // FIX #2: iconAllowOverlap: true — antes 'false' ocultaba muchos POIs.
   Future<void> _updatePoiLayer({
-  required String sourceId, 
-  required String layerId, 
-  required String iconName, 
-  required String geoJson
-}) async {
-  if (mapboxMap == null) return;
-  try {
-    final style = await mapboxMap!.style;
-    final exists = await style.styleSourceExists(sourceId);
-
-    if (exists) {
-      // ESTA ES LA CLAVE: Si ya existe, actualiza los datos en lugar de borrar la capa
-      final source = await style.getSource(sourceId);
-      if (source is mapbox.GeoJsonSource) {
-        await source.updateGeoJson(geoJson); 
-      }
-    } else {
-      // Solo si no existe (al iniciar la app) se crea desde cero
+    required String sourceId,
+    required String layerId,
+    required String iconName,
+    required String geoJson,
+  }) async {
+    if (mapboxMap == null) return;
+    try {
+      final style = await mapboxMap!.style;
+      try { await style.removeStyleLayer(layerId);  } catch (_) {}
+      try { await style.removeStyleSource(sourceId); } catch (_) {}
       await style.addSource(mapbox.GeoJsonSource(id: sourceId, data: geoJson));
       await style.addLayer(mapbox.SymbolLayer(
         id: layerId,
         sourceId: sourceId,
-        iconImage: iconName,
-        iconSize: 0.75,
-        iconAllowOverlap: true,
+        iconImage: iconName,          // Ícono personalizado registrado
+        iconSize: 0.75,               // 64px * 0.75 = 48px lógicos
+        iconAllowOverlap: true,       // FIX #2: mostrar todos los íconos
+        iconIgnorePlacement: false,
         textField: '{name}',
         textSize: 10.5,
         textOffset: [0.0, 2.4],
+        textAllowOverlap: false,
+        textOptional: true,           // Ocultar texto si hay colisión (no el ícono)
         textColor: 0xFF1A1A1A,
-        textHaloColor: 0xFFFFFFFF,
+        textHaloColor: 0xFFFFFFFF,    // Halo blanco para legibilidad
         textHaloWidth: 1.5,
-        textOptional: true,
       ));
+    } catch (e) {
+      debugPrint('[POI Layer] Error actualizando capa $layerId: $e');
     }
-  } catch (e) {
-    debugPrint("Error en capa POI: $e");
   }
-}
+
   Future<void> _clearPOIs() async {
     if (mapboxMap == null) return;
     try {
@@ -916,14 +899,39 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     if (remaining.length < 2) return;
     try {
       final style = await mapboxMap!.style;
+      // mapbox_maps_flutter 2.20.0: setStyleSourceProperty recibe Object,
+      // no String — se pasa el Map directamente sin json.encode
       await style.setStyleSourceProperty(
-          'route-source',
-          'data',
-          json.encode({
+        'route-source',
+        'data',
+        {
+          'type': 'Feature',
+          'geometry': {'type': 'LineString', 'coordinates': remaining},
+        },
+      );
+    } catch (e) {
+      // Fallback: si setStyleSourceProperty falla, reconstruir la capa
+      try {
+        final style = await mapboxMap!.style;
+        try { await style.removeStyleLayer('route-layer');  } catch (_) {}
+        try { await style.removeStyleSource('route-source'); } catch (_) {}
+        await style.addSource(mapbox.GeoJsonSource(
+          id: 'route-source',
+          data: json.encode({
             'type': 'Feature',
             'geometry': {'type': 'LineString', 'coordinates': remaining},
-          }));
-    } catch (_) {}
+          }),
+        ));
+        await style.addLayer(mapbox.LineLayer(
+          id: 'route-layer',
+          sourceId: 'route-source',
+          lineColor: 0xFF1976D2,
+          lineWidth: 6.0,
+          lineCap: mapbox.LineCap.ROUND,
+          lineJoin: mapbox.LineJoin.ROUND,
+        ));
+      } catch (_) {}
+    }
   }
 
   // ── NUEVO: Detección de tap en POI ────────────────────────────────────────
@@ -1319,29 +1327,20 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
       body: Stack(
         children: [
           // ── Mapa ──────────────────────────────────────────────────────────
-          SizedBox.expand(
-            child: mapbox.MapWidget(
-              key: const ValueKey("mapWidget"),
-              onMapCreated: _onMapCreated,
-              styleUri: mapbox.MapboxStyles.STANDARD,
-              onTapListener: _onMapTap,
-              cameraOptions: mapbox.CameraOptions(zoom: 15.0, pitch: 0.0),
-              onCameraChangeListener: (state) async {
-            // 1. Cancelamos cualquier carga de POIs que estuviera en espera
-            _poiDebounce?.cancel();
-
-            // 2. Iniciamos un cronómetro de 500ms
-            _poiDebounce = Timer(const Duration(milliseconds: 500), () async {
-              // 3. Solo cargamos si los POIs están visibles y no hay una carga en curso
-              // Además, validamos que el zoom sea suficiente (ej. > 13) para evitar parpadeos masivos
+          // Fix v2.20.0: MapWidget ocupa todo el espacio sin necesitar SizedBox.expand
+          mapbox.MapWidget(
+            key: const ValueKey("mapWidget"),
+            onMapCreated: _onMapCreated,
+            styleUri: mapbox.MapboxStyles.STANDARD,
+            onTapListener: _onMapTap,
+            cameraOptions: mapbox.CameraOptions(zoom: 15.0, pitch: 0.0),
+            // Fix v2.20.0: sin 'async' — el tipo es void Function(CameraChangedEventData)
+            onCameraChangeListener: (state) {
               if (_poisVisible && !_poiLoading) {
-                // Verificamos el nivel de zoom actual del estado de la cámara
-                if ((state.cameraState.zoom ?? 0) > 13.0) {
-                  await _detectAndLoadCityPOIs();
-                }
+                _detectAndLoadCityPOIs(); // Fire-and-forget, sin await
               }
-            });
-          },
+            },
+          ),
 
           // ── Botón menú ────────────────────────────────────────────────────
           if (!_navigating)
