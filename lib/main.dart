@@ -221,6 +221,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     _loadImages();
     _requestPermissions();
     _loadLists();
+    _loadPoiCache();
   }
 
   @override
@@ -333,6 +334,23 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     }
   }
 
+    Future<void> _loadPoiCache() async {
+  final prefs = await SharedPreferences.getInstance();
+  final keys = prefs.getStringList('poi_cache_keys') ?? [];
+  for (final key in keys) {
+    final value = prefs.getString('poi_cache_$key');
+    if (value != null) _poiGeoJsonCache[key] = value;
+  }
+}
+
+    Future<void> _savePoiCache() async {
+  final prefs = await SharedPreferences.getInstance();
+  final keys = _poiGeoJsonCache.keys.toList();
+  await prefs.setStringList('poi_cache_keys', keys);
+  for (final key in keys) {
+    await prefs.setString('poi_cache_$key', _poiGeoJsonCache[key]!);
+  }
+}
   // ── Listas ────────────────────────────────────────────────────────────────
   Future<void> _loadLists() async {
     final prefs = await SharedPreferences.getInstance();
@@ -762,6 +780,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     }
     _poiGeoJsonCache[cacheKey] = 'loaded';
     _poiGeoJsonCache.addAll(cacheEntry);
+    await _savePoiCache();
   }
 
   // ── NUEVO: Renderizar POIs desde caché ────────────────────────────────────
