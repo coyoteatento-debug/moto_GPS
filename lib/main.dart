@@ -2538,14 +2538,18 @@ class _PlaceListScreenState extends State<PlaceListScreen> {
                       IconButton(
                           icon: const Icon(Icons.navigation,
                               color: Colors.blue),
-                          onPressed: () => widget.onNavigate(place)),
+                          onPressed: () {
+                              Navigator.pop(context);
+                              _goToPlace(place.lat, place.lng, place.name);
+                          },
                       IconButton(
                           icon: const Icon(Icons.delete_outline,
                               color: Colors.red),
                           onPressed: () =>
                               setState(() {
-                                  list.places.remove(place);
-                                   _saveLists();
+                                  final targetList = _placeLists.firstWhere((l) => l.places.contains(place));
+                                  targetList.places.remove(place);
+                                  _saveLists();
                               }),
                     ],
                   ),
