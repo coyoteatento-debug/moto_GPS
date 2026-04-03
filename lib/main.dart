@@ -95,6 +95,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
 
   bool _poisVisible = true;
   bool _poiLoading = false;
+  Timer? _cameraDebounce;
   String _currentCity = '';
   mapbox.CoordinateBounds? _lastFetchedBounds;
 
@@ -227,6 +228,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
   @override
   void dispose() {
     _searchController.dispose();
+    _cameraDebounce?.cancel();
     super.dispose();
   }
 
@@ -811,23 +813,31 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     if (mapboxMap == null) return;
     try {
       final style = await mapboxMap!.style;
-      try { await style.removeStyleLayer(layerId);  } catch (_) {}
+
+      // Si la capa ya existe, solo actualiza los datos — sin parpadeo
+      final layerExists = await style.styleLayerExists(layerId);
+      if (layerExists) {
+        await style.setStyleSourceProperty(sourceId, 'data', geoJson);
+        return;
+      }
+
+      // Primera vez: crear fuente y capa desde cero
       try { await style.removeStyleSource(sourceId); } catch (_) {}
       await style.addSource(mapbox.GeoJsonSource(id: sourceId, data: geoJson));
       await style.addLayer(mapbox.SymbolLayer(
         id: layerId,
         sourceId: sourceId,
-        iconImage: iconName,          // Ícono personalizado registrado
-        iconSize: 0.75,               // 64px * 0.75 = 48px lógicos
-        iconAllowOverlap: true,       // FIX #2: mostrar todos los íconos
+        iconImage: iconName,
+        iconSize: 0.75,
+        iconAllowOverlap: true,
         iconIgnorePlacement: false,
         textField: '{name}',
         textSize: 10.5,
         textOffset: [0.0, 2.4],
         textAllowOverlap: false,
-        textOptional: true,           // Ocultar texto si hay colisión (no el ícono)
+        textOptional: true,
         textColor: 0xFF1A1A1A,
-        textHaloColor: 0xFFFFFFFF,    // Halo blanco para legibilidad
+        textHaloColor: 0xFFFFFFFF,
         textHaloWidth: 1.5,
       ));
     } catch (e) {
@@ -1372,12 +1382,13 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
                 cameraOptions: mapbox.CameraOptions(zoom: 15.0, pitch: 0.0),
                 // Fix v2.20.0: sin 'async' — el tipo es void Function(CameraChangedEventData)
                 onCameraChangeListener: (state) {
-                  if (_poisVisible && !_poiLoading) {
-                    _detectAndLoadCityPOIs();
-                  }
-                },
-              ),
-            ),
+                              _cameraDebounce?.cancel();
+                              _cameraDebounce = Timer(const Duration(milliseconds: 600), () {
+                                if (_poisVisible && !_poiLoading) {
+                                  _detectAndLoadCityPOIs();
+                                }
+                              });
+                            },
               // ── Botón centrar ubicación ───────────────────────────────────────
           if (!_followUser && !_navigating)
             Positioned(
