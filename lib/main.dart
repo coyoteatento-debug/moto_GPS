@@ -84,6 +84,8 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   bool _poisVisible = true;
+  bool _userIsExploring  = false; // usuario movió el mapa manualmente
+  bool _isProgrammaticMove = false; // evita falsos positivos en el listener
   bool _poiLoading  = false;
   String _currentCity = '';
   mapbox.CoordinateBounds? _lastFetchedBounds;
@@ -770,7 +772,8 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         );
       } else {
         _updateMotoMarker(position.latitude, position.longitude, position.heading);
-        if (!_routeDrawn && !_showTapConfirm) {
+        if (!_routeDrawn && !_showTapConfirm && !_userIsExploring) {
+          _isProgrammaticMove = true;
           mapboxMap?.setCamera(mapbox.CameraOptions(
             center: mapbox.Point(coordinates: mapbox.Position(position.longitude, position.latitude)),
             zoom: _calculateDynamicZoom(_currentSpeed),
@@ -1032,6 +1035,17 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
               onTapListener: _onMapTap,
               cameraOptions: mapbox.CameraOptions(zoom: 15.0, pitch: 0.0),
               onCameraChangeListener: (state) async {
+                if (_isProgrammaticMove) {
+                  // movimiento programático → ignorar y programar reset del flag
+                  Future.delayed(const Duration(milliseconds: 1200), () {
+                    if (mounted) setState(() => _isProgrammaticMove = false);
+                  });
+                } else {
+                  // movimiento manual del usuario → activar modo exploración
+                  if (!_userIsExploring) {
+                    setState(() => _userIsExploring = true);
+                  }
+                }
                 if (_poisVisible && !_poiLoading) {
                   await _detectAndLoadCityPOIs();
                 }
@@ -1103,6 +1117,43 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
               ),
             ),
 
+// ── Botón recentrar ──────────────────────────
+      if (_userIsExploring && !_navigating)
+        Positioned(
+          bottom: 110, right: 16,
+          child: GestureDetector(
+            onTap: () {
+              setState(() => _userIsExploring = false);
+              if (_currentPosition != null) {
+                _isProgrammaticMove = true;
+                mapboxMap?.flyTo(
+                  mapbox.CameraOptions(
+                    center: mapbox.Point(coordinates: mapbox.Position(
+                      _currentPosition!.longitude,
+                      _currentPosition!.latitude,
+                    )),
+                    zoom: _calculateDynamicZoom(_currentSpeed),
+                    bearing: _currentPosition!.heading,
+                    pitch: 0.0,
+                  ),
+                  mapbox.MapAnimationOptions(duration: 800, startDelay: 0),
+                );
+              }
+            },
+            child: Container(
+              width: 46, height: 46,
+              decoration: BoxDecoration(
+                color: Colors.blue[700],
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 2)),
+                ],
+              ),
+              child: const Icon(Icons.my_location, color: Colors.white, size: 22),
+            ),
+          ),
+        ),
+            
           // ── Barra de búsqueda ────────────────────────
           if (!_navigating)
             Positioned(
