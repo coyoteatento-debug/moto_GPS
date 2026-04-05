@@ -12,8 +12,7 @@ import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'dart:ui' as ui;
 
-const String _mapboxToken =
-    "pk.eyJ1IjoiY295b3RlYXRlbnRvMjIiLCJhIjoiY21tejd3MjNvMDViOTJycTRhajIyejM4MCJ9.eevGvjW-uA4r3VtYWRliaQ";
+const String _mapboxToken = String.fromEnvironment('MAPBOX_TOKEN');
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
