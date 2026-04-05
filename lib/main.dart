@@ -815,13 +815,15 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
       const double offset = 0.45;
       url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/'
             '${Uri.encodeComponent(query)}.json'
-            '?access_token=$_mapboxToken&language=es&limit=6'
+            '?access_token=$_mapboxToken&language=es&limit=8'
             '&proximity=$lng,$lat'
-            '&bbox=${lng-offset},${lat-offset},${lng+offset},${lat+offset}';
+            '&bbox=${lng-offset},${lat-offset},${lng+offset},${lat+offset}'
+            '&types=poi,place,locality,neighborhood,address';
     } else {
       url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/'
             '${Uri.encodeComponent(query)}.json'
-            '?access_token=$_mapboxToken&language=es&limit=6';
+            '?access_token=$_mapboxToken&language=es&limit=8'
+            '&types=poi,place,locality,neighborhood,address';
     }
     try {
       final response = await http.get(Uri.parse(url));
