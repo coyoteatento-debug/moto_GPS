@@ -34,6 +34,7 @@ jobs:
           echo "MAPBOX_DOWNLOADS_TOKEN=${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}" >> ~/.gradle/gradle.properties
           echo "sdk.dir=$ANDROID_HOME" >> android/local.properties
           echo "flutter.sdk=$FLUTTER_ROOT" >> android/local.properties
+          echo "MAPBOX_TOKEN=${{ secrets.MAPBOX_TOKEN }}" >> android/local.properties
 
       - name: Fix AndroidX
         run: |
@@ -60,6 +61,7 @@ jobs:
         run: flutter build apk --release
         env:
           MAPBOX_DOWNLOADS_TOKEN: ${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}
+          MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
           GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=512m"
           JAVA_TOOL_OPTIONS: "-Xmx4g"
 
