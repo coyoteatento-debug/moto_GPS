@@ -820,10 +820,9 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
       const double offset = 0.45;
       url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/'
             '${Uri.encodeComponent(query)}.json'
-            '?access_token=$_mapboxToken&language=es&limit=5'
+            '?access_token=$_mapboxToken&language=es&limit=8'
             '&proximity=$lng,$lat'
-            '&bbox=${lng-offset},${lat-offset},${lng+offset},${lat+offset}'
-            '&types=poi,place,locality,neighborhood,address';
+            '&types=poi,place,locality,neighborhood,address,poi.landmark';
     } else {
       url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/'
             '${Uri.encodeComponent(query)}.json'
@@ -914,29 +913,55 @@ out center 8;
   Future<void> _getRoute(double destLat, double destLng) async {
     if (_currentPosition == null) return;
     try {
-      final response = await http.get(Uri.parse(
-        'https://api.mapbox.com/directions/v5/mapbox/driving/'
-        '${_currentPosition!.longitude},${_currentPosition!.latitude};$destLng,$destLat'
-        '?geometries=geojson&access_token=$_mapboxToken&language=es&overview=full',
-      ));
+      final lat = _currentPosition!.latitude;
+      final lng = _currentPosition!.longitude;
+      const double radius = 10000;
+      final overpassQuery = '''
+[out:json][timeout:15];
+(
+  node["name"~"$query",i](around:$radius,$lat,$lng);
+  way["name"~"$query",i](around:$radius,$lat,$lng);
+);
+out center 10;
+''';
+      final response = await http.post(
+        Uri.parse('https://overpass-api.de/api/interpreter'),
+        body: overpassQuery,
+      ).timeout(const Duration(seconds: 15));
+      
+      debugPrint('Overpass status: ${response.statusCode}');
+      debugPrint('Overpass body: ${response.body.substring(0, min(200, response.body.length))}');
+      
       if (response.statusCode == 200) {
-        final data   = json.decode(response.body);
-        final routes = data['routes'] as List;
-        if (routes.isEmpty) return;
-        final route    = routes[0];
-        final geometry = route['geometry'];
-        final coords   = (geometry['coordinates'] as List)
-            .map((c) => [c[0] as double, c[1] as double]).toList();
-        setState(() {
-          _routeDistance    = '${((route['distance'] as double)/1000).toStringAsFixed(1)} km';
-          _routeDuration    = '${((route['duration'] as double)/60).round()} min';
-          _routeDrawn       = true;
-          _routeCoordinates = coords;
-        });
-        await _drawRouteOnMap(geometry);
-        _fitRouteBounds(destLat, destLng);
+        final decoded = json.decode(response.body);
+        final elements = decoded['elements'] as List;
+        debugPrint('Overpass elements encontrados: ${elements.length}');
+        for (final e in elements) {
+          final pLat = e['type'] == 'node'
+              ? e['lat'] as double
+              : (e['center']?['lat'] as double? ?? 0.0);
+          final pLng = e['type'] == 'node'
+              ? e['lon'] as double
+              : (e['center']?['lon'] as double? ?? 0.0);
+          if (pLat == 0.0 && pLng == 0.0) continue;
+          final name = e['tags']?['name'] as String? ?? query;
+          final isDup = results.any((r) =>
+              _distanceBetween(r['lat'], r['lng'], pLat, pLng) < 100);
+          if (isDup) continue;
+          final distKm = _distanceBetween(lat, lng, pLat, pLng) / 1000;
+          results.add({
+            'name':   name,
+            'short':  name,
+            'lng':    pLng,
+            'lat':    pLat,
+            'distKm': distKm,
+            'source': 'osm',
+          });
+        }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Overpass error: $e');
+    }
   }
 
   Future<void> _drawRouteOnMap(Map<String, dynamic> geometry) async {
