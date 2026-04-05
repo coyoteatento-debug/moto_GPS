@@ -861,8 +861,8 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
       const double radius = 10000; // 10 km
       final overpassQuery = '[out:json][timeout:15];\n'
     '(\n'
-    '  node["name"~"$query",i](around:$radius,$lat,$lng);\n'
-    '  way["name"~"$query",i](around:$radius,$lat,$lng);\n'
+    '  node["name"~="${query}",i](around:${radius},${lat},${lng});\n'
+    '  way["name"~="${query}",i](around:${radius},${lat},${lng});\n'
     ');\n'
     'out center 10;\n';
       final response = await http.post(
