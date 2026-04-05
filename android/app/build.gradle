@@ -34,7 +34,10 @@ android {
         versionCode 1
         versionName "1.0"
         multiDexEnabled true
-        manifestPlaceholders = [MAPBOX_TOKEN: mapboxToken]
+        manifestPlaceholders = [
+            MAPBOX_TOKEN: mapboxToken,
+            applicationName: "io.flutter.app.FlutterApplication"
+        ]
     }
     buildTypes {
         release {
