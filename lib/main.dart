@@ -859,14 +859,12 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
       final lat = _currentPosition!.latitude;
       final lng = _currentPosition!.longitude;
       const double radius = 10000; // 10 km
-      final overpassQuery = '''
-[out:json][timeout:10];
-(
-  node["name"~"${query}",i](around:$radius,$lat,$lng);
-  way["name"~"${query}",i](around:$radius,$lat,$lng);
-);
-out center 8;
-''';
+      final overpassQuery = '[out:json][timeout:15];\n'
+    '(\n'
+    '  node["name"~"$query",i](around:$radius,$lat,$lng);\n'
+    '  way["name"~"$query",i](around:$radius,$lat,$lng);\n'
+    ');\n'
+    'out center 10;\n';
       final response = await http.post(
         Uri.parse('https://overpass-api.de/api/interpreter'),
         body: overpassQuery,
