@@ -86,6 +86,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
   bool _poisVisible = true;
   bool _userIsExploring  = false; // usuario movió el mapa manualmente
   bool _isProgrammaticMove = false; // evita falsos positivos en el listener
+  bool _initialLocationSet = false; // centra el mapa solo al primer arranque
   bool _poiLoading  = false;
   String _currentCity = '';
   mapbox.CoordinateBounds? _lastFetchedBounds;
@@ -750,6 +751,24 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     ).listen((Position position) {
       if (!mounted) return;
       setState(() { _currentSpeed = position.speed * 3.6; _currentPosition = position; });
+    // ── Centrado automático solo al primer arranque ──
+      if (!_initialLocationSet) {
+        _initialLocationSet = true;
+        _isProgrammaticMove = true;
+        mapboxMap?.flyTo(
+          mapbox.CameraOptions(
+            center: mapbox.Point(coordinates: mapbox.Position(
+              position.longitude,
+              position.latitude,
+            )),
+            zoom: 15.0,
+            bearing: position.heading,
+            pitch: 0.0,
+          ),
+          mapbox.MapAnimationOptions(duration: 1200, startDelay: 0),
+        );
+        return;
+      }
       if (_navigating && _routeCoordinates.isNotEmpty) {
         final snapped    = _snapToRoute(position.latitude, position.longitude);
         final snappedLng = snapped[0];
