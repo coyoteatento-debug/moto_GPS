@@ -806,180 +806,262 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
   }
 
   // ── Búsqueda con bias de posición ─────────────────────
-Future<void> _searchPlaces(String query) async {
-  if (query.isEmpty) { setState(() => _searchResults = []); return; }
-  
-  final results = <Map<String, dynamic>>[];
-  
-  if (_currentPosition != null) {
-    final lat = _currentPosition!.latitude;
-    final lng = _currentPosition!.longitude;
-    const double radius = 15000; // 15 km
-    try {
-      // ── Mapa semántico: palabra clave → tag OSM ──────────
-      const semanticTags = <String, String>{
-        'gasolinera'    : 'amenity=fuel',
-        'gasolineras'   : 'amenity=fuel',
-        'gas'           : 'amenity=fuel',
-        'pemex'         : 'amenity=fuel',
-        'combustible'   : 'amenity=fuel',
-        'restaurante'   : 'amenity=restaurant',
-        'restaurantes'  : 'amenity=restaurant',
-        'comida'        : 'amenity=restaurant',
-        'taqueria'      : 'amenity=restaurant',
-        'tacos'         : 'amenity=restaurant',
-        'hospital'      : 'amenity=hospital',
-        'hospitales'    : 'amenity=hospital',
-        'clinica'       : 'amenity=clinic',
-        'emergencias'   : 'amenity=hospital',
-        'hotel'         : 'tourism=hotel',
-        'hoteles'       : 'tourism=hotel',
-        'motel'         : 'tourism=motel',
-        'posada'        : 'tourism=guest_house',
-        'supermercado'  : 'shop=supermarket',
-        'supermercados' : 'shop=supermarket',
-        'walmart'       : 'shop=supermarket',
-        'tienda'        : 'shop=convenience',
-        'tiendas'       : 'shop=convenience',
-        'oxxo'          : 'shop=convenience',
-        'farmacia'      : 'amenity=pharmacy',
-        'farmacias'     : 'amenity=pharmacy',
-        'banco'         : 'amenity=bank',
-        'bancos'        : 'amenity=bank',
-        'cajero'        : 'amenity=atm',
-        'atm'           : 'amenity=atm',
-        'taller'        : 'shop=car_repair',
-        'mecanico'      : 'shop=car_repair',
-        'llantera'      : 'shop=tyres',
-        'estacionamiento': 'amenity=parking',
-        'parking'       : 'amenity=parking',
-        'cafe'          : 'amenity=cafe',
-        'cafeteria'     : 'amenity=cafe',
-        'panaderia'     : 'shop=bakery',
-        'tortilleria'   : 'shop=tortilla',
-      };
+  //
+  // Arquitectura de 4 pasos (en orden de ejecución):
+  //   PASO 1 — Mapbox POI con bbox      → siempre, solo type=poi (sin calles)
+  //   PASO 2 — Overpass por CATEGORÍA   → solo si hay match semántico
+  //   PASO 3 — Overpass por NOMBRE      → si no hubo match semántico Y paso 1 vacío
+  //   PASO 4 — Mapbox ampliado sin bbox → último recurso si todo lo anterior = 0
+  //
+  Future<void> _searchPlaces(String query) async {
+    if (query.isEmpty) { setState(() => _searchResults = []); return; }
 
-      // ── Líneas de categoría OSM si hay match semántico ──
-      final qLower = query.toLowerCase().trim();
-      final osmTag = semanticTags[qLower];
-      String categoryLines = '';
-      if (osmTag != null) {
-        final kv = osmTag.split('=');
-        categoryLines =
-          '  node["${kv[0]}"="${kv[1]}"](around:${radius},${lat},${lng});\n'
-          '  way["${kv[0]}"="${kv[1]}"](around:${radius},${lat},${lng});\n';
-      }
+    final results = <Map<String, dynamic>>[];
 
-      final overpassQuery = '[out:json][timeout:20];\n'
-          '(\n'
-          '${categoryLines}'
-          '  node["name"~"${query}",i](around:${radius},${lat},${lng});\n'
-          '  way["name"~"${query}",i](around:${radius},${lat},${lng});\n'
-          '  node["brand"~"${query}",i](around:${radius},${lat},${lng});\n'
-          '  way["brand"~"${query}",i](around:${radius},${lat},${lng});\n'
-          ');\n'
-          'out center 10;\n';
-      final response = await http.post(
-        Uri.parse('https://overpass-api.de/api/interpreter'),
-        body: overpassQuery,
-      ).timeout(const Duration(seconds: 20));
-      if (response.statusCode == 200) {
-        final elements = json.decode(response.body)['elements'] as List;
-        for (final e in elements) {
-          final pLat = e['type'] == 'node'
-              ? (e['lat'] as num).toDouble()
-              : (e['center']?['lat'] as num?)?.toDouble() ?? 0.0;
-          final pLng = e['type'] == 'node'
-              ? (e['lon'] as num).toDouble()
-              : (e['center']?['lon'] as num?)?.toDouble() ?? 0.0;
-          if (pLat == 0.0 && pLng == 0.0) continue;
-          final name = e['tags']?['name'] as String?
-              ?? e['tags']?['brand'] as String?
-              ?? query;
-          final addr = e['tags']?['addr:street'] as String? ?? '';
-          final fullName = addr.isNotEmpty ? '$name — $addr' : name;
-          final isDup = results.any((r) =>
-              _distanceBetween(r['lat'], r['lng'], pLat, pLng) < 50);
-          if (isDup) continue;
-          final distKm = _distanceBetween(lat, lng, pLat, pLng) / 1000;
-          results.add({
-            'name':   fullName,
-            'short':  name,
-            'lng':    pLng,
-            'lat':    pLat,
-            'distKm': distKm,
-            'source': 'osm',
-          });
-        }
-      }
-    } catch (_) {}
-  }
+    // ── Mapa semántico: palabra clave → tag OSM ──────────
+    const semanticTags = <String, String>{
+      'gasolinera'     : 'amenity=fuel',
+      'gasolineras'    : 'amenity=fuel',
+      'gas'            : 'amenity=fuel',
+      'pemex'          : 'amenity=fuel',
+      'combustible'    : 'amenity=fuel',
+      'restaurante'    : 'amenity=restaurant',
+      'restaurantes'   : 'amenity=restaurant',
+      'comida'         : 'amenity=restaurant',
+      'taqueria'       : 'amenity=restaurant',
+      'tacos'          : 'amenity=restaurant',
+      'hospital'       : 'amenity=hospital',
+      'hospitales'     : 'amenity=hospital',
+      'clinica'        : 'amenity=clinic',
+      'emergencias'    : 'amenity=hospital',
+      'hotel'          : 'tourism=hotel',
+      'hoteles'        : 'tourism=hotel',
+      'motel'          : 'tourism=motel',
+      'posada'         : 'tourism=guest_house',
+      'supermercado'   : 'shop=supermarket',
+      'supermercados'  : 'shop=supermarket',
+      'tienda'         : 'shop=convenience',
+      'tiendas'        : 'shop=convenience',
+      'farmacia'       : 'amenity=pharmacy',
+      'farmacias'      : 'amenity=pharmacy',
+      'banco'          : 'amenity=bank',
+      'bancos'         : 'amenity=bank',
+      'cajero'         : 'amenity=atm',
+      'atm'            : 'amenity=atm',
+      'taller'         : 'shop=car_repair',
+      'mecanico'       : 'shop=car_repair',
+      'llantera'       : 'shop=tyres',
+      'estacionamiento': 'amenity=parking',
+      'parking'        : 'amenity=parking',
+      'cafe'           : 'amenity=cafe',
+      'cafeteria'      : 'amenity=cafe',
+      'panaderia'      : 'shop=bakery',
+      'tortilleria'    : 'shop=tortilla',
+    };
 
-  // ── Fallback Mapbox si no hay resultados OSM ──────────
-  if (results.isEmpty) {
-    try {
-      String url;
-      if (_currentPosition != null) {
-        final lat = _currentPosition!.latitude;
-        final lng = _currentPosition!.longitude;
-        // ── bbox estricto ≈ 15 km alrededor del usuario ──────
-        // 0.135° ≈ 15 km en latitud; suficiente para mantener
-        // los resultados dentro de la misma ciudad
-        const double delta = 0.135;
+    final qLower = query.toLowerCase().trim();
+    final osmTag  = semanticTags[qLower];
+
+    // ── Helper: agrega elemento Overpass a results ────────
+    void addOverpassElement(Map e, double userLat, double userLng) {
+      final pLat = e['type'] == 'node'
+          ? (e['lat'] as num).toDouble()
+          : (e['center']?['lat'] as num?)?.toDouble() ?? 0.0;
+      final pLng = e['type'] == 'node'
+          ? (e['lon'] as num).toDouble()
+          : (e['center']?['lon'] as num?)?.toDouble() ?? 0.0;
+      if (pLat == 0.0 && pLng == 0.0) return;
+      final name    = e['tags']?['name'] as String?
+          ?? e['tags']?['brand'] as String?
+          ?? query;
+      final addr    = e['tags']?['addr:street'] as String? ?? '';
+      final fullName = addr.isNotEmpty ? '$name — $addr' : name;
+      final isDup   = results.any((r) =>
+          _distanceBetween(r['lat'] as double, r['lng'] as double, pLat, pLng) < 80);
+      if (isDup) return;
+      final distKm = _distanceBetween(userLat, userLng, pLat, pLng) / 1000;
+      results.add({
+        'name': fullName, 'short': name,
+        'lng': pLng, 'lat': pLat,
+        'distKm': distKm, 'source': 'osm',
+      });
+    }
+
+    if (_currentPosition != null) {
+      final lat = _currentPosition!.latitude;
+      final lng = _currentPosition!.longitude;
+      const double radius = 15000; // 15 km
+      const double delta  = 0.135; // ≈ 15 km en grados
+
+      // ════════════════════════════════════════════════════
+      // PASO 1 — Mapbox POI con bbox (siempre se ejecuta)
+      //   types=poi  → solo lugares, NUNCA calles ni colonias
+      // ════════════════════════════════════════════════════
+      try {
         final bboxMinLng = (lng - delta).toStringAsFixed(6);
         final bboxMinLat = (lat - delta).toStringAsFixed(6);
         final bboxMaxLng = (lng + delta).toStringAsFixed(6);
         final bboxMaxLat = (lat + delta).toStringAsFixed(6);
-        url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/'
+        final url =
+            'https://api.mapbox.com/geocoding/v5/mapbox.places/'
+            '${Uri.encodeComponent(query)}.json'
+            '?access_token=$_mapboxToken&language=es&limit=8'
+            '&proximity=$lng,$lat'
+            '&bbox=$bboxMinLng,$bboxMinLat,$bboxMaxLng,$bboxMaxLat'
+            '&country=mx'
+            '&types=poi';
+        final response =
+            await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+        if (response.statusCode == 200) {
+          final features = json.decode(response.body)['features'] as List;
+          for (final f in features) {
+            final resLng = (f['center'][0] as num).toDouble();
+            final resLat = (f['center'][1] as num).toDouble();
+            final distKm =
+                _distanceBetween(lat, lng, resLat, resLng) / 1000;
+            if (distKm > 20) continue;
+            final isDup = results.any((r) =>
+                _distanceBetween(r['lat'] as double, r['lng'] as double,
+                    resLat, resLng) < 80);
+            if (isDup) continue;
+            results.add({
+              'name': f['place_name'] as String,
+              'short': f['text'] as String,
+              'lng': resLng, 'lat': resLat,
+              'distKm': distKm, 'source': 'mapbox',
+            });
+          }
+        }
+      } catch (_) {}
+
+      // ════════════════════════════════════════════════════
+      // PASO 2 — Overpass por CATEGORÍA OSM
+      //   Solo si la búsqueda es una palabra genérica con match
+      //   semántico (gasolinera, restaurante, hotel, etc.)
+      // ════════════════════════════════════════════════════
+      if (osmTag != null) {
+        try {
+          final kv = osmTag.split('=');
+          final overpassQuery =
+              '[out:json][timeout:20];\n'
+              '(\n'
+              '  node["${kv[0]}"="${kv[1]}"](around:${radius},${lat},${lng});\n'
+              '  way["${kv[0]}"="${kv[1]}"](around:${radius},${lat},${lng});\n'
+              ');\n'
+              'out center 15;\n';
+          final response = await http.post(
+            Uri.parse('https://overpass-api.de/api/interpreter'),
+            body: overpassQuery,
+          ).timeout(const Duration(seconds: 20));
+          if (response.statusCode == 200) {
+            final elements = json.decode(response.body)['elements'] as List;
+            for (final e in elements) {
+              addOverpassElement(e, lat, lng);
+            }
+          }
+        } catch (_) {}
+      }
+
+      // ════════════════════════════════════════════════════
+      // PASO 3 — Overpass por NOMBRE
+      //   Solo si NO hay match semántico Y el paso 1 (Mapbox)
+      //   no encontró nada → busca el nombre exacto en OSM
+      // ════════════════════════════════════════════════════
+      if (osmTag == null && results.isEmpty) {
+        try {
+          final overpassQuery =
+              '[out:json][timeout:20];\n'
+              '(\n'
+              '  node["name"~"$query",i](around:${radius},${lat},${lng});\n'
+              '  way["name"~"$query",i](around:${radius},${lat},${lng});\n'
+              '  node["brand"~"$query",i](around:${radius},${lat},${lng});\n'
+              '  way["brand"~"$query",i](around:${radius},${lat},${lng});\n'
+              ');\n'
+              'out center 10;\n';
+          final response = await http.post(
+            Uri.parse('https://overpass-api.de/api/interpreter'),
+            body: overpassQuery,
+          ).timeout(const Duration(seconds: 20));
+          if (response.statusCode == 200) {
+            final elements = json.decode(response.body)['elements'] as List;
+            for (final e in elements) {
+              addOverpassElement(e, lat, lng);
+            }
+          }
+        } catch (_) {}
+      }
+
+      // ════════════════════════════════════════════════════
+      // PASO 4 — Mapbox ampliado SIN bbox (último recurso)
+      //   Si todo lo anterior devolvió 0 resultados, se amplía
+      //   el radio y se incluyen direcciones como fallback final
+      // ════════════════════════════════════════════════════
+      if (results.isEmpty) {
+        try {
+          final url =
+              'https://api.mapbox.com/geocoding/v5/mapbox.places/'
               '${Uri.encodeComponent(query)}.json'
               '?access_token=$_mapboxToken&language=es&limit=8'
               '&proximity=$lng,$lat'
-              '&bbox=$bboxMinLng,$bboxMinLat,$bboxMaxLng,$bboxMaxLat'
               '&country=mx'
-              '&types=poi,place,locality,neighborhood,address';
-      } else {
-        url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/'
-              '${Uri.encodeComponent(query)}.json'
-              '?access_token=$_mapboxToken&language=es&limit=8'
-              '&country=mx'
-              '&types=poi,place,locality,neighborhood,address';
-      }
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        final features = json.decode(response.body)['features'] as List;
-        for (final f in features) {
-          final resLng = f['center'][0] as double;
-          final resLat = f['center'][1] as double;
-          double? distKm;
-          if (_currentPosition != null) {
-            distKm = _distanceBetween(
-                _currentPosition!.latitude, _currentPosition!.longitude,
-                resLat, resLng) / 1000;
-            // ── Filtro de seguridad: descartar resultados > 20 km ──
-            if (distKm > 20) continue;
+              '&types=poi,address';
+          final response =
+              await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+          if (response.statusCode == 200) {
+            final features = json.decode(response.body)['features'] as List;
+            for (final f in features) {
+              final resLng = (f['center'][0] as num).toDouble();
+              final resLat = (f['center'][1] as num).toDouble();
+              final distKm =
+                  _distanceBetween(lat, lng, resLat, resLng) / 1000;
+              if (distKm > 30) continue; // radio ampliado solo en último recurso
+              results.add({
+                'name': f['place_name'] as String,
+                'short': f['text'] as String,
+                'lng': resLng, 'lat': resLat,
+                'distKm': distKm, 'source': 'mapbox',
+              });
+            }
           }
-          results.add({
-            'name':   f['place_name'] as String,
-            'short':  f['text'] as String,
-            'lng':    resLng,
-            'lat':    resLat,
-            'distKm': distKm,
-            'source': 'mapbox',
-          });
-        }
+        } catch (_) {}
       }
-    } catch (_) {}
+
+    } else {
+      // ── Sin GPS: Mapbox sin restricción geográfica ──────
+      try {
+        final url =
+            'https://api.mapbox.com/geocoding/v5/mapbox.places/'
+            '${Uri.encodeComponent(query)}.json'
+            '?access_token=$_mapboxToken&language=es&limit=8'
+            '&country=mx'
+            '&types=poi,place,address';
+        final response =
+            await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+        if (response.statusCode == 200) {
+          final features = json.decode(response.body)['features'] as List;
+          for (final f in features) {
+            final resLng = (f['center'][0] as num).toDouble();
+            final resLat = (f['center'][1] as num).toDouble();
+            results.add({
+              'name': f['place_name'] as String,
+              'short': f['text'] as String,
+              'lng': resLng, 'lat': resLat,
+              'distKm': null, 'source': 'mapbox',
+            });
+          }
+        }
+      } catch (_) {}
+    }
+
+    // ── Ordenar por distancia y limitar a 8 ───────────────
+    results.sort((a, b) {
+      final dA = a['distKm'] as double? ?? 999.0;
+      final dB = b['distKm'] as double? ?? 999.0;
+      return dA.compareTo(dB);
+    });
+
+    setState(() => _searchResults = results.take(8).toList());
   }
-
-  // ── Ordenar por distancia ──────────────────────────────
-  results.sort((a, b) {
-    final dA = a['distKm'] as double? ?? 999.0;
-    final dB = b['distKm'] as double? ?? 999.0;
-    return dA.compareTo(dB);
-  });
-
-  setState(() => _searchResults = results.take(8).toList());
-}
   // ── Ruta ──────────────────────────────────────────────
   Future<void> _getRoute(double destLat, double destLng) async {
     if (_currentPosition == null) return;
