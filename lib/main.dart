@@ -3,8 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'dart:typed_data';
 import 'dart:convert';
 import 'dart:math';
@@ -18,32 +16,6 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   mapbox.MapboxOptions.setAccessToken(_mapboxToken);
   runApp(const MaterialApp(home: MotoGPSApp()));
-}
-
-class PlaceItem {
-  final String name;
-  final double lat;
-  final double lng;
-  PlaceItem({required this.name, required this.lat, required this.lng});
-  Map<String, dynamic> toJson() => {'name': name, 'lat': lat, 'lng': lng};
-  factory PlaceItem.fromJson(Map<String, dynamic> j) =>
-      PlaceItem(name: j['name'], lat: j['lat'], lng: j['lng']);
-}
-
-class PlaceList {
-  String id;
-  String name;
-  String emoji;
-  List<PlaceItem> places;
-  PlaceList({required this.id, required this.name, required this.emoji, required this.places});
-  Map<String, dynamic> toJson() => {
-        'id': id, 'name': name, 'emoji': emoji,
-        'places': places.map((p) => p.toJson()).toList(),
-      };
-  factory PlaceList.fromJson(Map<String, dynamic> j) => PlaceList(
-        id: j['id'], name: j['name'], emoji: j['emoji'] ?? '📍',
-        places: (j['places'] as List).map((p) => PlaceItem.fromJson(p)).toList(),
-      );
 }
 
 class MotoGPSApp extends StatefulWidget {
@@ -76,8 +48,6 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
   double? _tappedLng;
 
   List<List<double>> _routeCoordinates = [];
-  List<PlaceList> _placeLists = [];
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   bool _userIsExploring  = false;
   bool _isProgrammaticMove = false;
@@ -88,7 +58,6 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     super.initState();
     _loadImages();
     _requestPermissions();
-    _loadLists();
   }
 
   @override
@@ -110,164 +79,6 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     final Uint8List pinResized  = await _resizeImage(pinData.buffer.asUint8List(), 120);
     final Uint8List motoResized = await _resizeImage(motoData.buffer.asUint8List(), 100);
     setState(() { pinImage = pinResized; motoImage = motoResized; });
-  }
-
-  // ── Listas ────────────────────────────────────────────
-  Future<void> _loadLists() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw   = prefs.getString('place_lists');
-    if (raw != null) {
-      final data = json.decode(raw) as List;
-      setState(() { _placeLists = data.map((e) => PlaceList.fromJson(e)).toList(); });
-    }
-  }
-
-  Future<void> _saveLists() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('place_lists',
-        json.encode(_placeLists.map((l) => l.toJson()).toList()));
-  }
-
-  void _createList() {
-    final nameController = TextEditingController();
-    String selectedEmoji = '📍';
-    final emojis = ['📍','⛽','🍽️','🏨','🏍️','🌄','🔧','🎯','⭐','🗺️'];
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) => AlertDialog(
-          title: const Text('Nueva lista'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                    labelText: 'Nombre de la lista', border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 16),
-              const Text('Elige un emoji:'),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                children: emojis.map((e) => GestureDetector(
-                  onTap: () => setS(() => selectedEmoji = e),
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: selectedEmoji == e ? Colors.blue[100] : Colors.transparent,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                          color: selectedEmoji == e ? Colors.blue : Colors.transparent),
-                    ),
-                    child: Text(e, style: const TextStyle(fontSize: 22)),
-                  ),
-                )).toList(),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-            ElevatedButton(
-              onPressed: () {
-                if (nameController.text.trim().isEmpty) return;
-                setState(() {
-                  _placeLists.add(PlaceList(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                    name: nameController.text.trim(),
-                    emoji: selectedEmoji,
-                    places: [],
-                  ));
-                });
-                _saveLists();
-                Navigator.pop(ctx);
-              },
-              child: const Text('Crear'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _addPlaceToList(PlaceItem place) {
-    if (_placeLists.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Primero crea una lista'),
-        action: SnackBarAction(label: 'Crear', onPressed: _createList),
-      ));
-      return;
-    }
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Agregar a lista'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: _placeLists.length,
-            itemBuilder: (_, i) {
-              final list = _placeLists[i];
-              return ListTile(
-                leading: Text(list.emoji, style: const TextStyle(fontSize: 24)),
-                title: Text(list.name),
-                subtitle: Text('${list.places.length} lugares'),
-                onTap: () {
-                  final exists = list.places.any((p) => p.name == place.name);
-                  if (exists) {
-                    Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Este lugar ya está en la lista')));
-                    return;
-                  }
-                  setState(() => list.places.add(place));
-                  _saveLists();
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('✅ Agregado a "${list.name}"')));
-                },
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-        ],
-      ),
-    );
-  }
-
-  void _openList(PlaceList list) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PlaceListScreen(
-          placeList: list,
-          onNavigate: (place) { Navigator.pop(context); _goToPlace(place.lat, place.lng, place.name); },
-          onDelete:   (place) { setState(() => list.places.remove(place)); _saveLists(); },
-          onShare:    () => _shareList(list),
-          onDeleteList: () { setState(() => _placeLists.remove(list)); _saveLists(); Navigator.pop(context); },
-        ),
-      ),
-    );
-  }
-
-  void _shareList(PlaceList list) async {
-    final buffer = StringBuffer();
-    buffer.writeln('${list.emoji} ${list.name} — MotoGPS\n');
-    for (final place in list.places) {
-      buffer.writeln('📍 ${place.name}');
-      buffer.writeln('https://maps.google.com/?q=${place.lat},${place.lng}\n');
-    }
-    final uri = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(buffer.toString())}');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      await Clipboard.setData(ClipboardData(text: buffer.toString()));
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('📋 Lista copiada al portapapeles')));
-    }
   }
 
   // ── Permisos ──────────────────────────────────────────
@@ -307,10 +118,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         'color': '#F5820C',
         'width': [
           'interpolate', ['linear'], ['zoom'],
-          8, 1.5,
-          12, 4.0,
-          16, 10.0,
-          20, 16.0,
+          8, 1.5, 12, 4.0, 16, 10.0, 20, 16.0,
         ],
       },
       {
@@ -318,10 +126,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         'color': '#C96800',
         'width': [
           'interpolate', ['linear'], ['zoom'],
-          8, 2.5,
-          12, 6.0,
-          16, 13.0,
-          20, 20.0,
+          8, 2.5, 12, 6.0, 16, 13.0, 20, 20.0,
         ],
       },
 
@@ -331,10 +136,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         'color': '#FFD600',
         'width': [
           'interpolate', ['linear'], ['zoom'],
-          8, 1.0,
-          12, 3.0,
-          16, 8.0,
-          20, 14.0,
+          8, 1.0, 12, 3.0, 16, 8.0, 20, 14.0,
         ],
       },
       {
@@ -342,10 +144,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         'color': '#D4B000',
         'width': [
           'interpolate', ['linear'], ['zoom'],
-          8, 2.0,
-          12, 5.0,
-          16, 11.0,
-          20, 18.0,
+          8, 2.0, 12, 5.0, 16, 11.0, 20, 18.0,
         ],
       },
 
@@ -355,10 +154,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         'color': '#FFE566',
         'width': [
           'interpolate', ['linear'], ['zoom'],
-          10, 0.8,
-          13, 2.0,
-          16, 6.0,
-          20, 10.0,
+          10, 0.8, 13, 2.0, 16, 6.0, 20, 10.0,
         ],
       },
       {
@@ -366,10 +162,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         'color': '#C8B040',
         'width': [
           'interpolate', ['linear'], ['zoom'],
-          10, 1.5,
-          13, 3.5,
-          16, 8.5,
-          20, 13.0,
+          10, 1.5, 13, 3.5, 16, 8.5, 20, 13.0,
         ],
       },
 
@@ -379,9 +172,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         'color': '#FFFFFF',
         'width': [
           'interpolate', ['linear'], ['zoom'],
-          13, 0.5,
-          16, 3.5,
-          20, 7.0,
+          13, 0.5, 16, 3.5, 20, 7.0,
         ],
       },
       {
@@ -389,9 +180,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         'color': '#FFFFFF',
         'width': [
           'interpolate', ['linear'], ['zoom'],
-          13, 0.5,
-          16, 3.5,
-          20, 7.0,
+          13, 0.5, 16, 3.5, 20, 7.0,
         ],
       },
       {
@@ -399,9 +188,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         'color': '#CCCCCC',
         'width': [
           'interpolate', ['linear'], ['zoom'],
-          13, 1.0,
-          16, 5.5,
-          20, 10.0,
+          13, 1.0, 16, 5.5, 20, 10.0,
         ],
       },
 
@@ -411,9 +198,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         'color': '#D9CEBC',
         'width': [
           'interpolate', ['linear'], ['zoom'],
-          14, 0.5,
-          17, 2.0,
-          20, 4.0,
+          14, 0.5, 17, 2.0, 20, 4.0,
         ],
       },
       {
@@ -421,9 +206,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         'color': '#EDE8DC',
         'width': [
           'interpolate', ['linear'], ['zoom'],
-          14, 0.8,
-          17, 2.5,
-          20, 5.0,
+          14, 0.8, 17, 2.5, 20, 5.0,
         ],
       },
     ];
@@ -431,26 +214,19 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     for (final road in roadConfig) {
       try {
         await style.setStyleLayerProperty(
-          road['layer'] as String,
-          'line-color',
-          json.encode(road['color']),
+          road['layer'] as String, 'line-color', json.encode(road['color']),
         );
       } catch (_) {}
-
       try {
         await style.setStyleLayerProperty(
-          road['layer'] as String,
-          'line-width',
-          json.encode(road['width']),
+          road['layer'] as String, 'line-width', json.encode(road['width']),
         );
       } catch (_) {}
     }
 
     // ── Fondo crema cálido tipo Riser ──────────────────
     try {
-      await style.setStyleLayerProperty(
-        'land', 'background-color', json.encode('#F5F0E8'),
-      );
+      await style.setStyleLayerProperty('land', 'background-color', json.encode('#F5F0E8'));
     } catch (_) {}
   }
 
@@ -604,23 +380,18 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
       if (!mounted) return;
       setState(() { _currentSpeed = position.speed * 3.6; _currentPosition = position; });
 
-      // ── Centrado automático solo al primer arranque ──
       if (!_initialLocationSet) {
         _initialLocationSet = true;
         _isProgrammaticMove = true;
         mapboxMap?.flyTo(
           mapbox.CameraOptions(
             center: mapbox.Point(coordinates: mapbox.Position(
-              position.longitude,
-              position.latitude,
+              position.longitude, position.latitude,
             )),
-            zoom: 15.0,
-            bearing: position.heading,
-            pitch: 0.0,
+            zoom: 15.0, bearing: position.heading, pitch: 0.0,
           ),
           mapbox.MapAnimationOptions(duration: 1200, startDelay: 0),
         );
-        // ── Cargar gasolineras cercanas al primer fix GPS ──
         Future.delayed(const Duration(milliseconds: 1500), () {
           _fetchGasolineras(position.latitude, position.longitude);
         });
@@ -661,11 +432,10 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     });
   }
 
-
   // ── Gasolineras ───────────────────────────────────────
   Future<void> _fetchGasolineras(double lat, double lng) async {
     if (mapboxMap == null) return;
-    const double radius = 8000; // 8 km alrededor de la posición actual
+    const double radius = 8000;
     final query =
         '[out:json][timeout:25];\n'
         '(\n'
@@ -712,8 +482,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
       try { await style.removeStyleLayer('gasolineras-layer');  } catch (_) {}
       try { await style.removeStyleSource('gasolineras-source'); } catch (_) {}
       await style.addSource(mapbox.GeoJsonSource(
-        id: 'gasolineras-source',
-        data: geoJson,
+        id: 'gasolineras-source', data: geoJson,
       ));
       await style.addLayer(mapbox.SymbolLayer(
         id:               'gasolineras-layer',
@@ -787,18 +556,6 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     );
   }
 
-  void _goToPlace(double lat, double lng, String name) async {
-    Navigator.of(context).popUntil((route) => route.isFirst);
-    setState(() {
-      _selectedPlace = {'name': name, 'lat': lat, 'lng': lng};
-      _routeDrawn = false; _navigating = false;
-      _showTapConfirm = false; _routeCoordinates = [];
-    });
-    FocusScope.of(context).unfocus();
-    await _addDestinationMarker(lat, lng);
-    await _getRoute(lat, lng);
-  }
-
   Future<void> _cancelRoute() async {
     if (mapboxMap != null) {
       try {
@@ -836,92 +593,6 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      key: _scaffoldKey,
-      drawer: Drawer(
-        child: SafeArea(
-          child: Column(
-            children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(color: Colors.blue[700]),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text('🏍️ MotoGPS',
-                        style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                    SizedBox(height: 4),
-                    Text('Mis listas de lugares',
-                        style: TextStyle(color: Colors.white70, fontSize: 14)),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: _placeLists.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text('📭', style: TextStyle(fontSize: 48)),
-                            const SizedBox(height: 12),
-                            const Text('No tienes listas aún',
-                                style: TextStyle(color: Colors.grey, fontSize: 16)),
-                            const SizedBox(height: 16),
-                            ElevatedButton.icon(
-                                onPressed: _createList,
-                                icon: const Icon(Icons.add),
-                                label: const Text('Crear lista')),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: _placeLists.length,
-                        itemBuilder: (_, i) {
-                          final list = _placeLists[i];
-                          return ListTile(
-                            leading: Text(list.emoji, style: const TextStyle(fontSize: 28)),
-                            title: Text(list.name,
-                                style: const TextStyle(fontWeight: FontWeight.w600)),
-                            subtitle: Text(
-                                '${list.places.length} lugar${list.places.length == 1 ? '' : 'es'}'),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                    icon: const Icon(Icons.share, color: Colors.blue, size: 20),
-                                    onPressed: () => _shareList(list)),
-                                const Icon(Icons.chevron_right, color: Colors.grey),
-                              ],
-                            ),
-                            onTap: () => _openList(list),
-                          );
-                        },
-                      ),
-              ),
-              if (_placeLists.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: _createList,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Nueva lista'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue[700],
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-
       body: Stack(
         children: [
 
@@ -939,31 +610,11 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
                     if (mounted) setState(() => _isProgrammaticMove = false);
                   });
                 } else {
-                  if (!_userIsExploring) {
-                    setState(() => _userIsExploring = true);
-                  }
+                  if (!_userIsExploring) setState(() => _userIsExploring = true);
                 }
               },
             ),
           ),
-
-          // ── Botón menú ───────────────────────────────
-          if (!_navigating)
-            Positioned(
-              top: 50, left: 16,
-              child: GestureDetector(
-                onTap: () => _scaffoldKey.currentState?.openDrawer(),
-                child: Container(
-                  width: 46, height: 46,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 2))],
-                  ),
-                  child: const Icon(Icons.menu, color: Colors.black87),
-                ),
-              ),
-            ),
 
           // ── Botón recentrar ──────────────────────────
           if (_userIsExploring && !_navigating)
@@ -977,8 +628,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
                     mapboxMap?.flyTo(
                       mapbox.CameraOptions(
                         center: mapbox.Point(coordinates: mapbox.Position(
-                          _currentPosition!.longitude,
-                          _currentPosition!.latitude,
+                          _currentPosition!.longitude, _currentPosition!.latitude,
                         )),
                         zoom: _calculateDynamicZoom(_currentSpeed),
                         bearing: _currentPosition!.heading,
@@ -1086,21 +736,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
                             style: TextStyle(color: Colors.grey[700], fontSize: 14)),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    TextButton.icon(
-                      onPressed: () {
-                        if (_selectedPlace != null) {
-                          _addPlaceToList(PlaceItem(
-                              name: _selectedPlace!['name'],
-                              lat:  _selectedPlace!['lat'],
-                              lng:  _selectedPlace!['lng']));
-                        }
-                      },
-                      icon: const Icon(Icons.bookmark_add_outlined, color: Colors.orange),
-                      label: const Text('Guardar en lista',
-                          style: TextStyle(color: Colors.orange)),
-                    ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 14),
                     Row(
                       children: [
                         Expanded(
@@ -1192,108 +828,6 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
 
         ],
       ),
-    );
-  }
-}
-
-// ── PlaceListScreen ───────────────────────────────────────
-class PlaceListScreen extends StatefulWidget {
-  final PlaceList placeList;
-  final Function(PlaceItem) onNavigate;
-  final Function(PlaceItem) onDelete;
-  final VoidCallback onShare;
-  final VoidCallback onDeleteList;
-
-  const PlaceListScreen({
-    super.key,
-    required this.placeList,
-    required this.onNavigate,
-    required this.onDelete,
-    required this.onShare,
-    required this.onDeleteList,
-  });
-
-  @override
-  State<PlaceListScreen> createState() => _PlaceListScreenState();
-}
-
-class _PlaceListScreenState extends State<PlaceListScreen> {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('${widget.placeList.emoji} ${widget.placeList.name}'),
-        backgroundColor: Colors.blue[700],
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(icon: const Icon(Icons.share), onPressed: widget.onShare),
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            onPressed: () => showDialog(
-              context: context,
-              builder: (_) => AlertDialog(
-                title: const Text('Eliminar lista'),
-                content: Text('¿Eliminar "${widget.placeList.name}"? Esta acción no se puede deshacer.'),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancelar')),
-                  ElevatedButton(
-                    onPressed: () { Navigator.pop(context); widget.onDeleteList(); },
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                    child: const Text('Eliminar', style: TextStyle(color: Colors.white)),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-      body: widget.placeList.places.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Text('📭', style: TextStyle(fontSize: 48)),
-                  SizedBox(height: 12),
-                  Text('No hay lugares en esta lista',
-                      style: TextStyle(color: Colors.grey, fontSize: 16)),
-                  SizedBox(height: 8),
-                  Text('Navega a un lugar y toca 🔖 para guardarlo aquí',
-                      style: TextStyle(color: Colors.grey, fontSize: 13),
-                      textAlign: TextAlign.center),
-                ],
-              ),
-            )
-          : ListView.separated(
-              itemCount: widget.placeList.places.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (_, i) {
-                final place = widget.placeList.places[i];
-                return ListTile(
-                  leading: const CircleAvatar(
-                    backgroundColor: Colors.blue,
-                    child: Icon(Icons.location_on, color: Colors.white, size: 18),
-                  ),
-                  title: Text(place.name, maxLines: 2, overflow: TextOverflow.ellipsis),
-                  subtitle: Text(
-                    '${place.lat.toStringAsFixed(4)}, ${place.lng.toStringAsFixed(4)}',
-                    style: const TextStyle(fontSize: 11),
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                          icon: const Icon(Icons.navigation, color: Colors.blue),
-                          onPressed: () => widget.onNavigate(place)),
-                      IconButton(
-                          icon: const Icon(Icons.delete_outline, color: Colors.red),
-                          onPressed: () => setState(() => widget.onDelete(place))),
-                    ],
-                  ),
-                );
-              },
-            ),
     );
   }
 }
