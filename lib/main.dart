@@ -54,8 +54,6 @@ class MotoGPSApp extends StatefulWidget {
 
 class _MotoGPSAppState extends State<MotoGPSApp> {
 
-  Timer? _poiDebounceTimer;
-  
   mapbox.MapboxMap? mapboxMap;
   mapbox.PointAnnotationManager? annotationManager;
   mapbox.PointAnnotation? motoAnnotation;
@@ -66,9 +64,6 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
 
   double _currentSpeed = 0.0;
   Position? _currentPosition;
-
-  final TextEditingController _searchController = TextEditingController();
-  List<Map<String, dynamic>> _searchResults = [];
 
   Map<String, dynamic>? _selectedPlace;
   bool _routeDrawn = false;
@@ -84,22 +79,9 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
   List<PlaceList> _placeLists = [];
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
-  bool _poisVisible = true;
-  bool _userIsExploring  = false; // usuario movió el mapa manualmente
-  bool _isProgrammaticMove = false; // evita falsos positivos en el listener
-  bool _initialLocationSet = false; // centra el mapa solo al primer arranque
-  bool _poiLoading  = false;
-  String _currentCity = '';
-  mapbox.CoordinateBounds? _lastFetchedBounds;
-
-  static const List<Map<String, String>> _poiCategories = [
-    {'id': 'fuel',        'query': 'amenity=fuel',        'icon': 'fuel',       'label': 'Gasolineras'},
-    {'id': 'restaurant',  'query': 'amenity=restaurant',  'icon': 'restaurant', 'label': 'Restaurantes'},
-    {'id': 'hotel',       'query': 'tourism=hotel',       'icon': 'lodging',    'label': 'Hoteles'},
-    {'id': 'mall',        'query': 'shop=mall',           'icon': 'shop',       'label': 'Centros comerciales'},
-    {'id': 'marketplace', 'query': 'amenity=marketplace', 'icon': 'shop',       'label': 'Plazas comerciales'},
-    {'id': 'hospital',    'query': 'amenity=hospital',    'icon': 'hospital',   'label': 'Hospitales'},
-  ];
+  bool _userIsExploring  = false;
+  bool _isProgrammaticMove = false;
+  bool _initialLocationSet = false;
 
   @override
   void initState() {
@@ -111,8 +93,6 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
 
   @override
   void dispose() {
-    _poiDebounceTimer?.cancel();
-    _searchController.dispose();
     super.dispose();
   }
 
@@ -314,12 +294,11 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     await _applyCustomRoadStyle();
   }
 
-    // ── Estilo de carreteras tipo Riser ───────────────────
+  // ── Estilo de carreteras tipo Riser ───────────────────
   Future<void> _applyCustomRoadStyle() async {
     if (mapboxMap == null) return;
     final style = await mapboxMap!.style;
 
-    // Estructura: layerId → {color de línea, color casing, ancho base, ancho casing}
     final List<Map<String, dynamic>> roadConfig = [
 
       // ── AUTOPISTAS / CARRETERAS (naranja) ─────────────
@@ -328,10 +307,10 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         'color': '#F5820C',
         'width': [
           'interpolate', ['linear'], ['zoom'],
-          8, 1.5,   // zoom 8  → 1.5px
-          12, 4.0,  // zoom 12 → 4px
-          16, 10.0, // zoom 16 → 10px
-          20, 16.0, // zoom 20 → 16px
+          8, 1.5,
+          12, 4.0,
+          16, 10.0,
+          20, 16.0,
         ],
       },
       {
@@ -450,7 +429,6 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     ];
 
     for (final road in roadConfig) {
-      // Aplicar color
       try {
         await style.setStyleLayerProperty(
           road['layer'] as String,
@@ -459,7 +437,6 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         );
       } catch (_) {}
 
-      // Aplicar grosor con interpolación por zoom
       try {
         await style.setStyleLayerProperty(
           road['layer'] as String,
@@ -474,132 +451,6 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
       await style.setStyleLayerProperty(
         'land', 'background-color', json.encode('#F5F0E8'),
       );
-    } catch (_) {}
-  }
-    
-  // ── POIs ──────────────────────────────────────────────
-  Future<void> _detectAndLoadCityPOIs() async {
-    if (!_poisVisible || mapboxMap == null || _poiLoading) return;
-    try {
-      final cameraState = await mapboxMap!.getCameraState();
-      final bounds = await mapboxMap!.coordinateBoundsForCamera(
-        mapbox.CameraOptions(
-          center:  cameraState.center,
-          zoom:    cameraState.zoom,
-          bearing: cameraState.bearing,
-          pitch:   cameraState.pitch,
-        ),
-      );
-      if (_lastFetchedBounds != null && _boundsAreSimilar(bounds, _lastFetchedBounds!)) return;
-      _lastFetchedBounds = bounds;
-      setState(() => _poiLoading = true);
-      final swLat = bounds.southwest.coordinates.lat.toDouble();
-      final swLng = bounds.southwest.coordinates.lng.toDouble();
-      final neLat = bounds.northeast.coordinates.lat.toDouble();
-      final neLng = bounds.northeast.coordinates.lng.toDouble();
-      if (_currentPosition != null) {
-        await _detectCurrentCity(_currentPosition!.latitude, _currentPosition!.longitude);
-      }
-      await _fetchPOIsForBounds(swLat: swLat, swLng: swLng, neLat: neLat, neLng: neLng);
-    } catch (_) {
-    } finally {
-      if (mounted) setState(() => _poiLoading = false);
-    }
-  }
-
-  bool _boundsAreSimilar(mapbox.CoordinateBounds a, mapbox.CoordinateBounds b) {
-    const t = 0.01;
-    return (a.southwest.coordinates.lat.toDouble() - b.southwest.coordinates.lat.toDouble()).abs() < t &&
-           (a.southwest.coordinates.lng.toDouble() - b.southwest.coordinates.lng.toDouble()).abs() < t &&
-           (a.northeast.coordinates.lat.toDouble() - b.northeast.coordinates.lat.toDouble()).abs() < t &&
-           (a.northeast.coordinates.lng.toDouble() - b.northeast.coordinates.lng.toDouble()).abs() < t;
-  }
-
-  Future<void> _detectCurrentCity(double lat, double lng) async {
-    try {
-      final response = await http.get(Uri.parse(
-        'https://api.mapbox.com/geocoding/v5/mapbox.places/$lng,$lat.json'
-        '?types=place&access_token=$_mapboxToken&language=es&limit=1',
-      ));
-      if (response.statusCode == 200) {
-        final features = (json.decode(response.body)['features'] as List);
-        if (features.isNotEmpty && mounted) {
-          final city = features[0]['text'] as String;
-          if (city != _currentCity) {
-            setState(() => _currentCity = city);
-            _lastFetchedBounds = null;
-          }
-        }
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _fetchPOIsForBounds({
-    required double swLat, required double swLng,
-    required double neLat, required double neLng,
-  }) async {
-    final bbox = '$swLat,$swLng,$neLat,$neLng';
-    await Future.wait(_poiCategories.map((category) async {
-      final query = '[out:json][timeout:25];\n(\n'
-          '  node[${category['query']}]($bbox);\n'
-          '  way[${category['query']}]($bbox);\n'
-          '  relation[${category['query']}]($bbox);\n'
-          ');\nout center;\n';
-      try {
-        final response = await http.post(
-            Uri.parse('https://overpass-api.de/api/interpreter'), body: query);
-        if (response.statusCode != 200) return;
-        final elements = (json.decode(response.body)['elements'] as List);
-        final features = elements.map((e) {
-          final pLat = e['type'] == 'node' ? e['lat'] as double : (e['center']?['lat'] as double? ?? 0.0);
-          final pLng = e['type'] == 'node' ? e['lon'] as double : (e['center']?['lon'] as double? ?? 0.0);
-          return {
-            'type': 'Feature',
-            'geometry': {'type': 'Point', 'coordinates': [pLng, pLat]},
-            'properties': {
-              'name': (e['tags']?['name'] as String?) ?? category['label']!,
-              'category': category['id'],
-            },
-          };
-        }).toList();
-        await _updatePoiLayer(
-          sourceId: 'poi-${category['id']}-source',
-          layerId:  'poi-${category['id']}-layer',
-          iconName: category['icon']!,
-          geoJson:  json.encode({'type': 'FeatureCollection', 'features': features}),
-        );
-      } catch (_) {}
-    }));
-  }
-
-  Future<void> _updatePoiLayer({
-    required String sourceId, required String layerId,
-    required String iconName, required String geoJson,
-  }) async {
-    if (mapboxMap == null) return;
-    try {
-      final style = await mapboxMap!.style;
-      try { await style.removeStyleLayer(layerId);  } catch (_) {}
-      try { await style.removeStyleSource(sourceId); } catch (_) {}
-      await style.addSource(mapbox.GeoJsonSource(id: sourceId, data: geoJson));
-      await style.addLayer(mapbox.SymbolLayer(
-        id: layerId, sourceId: sourceId,
-        iconImage: iconName, iconSize: 1.2, iconAllowOverlap: false,
-        textField: '{name}', textSize: 10.0,
-        textOffset: [0.0, 1.8], textAllowOverlap: false, textOptional: true,
-      ));
-    } catch (_) {}
-  }
-
-  Future<void> _clearPOIs() async {
-    if (mapboxMap == null) return;
-    try {
-      final style = await mapboxMap!.style;
-      for (final c in _poiCategories) {
-        try { await style.removeStyleLayer('poi-${c['id']}-layer');  } catch (_) {}
-        try { await style.removeStyleSource('poi-${c['id']}-source'); } catch (_) {}
-      }
-      _lastFetchedBounds = null;
     } catch (_) {}
   }
 
@@ -677,7 +528,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     if (_navigating) return;
     final lat = context.point.coordinates.lat.toDouble();
     final lng = context.point.coordinates.lng.toDouble();
-    setState(() { _tappedLat = lat; _tappedLng = lng; _showTapConfirm = true; _searchResults = []; });
+    setState(() { _tappedLat = lat; _tappedLng = lng; _showTapConfirm = true; });
     _addDestinationMarker(lat, lng);
     mapboxMap?.flyTo(
       mapbox.CameraOptions(
@@ -704,7 +555,6 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     setState(() {
       _selectedPlace = {'name': placeName, 'lat': _tappedLat, 'lng': _tappedLng};
       _showTapConfirm = false;
-      _searchController.text = placeName;
     });
     await _getRoute(_tappedLat!, _tappedLng!);
   }
@@ -753,7 +603,8 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     ).listen((Position position) {
       if (!mounted) return;
       setState(() { _currentSpeed = position.speed * 3.6; _currentPosition = position; });
-    // ── Centrado automático solo al primer arranque ──
+
+      // ── Centrado automático solo al primer arranque ──
       if (!_initialLocationSet) {
         _initialLocationSet = true;
         _isProgrammaticMove = true;
@@ -771,6 +622,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         );
         return;
       }
+
       if (_navigating && _routeCoordinates.isNotEmpty) {
         final snapped    = _snapToRoute(position.latitude, position.longitude);
         final snappedLng = snapped[0];
@@ -805,284 +657,6 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     });
   }
 
-  // ── Búsqueda con bias de posición ─────────────────────
-  //
-  // Arquitectura de 4 pasos (en orden de ejecución):
-  //   PASO 1 — Mapbox POI con bbox      → siempre, solo type=poi (sin calles)
-  //   PASO 2 — Overpass por CATEGORÍA   → solo si hay match semántico
-  //   PASO 3 — Overpass por NOMBRE      → si no hubo match semántico Y paso 1 vacío
-  //   PASO 4 — Mapbox ampliado sin bbox → último recurso si todo lo anterior = 0
-  //
-  Future<void> _searchPlaces(String query) async {
-    if (query.isEmpty) { setState(() => _searchResults = []); return; }
-
-    final results = <Map<String, dynamic>>[];
-
-    // ── Mapa semántico: palabra clave → tag OSM ──────────
-    const semanticMapbox = <String, String>{
-      'gasolinera'     : 'gas station',
-      'gasolineras'    : 'gas station',
-      'gas'            : 'gas station',
-      'pemex'          : 'pemex',
-      'combustible'    : 'gas station',
-      'restaurante'    : 'restaurant',
-      'restaurantes'   : 'restaurant',
-      'comida'         : 'restaurant',
-      'taqueria'       : 'taqueria',
-      'tacos'          : 'tacos',
-      'hospital'       : 'hospital',
-      'hospitales'     : 'hospital',
-      'clinica'        : 'clinic',
-      'hotel'          : 'hotel',
-      'hoteles'        : 'hotel',
-      'motel'          : 'motel',
-      'supermercado'   : 'supermarket',
-      'farmacia'       : 'pharmacy',
-      'farmacias'      : 'pharmacy',
-      'banco'          : 'bank',
-      'cajero'         : 'atm',
-      'taller'         : 'car repair',
-      'llantera'       : 'tire shop',
-      'estacionamiento': 'parking',
-      'cafe'           : 'cafe',
-      'mall'           : 'mall',
-    };
-    
-    final qLower = query.toLowerCase().trim();
-    final mapboxQuery = semanticMapbox[qLower] ?? query;
-
-    // ── AGREGAR ESTAS LÍNEAS (después del 852) ─────────────
-const semanticOsm = <String, String>{
-  'gasolinera'     : 'amenity=fuel',
-  'gasolineras'    : 'amenity=fuel',
-  'gas'            : 'amenity=fuel',
-  'pemex'          : 'amenity=fuel',
-  'combustible'    : 'amenity=fuel',
-  'restaurante'    : 'amenity=restaurant',
-  'restaurantes'   : 'amenity=restaurant',
-  'comida'         : 'amenity=restaurant',
-  'taqueria'       : 'amenity=restaurant',
-  'tacos'          : 'amenity=restaurant',
-  'hospital'       : 'amenity=hospital',
-  'hospitales'     : 'amenity=hospital',
-  'clinica'        : 'amenity=clinic',
-  'hotel'          : 'tourism=hotel',
-  'hoteles'        : 'tourism=hotel',
-  'motel'          : 'tourism=motel',
-  'farmacia'       : 'amenity=pharmacy',
-  'farmacias'      : 'amenity=pharmacy',
-  'banco'          : 'amenity=bank',
-  'cajero'         : 'amenity=atm',
-  'taller'         : 'shop=car_repair',
-  'llantera'       : 'shop=tyres',
-  'estacionamiento': 'amenity=parking',
-  'cafe'           : 'amenity=cafe',
-  'supermercado'   : 'shop=supermarket',
-  'mall'           : 'shop=mall',
-};
-final String? osmTag = semanticOsm[qLower]; // null si no hay match semántico
-
-    // ── Helper: agrega elemento Overpass a results ────────
-    void addOverpassElement(Map e, double userLat, double userLng) {
-      final pLat = e['type'] == 'node'
-          ? (e['lat'] as num).toDouble()
-          : (e['center']?['lat'] as num?)?.toDouble() ?? 0.0;
-      final pLng = e['type'] == 'node'
-          ? (e['lon'] as num).toDouble()
-          : (e['center']?['lon'] as num?)?.toDouble() ?? 0.0;
-      if (pLat == 0.0 && pLng == 0.0) return;
-      final name    = e['tags']?['name'] as String?
-          ?? e['tags']?['brand'] as String?
-          ?? query;
-      final addr    = e['tags']?['addr:street'] as String? ?? '';
-      final fullName = addr.isNotEmpty ? '$name — $addr' : name;
-      final distKm = _distanceBetween(userLat, userLng, pLat, pLng) / 1000;
-      if (distKm > 20) return;
-      final isDup   = results.any((r) =>
-          _distanceBetween(r['lat'] as double, r['lng'] as double, pLat, pLng) < 80);
-      if (isDup) return;
-      results.add({
-        'name': fullName, 'short': name,
-        'lng': pLng, 'lat': pLat,
-        'distKm': distKm, 'source': 'osm',
-      });
-    }
-
-    if (_currentPosition != null) {
-      final lat = _currentPosition!.latitude;
-      final lng = _currentPosition!.longitude;
-      const double radius = 15000; // 15 km
-      const double delta  = 0.09; // ≈ 10 km en grados
-
-      // ════════════════════════════════════════════════════
-      // PASO 1 — Mapbox POI con bbox (siempre se ejecuta)
-      //   types=poi  → solo lugares, NUNCA calles ni colonias
-      // ════════════════════════════════════════════════════
-      try {
-        final bboxMinLng = (lng - delta).toStringAsFixed(6);
-        final bboxMinLat = (lat - delta).toStringAsFixed(6);
-        final bboxMaxLng = (lng + delta).toStringAsFixed(6);
-        final bboxMaxLat = (lat + delta).toStringAsFixed(6);
-        final url =
-            'https://api.mapbox.com/geocoding/v5/mapbox.places/'
-            '${Uri.encodeComponent(mapboxQuery)}.json'
-            '?access_token=$_mapboxToken&language=es&limit=8'
-            '&proximity=$lng,$lat'
-            '&bbox=$bboxMinLng,$bboxMinLat,$bboxMaxLng,$bboxMaxLat'
-            '&country=mx'
-            '&types=poi';
-        final response =
-            await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
-        if (response.statusCode == 200) {
-          final features = json.decode(response.body)['features'] as List;
-          for (final f in features) {
-            final resLng = (f['center'][0] as num).toDouble();
-            final resLat = (f['center'][1] as num).toDouble();
-            final distKm =
-                _distanceBetween(lat, lng, resLat, resLng) / 1000;
-            if (distKm > 15) continue;
-            final isDup = results.any((r) =>
-                _distanceBetween(r['lat'] as double, r['lng'] as double,
-                    resLat, resLng) < 80);
-            if (isDup) continue;
-            results.add({
-              'name': f['place_name'] as String,
-              'short': f['text'] as String,
-              'lng': resLng, 'lat': resLat,
-              'distKm': distKm, 'source': 'mapbox',
-            });
-          }
-        }
-      } catch (_) {}
-
-      // ════════════════════════════════════════════════════
-      // PASO 2 — Overpass por CATEGORÍA OSM
-      //   Solo si la búsqueda es una palabra genérica con match
-      //   semántico (gasolinera, restaurante, hotel, etc.)
-      // ════════════════════════════════════════════════════
-      if (osmTag != null) {
-        try {
-          final kv = osmTag.split('=');
-          final overpassQuery =
-              '[out:json][timeout:20];\n'
-              '(\n'
-              '  node["${kv[0]}"="${kv[1]}"](around:${radius},${lat},${lng});\n'
-              '  way["${kv[0]}"="${kv[1]}"](around:${radius},${lat},${lng});\n'
-              ');\n'
-              'out center 15;\n';
-          final response = await http.post(
-            Uri.parse('https://overpass-api.de/api/interpreter'),
-            body: overpassQuery,
-          ).timeout(const Duration(seconds: 20));
-          if (response.statusCode == 200) {
-            final elements = json.decode(response.body)['elements'] as List;
-            for (final e in elements) {
-              addOverpassElement(e, lat, lng);
-            }
-          }
-        } catch (_) {}
-      }
-
-      // ════════════════════════════════════════════════════
-      // PASO 3 — Overpass por NOMBRE
-      //   Solo si NO hay match semántico Y el paso 1 (Mapbox)
-      //   no encontró nada → busca el nombre exacto en OSM
-      // ════════════════════════════════════════════════════
-      if (osmTag == null && results.isEmpty) {
-        try {
-          final overpassQuery =
-              '[out:json][timeout:20];\n'
-              '(\n'
-              '  node["name"~"$query",i](around:${radius},${lat},${lng});\n'
-              '  way["name"~"$query",i](around:${radius},${lat},${lng});\n'
-              '  node["brand"~"$query",i](around:${radius},${lat},${lng});\n'
-              '  way["brand"~"$query",i](around:${radius},${lat},${lng});\n'
-              ');\n'
-              'out center 10;\n';
-          final response = await http.post(
-            Uri.parse('https://overpass-api.de/api/interpreter'),
-            body: overpassQuery,
-          ).timeout(const Duration(seconds: 20));
-          if (response.statusCode == 200) {
-            final elements = json.decode(response.body)['elements'] as List;
-            for (final e in elements) {
-              addOverpassElement(e, lat, lng);
-            }
-          }
-        } catch (_) {}
-      }
-
-      // ════════════════════════════════════════════════════
-      // PASO 4 — Mapbox ampliado SIN bbox (último recurso)
-      //   Si todo lo anterior devolvió 0 resultados, se amplía
-      //   el radio y se incluyen direcciones como fallback final
-      // ════════════════════════════════════════════════════
-      if (results.isEmpty) {
-        try {
-          final url =
-              'https://api.mapbox.com/geocoding/v5/mapbox.places/'
-              '${Uri.encodeComponent(mapboxQuery)}.json'
-              '?access_token=$_mapboxToken&language=es&limit=8'
-              '&proximity=$lng,$lat'
-              '&country=mx'
-              '&types=poi,address';
-          final response =
-              await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
-          if (response.statusCode == 200) {
-            final features = json.decode(response.body)['features'] as List;
-            for (final f in features) {
-              final resLng = (f['center'][0] as num).toDouble();
-              final resLat = (f['center'][1] as num).toDouble();
-              final distKm =
-                  _distanceBetween(lat, lng, resLat, resLng) / 1000;
-              if (distKm > 15) continue;
-              results.add({
-                'name': f['place_name'] as String,
-                'short': f['text'] as String,
-                'lng': resLng, 'lat': resLat,
-                'distKm': distKm, 'source': 'mapbox',
-              });
-            }
-          }
-        } catch (_) {}
-      }
-
-    } else {
-      // ── Sin GPS: Mapbox sin restricción geográfica ──────
-      try {
-        final url =
-            'https://api.mapbox.com/geocoding/v5/mapbox.places/'
-            '${Uri.encodeComponent(query)}.json'
-            '?access_token=$_mapboxToken&language=es&limit=8'
-            '&country=mx'
-            '&types=poi,place,address';
-        final response =
-            await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
-        if (response.statusCode == 200) {
-          final features = json.decode(response.body)['features'] as List;
-          for (final f in features) {
-            final resLng = (f['center'][0] as num).toDouble();
-            final resLat = (f['center'][1] as num).toDouble();
-            results.add({
-              'name': f['place_name'] as String,
-              'short': f['text'] as String,
-              'lng': resLng, 'lat': resLat,
-              'distKm': null, 'source': 'mapbox',
-            });
-          }
-        }
-      } catch (_) {}
-    }
-
-    // ── Ordenar por distancia y limitar a 8 ───────────────
-    results.sort((a, b) {
-      final dA = a['distKm'] as double? ?? 999.0;
-      final dB = b['distKm'] as double? ?? 999.0;
-      return dA.compareTo(dB);
-    });
-
-    setState(() => _searchResults = results.take(8).toList());
-  }
   // ── Ruta ──────────────────────────────────────────────
   Future<void> _getRoute(double destLat, double destLng) async {
     if (_currentPosition == null) return;
@@ -1143,7 +717,6 @@ final String? osmTag = semanticOsm[qLower]; // null si no hay match semántico
   void _goToPlace(double lat, double lng, String name) async {
     Navigator.of(context).popUntil((route) => route.isFirst);
     setState(() {
-      _searchResults = []; _searchController.text = name;
       _selectedPlace = {'name': name, 'lat': lat, 'lng': lng};
       _routeDrawn = false; _navigating = false;
       _showTapConfirm = false; _routeCoordinates = [];
@@ -1169,7 +742,6 @@ final String? osmTag = semanticOsm[qLower]; // null si no hay match semántico
       _selectedPlace = null; _routeDrawn = false; _navigating = false;
       _showTapConfirm = false; _tappedLat = null; _tappedLng = null;
       _routeDistance = ''; _routeDuration = ''; _routeCoordinates = [];
-      _searchController.clear();
     });
   }
 
@@ -1292,22 +864,15 @@ final String? osmTag = semanticOsm[qLower]; // null si no hay match semántico
                 if (_isProgrammaticMove) {
                   Future.delayed(const Duration(milliseconds: 1200), () {
                     if (mounted) setState(() => _isProgrammaticMove = false);
-                });
-              } else {
-                if (!_userIsExploring) {
-                  setState(() => _userIsExploring = true);
+                  });
+                } else {
+                  if (!_userIsExploring) {
+                    setState(() => _userIsExploring = true);
+                  }
                 }
-              }
-              // ── Debounce POIs — espera 800ms después del último movimiento ──
-              _poiDebounceTimer?.cancel();
-              _poiDebounceTimer = Timer(const Duration(milliseconds: 800), () {
-                if (_poisVisible && !_poiLoading && mounted) {
-                  _detectAndLoadCityPOIs();
-                }
-              });
-            },
+              },
+            ),
           ),
-        ),
 
           // ── Botón menú ───────────────────────────────
           if (!_navigating)
@@ -1327,182 +892,40 @@ final String? osmTag = semanticOsm[qLower]; // null si no hay match semántico
               ),
             ),
 
-          // ── Botón POIs ───────────────────────────────
-          if (!_navigating)
+          // ── Botón recentrar ──────────────────────────
+          if (_userIsExploring && !_navigating)
             Positioned(
-              top: 108, left: 16,
-              child: Column(
-                children: [
-                  GestureDetector(
-                    onTap: () async {
-                      setState(() => _poisVisible = !_poisVisible);
-                      if (_poisVisible) {
-                        _lastFetchedBounds = null;
-                        await _detectAndLoadCityPOIs();
-                      } else {
-                        await _clearPOIs();
-                      }
-                    },
-                    child: Container(
-                      width: 46, height: 46,
-                      decoration: BoxDecoration(
-                        color: _poisVisible ? Colors.blue[700] : Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 2))],
+              bottom: 110, right: 16,
+              child: GestureDetector(
+                onTap: () {
+                  setState(() => _userIsExploring = false);
+                  if (_currentPosition != null) {
+                    _isProgrammaticMove = true;
+                    mapboxMap?.flyTo(
+                      mapbox.CameraOptions(
+                        center: mapbox.Point(coordinates: mapbox.Position(
+                          _currentPosition!.longitude,
+                          _currentPosition!.latitude,
+                        )),
+                        zoom: _calculateDynamicZoom(_currentSpeed),
+                        bearing: _currentPosition!.heading,
+                        pitch: 0.0,
                       ),
-                      child: _poiLoading
-                          ? const Padding(
-                              padding: EdgeInsets.all(12),
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : Icon(Icons.place,
-                              color: _poisVisible ? Colors.white : Colors.black54),
-                    ),
+                      mapbox.MapAnimationOptions(duration: 800, startDelay: 0),
+                    );
+                  }
+                },
+                child: Container(
+                  width: 46, height: 46,
+                  decoration: BoxDecoration(
+                    color: Colors.blue[700],
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 2)),
+                    ],
                   ),
-                  if (_currentCity.isNotEmpty && _poisVisible)
-                    Container(
-                      margin: const EdgeInsets.only(top: 4),
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                      decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(8)),
-                      child: Text(_currentCity,
-                          style: const TextStyle(color: Colors.white, fontSize: 10)),
-                    ),
-                ],
-              ),
-            ),
-
-// ── Botón recentrar ──────────────────────────
-      if (_userIsExploring && !_navigating)
-        Positioned(
-          bottom: 110, right: 16,
-          child: GestureDetector(
-            onTap: () {
-              setState(() => _userIsExploring = false);
-              if (_currentPosition != null) {
-                _isProgrammaticMove = true;
-                mapboxMap?.flyTo(
-                  mapbox.CameraOptions(
-                    center: mapbox.Point(coordinates: mapbox.Position(
-                      _currentPosition!.longitude,
-                      _currentPosition!.latitude,
-                    )),
-                    zoom: _calculateDynamicZoom(_currentSpeed),
-                    bearing: _currentPosition!.heading,
-                    pitch: 0.0,
-                  ),
-                  mapbox.MapAnimationOptions(duration: 800, startDelay: 0),
-                );
-              }
-            },
-            child: Container(
-              width: 46, height: 46,
-              decoration: BoxDecoration(
-                color: Colors.blue[700],
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 2)),
-                ],
-              ),
-              child: const Icon(Icons.my_location, color: Colors.white, size: 22),
-            ),
-          ),
-        ),
-            
-          // ── Barra de búsqueda ────────────────────────
-          if (!_navigating)
-            Positioned(
-              top: 50, left: 72, right: 16,
-              child: Column(
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 2))],
-                    ),
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: _searchPlaces,
-                      decoration: InputDecoration(
-                        hintText: '🔍  Buscar lugar...',
-                        hintStyle: const TextStyle(color: Colors.grey),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                        suffixIcon: _searchController.text.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear, color: Colors.grey),
-                                onPressed: _cancelRoute)
-                            : const Icon(Icons.search, color: Colors.grey),
-                      ),
-                    ),
-                  ),
-
-                  // ── Resultados de búsqueda ───────────
-                  if (_searchResults.isNotEmpty)
-                    Container(
-                      margin: const EdgeInsets.only(top: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 2))],
-                      ),
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        padding: EdgeInsets.zero,
-                        itemCount: _searchResults.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final place   = _searchResults[index];
-                          final distKm  = place['distKm'] as double?;
-                          final distText = distKm == null ? ''
-                              : distKm < 1
-                                  ? '${(distKm * 1000).toStringAsFixed(0)} m'
-                                  : '${distKm.toStringAsFixed(1)} km';
-                          return ListTile(
-                            leading: const Icon(Icons.location_on, color: Colors.blue),
-                            title: Text(
-                              place['short'] ?? place['name'],
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Text(
-                              place['name'],
-                              style: const TextStyle(fontSize: 11, color: Colors.grey),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (distText.isNotEmpty)
-                                  Container(
-                                    margin: const EdgeInsets.only(right: 4),
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                    decoration: BoxDecoration(
-                                        color: Colors.blue[50],
-                                        borderRadius: BorderRadius.circular(8)),
-                                    child: Text(distText,
-                                        style: TextStyle(
-                                            fontSize: 10,
-                                            color: Colors.blue[700],
-                                            fontWeight: FontWeight.w600)),
-                                  ),
-                                IconButton(
-                                  icon: const Icon(Icons.bookmark_add_outlined, color: Colors.orange),
-                                  onPressed: () => _addPlaceToList(PlaceItem(
-                                      name: place['name'], lat: place['lat'], lng: place['lng'])),
-                                ),
-                              ],
-                            ),
-                            onTap: () => _goToPlace(place['lat'], place['lng'], place['name']),
-                          );
-                        },
-                      ),
-                    ),
-                ],
+                  child: const Icon(Icons.my_location, color: Colors.white, size: 22),
+                ),
               ),
             ),
 
@@ -1763,7 +1186,7 @@ class _PlaceListScreenState extends State<PlaceListScreen> {
                   Text('No hay lugares en esta lista',
                       style: TextStyle(color: Colors.grey, fontSize: 16)),
                   SizedBox(height: 8),
-                  Text('Busca un lugar en el mapa y toca 🔖 para guardarlo aquí',
+                  Text('Navega a un lugar y toca 🔖 para guardarlo aquí',
                       style: TextStyle(color: Colors.grey, fontSize: 13),
                       textAlign: TextAlign.center),
                 ],
