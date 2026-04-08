@@ -849,7 +849,38 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     };
     
     final qLower = query.toLowerCase().trim();
-    final mapboxQuery = semanticMapbox[qLower] ?? query;;
+    final mapboxQuery = semanticMapbox[qLower] ?? query;
+
+    // ── AGREGAR ESTAS LÍNEAS (después del 852) ─────────────
+const semanticOsm = <String, String>{
+  'gasolinera'     : 'amenity=fuel',
+  'gasolineras'    : 'amenity=fuel',
+  'gas'            : 'amenity=fuel',
+  'pemex'          : 'amenity=fuel',
+  'combustible'    : 'amenity=fuel',
+  'restaurante'    : 'amenity=restaurant',
+  'restaurantes'   : 'amenity=restaurant',
+  'comida'         : 'amenity=restaurant',
+  'taqueria'       : 'amenity=restaurant',
+  'tacos'          : 'amenity=restaurant',
+  'hospital'       : 'amenity=hospital',
+  'hospitales'     : 'amenity=hospital',
+  'clinica'        : 'amenity=clinic',
+  'hotel'          : 'tourism=hotel',
+  'hoteles'        : 'tourism=hotel',
+  'motel'          : 'tourism=motel',
+  'farmacia'       : 'amenity=pharmacy',
+  'farmacias'      : 'amenity=pharmacy',
+  'banco'          : 'amenity=bank',
+  'cajero'         : 'amenity=atm',
+  'taller'         : 'shop=car_repair',
+  'llantera'       : 'shop=tyres',
+  'estacionamiento': 'amenity=parking',
+  'cafe'           : 'amenity=cafe',
+  'supermercado'   : 'shop=supermarket',
+  'mall'           : 'shop=mall',
+};
+final String? osmTag = semanticOsm[qLower]; // null si no hay match semántico
 
     // ── Helper: agrega elemento Overpass a results ────────
     void addOverpassElement(Map e, double userLat, double userLng) {
