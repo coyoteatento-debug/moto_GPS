@@ -12,7 +12,8 @@ dependencies:
   mapbox_maps_flutter: ^2.0.0
   geolocator: ^13.0.0
   permission_handler: ^11.3.1
-  http: ^1.2.0                 # ✅ AGREGA
+  shared_preferences: ^2.2.2
+  http: ^1.2.0
   cupertino_icons: ^1.0.6
 
 dev_dependencies:
@@ -22,8 +23,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-
-  # ✅ SECCIÓN AGREGADA - Assets del proyecto
   assets:
     - assets/moto_pin.png
-    - assets/moto.png        # ✅ AGREGA ESTA LÍNEA
+    - assets/moto.png
