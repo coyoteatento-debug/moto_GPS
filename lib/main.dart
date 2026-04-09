@@ -73,6 +73,12 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
   String _routeDistance = '';
   String _routeDuration = '';
 
+  // ── Turn-by-turn ──────────────────────────────────────
+  List<Map<String, dynamic>> _routeSteps = [];
+  String _currentInstruction = '';
+  double _distanceToNextManeuver = 0.0;
+  int _currentStepIndex = 0;
+  
   bool _showTapConfirm = false;
   double? _tappedLat;
   double? _tappedLng;
@@ -351,6 +357,28 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     } catch (_) {}
   }
 
+  void _updateTurnByTurn(double lat, double lng) {
+  if (_routeSteps.isEmpty || _currentStepIndex >= _routeSteps.length) return;
+
+  final step     = _routeSteps[_currentStepIndex];
+  final loc      = step['location'] as List;
+  final stepLng  = (loc[0] as num).toDouble();
+  final stepLat  = (loc[1] as num).toDouble();
+  final distToManeuver = _distanceBetween(lat, lng, stepLat, stepLng);
+
+  setState(() => _distanceToNextManeuver = distToManeuver);
+
+  // Avanza al siguiente paso si estás a menos de 30 m
+  if (distToManeuver < 30 && _currentStepIndex < _routeSteps.length - 1) {
+    _currentStepIndex++;
+    final next = _routeSteps[_currentStepIndex];
+    setState(() {
+      _currentInstruction     = next['instruction'] as String;
+      _distanceToNextManeuver = next['distance'] as double;
+    });
+  }
+}
+
   // ── Tap mapa ──────────────────────────────────────────
   void _onMapTap(mapbox.MapContentGestureContext context) {
     if (_navigating) return;
@@ -464,6 +492,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         _updateMotoMarker(snappedLat, snappedLng, bearing);
         _accumulateTripDistance(position);
         _updateRemainingRoute(position.latitude, position.longitude);
+        _updateTurnByTurn(position.latitude, position.longitude);
         mapboxMap?.flyTo(
           mapbox.CameraOptions(
             center: mapbox.Point(coordinates: mapbox.Position(snappedLng, snappedLat)),
@@ -630,6 +659,21 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     });
   }
 
+_routeSteps = (route['legs'][0]['steps'] as List)
+    .map((s) => {
+          'instruction': (s['maneuver']['instruction'] as String?) ?? '',
+          'distance':    (s['distance'] as num).toDouble(),
+          'location':    s['maneuver']['location'] as List,
+        })
+    .toList();
+_currentStepIndex   = 0;
+_currentInstruction = _routeSteps.isNotEmpty
+    ? _routeSteps[0]['instruction'] as String
+    : '';
+_distanceToNextManeuver = _routeSteps.isNotEmpty
+    ? _routeSteps[0]['distance'] as double
+    : 0.0;
+  
   void _startNavigation() {
     setState(() => _navigating = true);
     _startTripTracking();
@@ -1047,6 +1091,48 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
                     ),
                   ),
 
+// ── Banner instrucción turn-by-turn ─────────────────
+if (_navigating && _currentInstruction.isNotEmpty)
+  Positioned(
+    top: 0, left: 0, right: 0,
+    child: Container(
+      padding: const EdgeInsets.fromLTRB(16, 48, 16, 16),
+      decoration: const BoxDecoration(
+        color: Color(0xFF1565C0),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+        boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 10, offset: Offset(0, 3))],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Icon(Icons.navigation, color: Colors.white, size: 32),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _currentInstruction,
+                  style: const TextStyle(
+                      color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _distanceToNextManeuver >= 1000
+                      ? '${(_distanceToNextManeuver / 1000).toStringAsFixed(1)} km'
+                      : '${_distanceToNextManeuver.toStringAsFixed(0)} m',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  ),
+                
                 // ── Velocímetro modo libre ─────────────
                 if (!_navigating && !_routeDrawn && !_showTapConfirm)
                   Positioned(
