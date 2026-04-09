@@ -999,37 +999,10 @@ IconData _maneuverIcon(String instruction) {
     );
   }
 
-  // ── BUILD ─────────────────────────────────────────────
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      bottomNavigationBar: _navigating
-          ? null
-          : BottomNavigationBar(
-              currentIndex: _currentTabIndex,
-              onTap: (i) => setState(() => _currentTabIndex = i),
-              backgroundColor: Colors.black87,
-              selectedItemColor: Colors.white,
-              unselectedItemColor: Colors.grey,
-              items: const [
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.map_outlined),
-                  activeIcon: Icon(Icons.map),
-                  label: 'Mapa',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.menu_book_outlined),
-                  activeIcon: Icon(Icons.menu_book),
-                  label: 'Libro de viaje',
-                ),
-              ],
-            ),
-      body: _currentTabIndex == 1
-          ? _buildTripBook()
-          : Stack(
-              children: [
-
-                // ── Mapa ──────────────────────────────
+  Widget _buildMapTab() {
+  return Stack(
+    children: [
+      // ── Mapa ──────────────────────────────
                 SizedBox.expand(
                   child: mapbox.MapWidget(
                     key: const ValueKey("mapWidget"),
@@ -1048,6 +1021,66 @@ IconData _maneuverIcon(String instruction) {
                     },
                   ),
                 ),
+              ],
+            );
+           }
+  // ── BUILD ─────────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      bottomNavigationBar: _navigating
+          ? null
+          : BottomNavigationBar(
+              currentIndex: _currentTabIndex,
+              onTap: (i) {
+  setState(() => _currentTabIndex = i);
+  if (i == 0 && _currentPosition != null) {
+    Future.delayed(const Duration(milliseconds: 300), () {
+      _isProgrammaticMove = true;
+      mapboxMap?.flyTo(
+        mapbox.CameraOptions(
+          center: mapbox.Point(coordinates: mapbox.Position(
+            _currentPosition!.longitude,
+            _currentPosition!.latitude,
+          )),
+          zoom: _calculateDynamicZoom(_currentSpeed),
+          bearing: _currentPosition!.heading,
+          pitch: 0.0,
+        ),
+        mapbox.MapAnimationOptions(duration: 800, startDelay: 0),
+      );
+      // Restaurar marcador de moto
+      _updateMotoMarker(
+        _currentPosition!.latitude,
+        _currentPosition!.longitude,
+        _currentPosition!.heading,
+      );
+    });
+  }
+},
+              backgroundColor: Colors.black87,
+              selectedItemColor: Colors.white,
+              unselectedItemColor: Colors.grey,
+              items: const [
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.map_outlined),
+                  activeIcon: Icon(Icons.map),
+                  label: 'Mapa',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.menu_book_outlined),
+                  activeIcon: Icon(Icons.menu_book),
+                  label: 'Libro de viaje',
+                ),
+              ],
+            ),
+      body: IndexedStack(
+        index: _currentTabIndex,
+        children: [
+          _buildMapTab(),   // índice 0 — Mapa
+          _buildTripBook(), // índice 1 — Libro de viaje
+        ],
+      ),
 
 // ── Botón búsqueda ────────────────────────
 if (!_navigating)
