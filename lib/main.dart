@@ -10,6 +10,7 @@ import 'dart:math';
 import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'dart:ui' as ui;
+import 'package:flutter_tts/flutter_tts.dart';
 
 const String _mapboxToken = String.fromEnvironment('MAPBOX_TOKEN', defaultValue: '');
 
@@ -73,6 +74,10 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
   String _routeDistance = '';
   String _routeDuration = '';
 
+  // ── TTS ───────────────────────────────────────────────
+  final FlutterTts _tts = FlutterTts();
+  String _lastSpokenInstruction = '';
+  
   // ── Turn-by-turn ──────────────────────────────────────
   List<Map<String, dynamic>> _routeSteps = [];
   String _currentInstruction = '';
@@ -102,6 +107,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     _loadImages();
     _requestPermissions();
     _loadTrips();
+    _initTts();
   }
 
   @override
@@ -137,6 +143,20 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     }
   }
 
+Future<void> _initTts() async {
+  await _tts.setLanguage('es-MX');
+  await _tts.setSpeechRate(0.52);
+  await _tts.setVolume(1.0);
+  await _tts.setPitch(1.0);
+}
+
+Future<void> _speak(String text) async {
+  if (text.isEmpty || text == _lastSpokenInstruction) return;
+  _lastSpokenInstruction = text;
+  await _tts.stop();
+  await _tts.speak(text);
+}
+  
   Future<void> _saveTrips() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
@@ -370,13 +390,20 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
 
   // Avanza al siguiente paso si estás a menos de 30 m
   if (distToManeuver < 30 && _currentStepIndex < _routeSteps.length - 1) {
-    _currentStepIndex++;
-    final next = _routeSteps[_currentStepIndex];
-    setState(() {
-      _currentInstruction     = next['instruction'] as String;
-      _distanceToNextManeuver = next['distance'] as double;
-    });
-  }
+  _currentStepIndex++;
+  final next = _routeSteps[_currentStepIndex];
+  final instr = next['instruction'] as String;
+  setState(() {
+    _currentInstruction     = instr;
+    _distanceToNextManeuver = next['distance'] as double;
+  });
+  _speak(instr);   // ← voz aquí
+}
+
+// Aviso anticipado a 200 m
+if (distToManeuver < 200 && distToManeuver >= 170) {
+  final preview = _routeSteps[_currentStepIndex]['instruction'] as String;
+  _speak('En 200 metros, $preview');
 }
 
   // ── Tap mapa ──────────────────────────────────────────
@@ -668,6 +695,8 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
       _selectedPlace = null; _routeDrawn = false; _navigating = false;
       _showTapConfirm = false; _tappedLat = null; _tappedLng = null;
       _routeDistance = ''; _routeDuration = ''; _routeCoordinates = [];
+      _tts.stop();
+      _lastSpokenInstruction = '';
     });
   }
   
@@ -781,6 +810,18 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     );
   }
 
+IconData _maneuverIcon(String instruction) {
+  final i = instruction.toLowerCase();
+  if (i.contains('izquierda'))  return Icons.turn_left;
+  if (i.contains('derecha'))    return Icons.turn_right;
+  if (i.contains('derecha'))    return Icons.turn_right;
+  if (i.contains('gira'))       return Icons.turn_slight_right;
+  if (i.contains('rotonda') || i.contains('redondel')) return Icons.roundabout_left;
+  if (i.contains('destino') || i.contains('llegada'))  return Icons.flag;
+  if (i.contains('continúa') || i.contains('sigue'))   return Icons.straight;
+  return Icons.navigation;
+}
+    
   Widget _tripStat(IconData icon, String label, Color color) {
     return Row(
       children: [
@@ -1102,7 +1143,7 @@ if (_navigating && _currentInstruction.isNotEmpty)
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Icon(Icons.navigation, color: Colors.white, size: 32),
+          Icon(_maneuverIcon(_currentInstruction), color: Colors.white, size: 36),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
