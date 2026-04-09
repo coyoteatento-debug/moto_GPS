@@ -83,6 +83,12 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
   String _currentInstruction = '';
   double _distanceToNextManeuver = 0.0;
   int _currentStepIndex = 0;
+
+  // ── Buscador ──────────────────────────────────────────
+  bool _showSearch = false;
+  List<Map<String, dynamic>> _searchResults = [];
+  bool _searchLoading = false;
+  final TextEditingController _searchController = TextEditingController();
   
   bool _showTapConfirm = false;
   double? _tappedLat;
@@ -112,6 +118,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
 
   @override
   void dispose() {
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -155,6 +162,54 @@ Future<void> _speak(String text) async {
   _lastSpokenInstruction = text;
   await _tts.stop();
   await _tts.speak(text);
+}
+
+Future<void> _searchPlaces(String query) async {
+  if (query.trim().length < 3) {
+    setState(() => _searchResults = []);
+    return;
+  }
+  setState(() => _searchLoading = true);
+  try {
+    // Tipos permitidos: lugar, localidad, vecindario, calle, colonia
+    const types = 'place,locality,neighborhood,address,district';
+    final url =
+        'https://api.mapbox.com/geocoding/v5/mapbox.places/'
+        '${Uri.encodeComponent(query)}.json'
+        '?access_token=$_mapboxToken'
+        '&language=es'
+        '&country=MX'
+        '&types=$types'
+        '&limit=7';
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode == 200) {
+      final features = json.decode(response.body)['features'] as List;
+      setState(() {
+        _searchResults = features.map((f) => {
+          'name':      f['text'] as String,
+          'full_name': f['place_name'] as String,
+          'lat':       (f['center'][1] as num).toDouble(),
+          'lng':       (f['center'][0] as num).toDouble(),
+        }).toList();
+      });
+    }
+  } catch (_) {}
+  setState(() => _searchLoading = false);
+}
+
+  Future<void> _selectSearchResult(Map<String, dynamic> place) async {
+  final lat = place['lat'] as double;
+  final lng = place['lng'] as double;
+  // Cerrar modal y limpiar
+  setState(() {
+    _showSearch = false;
+    _searchResults = [];
+    _searchController.clear();
+    _selectedPlace = place;
+  });
+  // Poner marcador y trazar ruta
+  await _addDestinationMarker(lat, lng);
+  await _getRoute(lat, lng);
 }
   
   Future<void> _saveTrips() async {
@@ -716,6 +771,92 @@ if (distToManeuver < 200 && distToManeuver >= 170) {
     }
   }
 
+
+  Widget _buildSearchModal() {
+  return Container(
+    margin: const EdgeInsets.fromLTRB(16, 60, 16, 16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      boxShadow: const [
+        BoxShadow(color: Colors.black26, blurRadius: 16, offset: Offset(0, 4)),
+      ],
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // ── Barra de búsqueda ──
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Row(
+            children: [
+              const Icon(Icons.search, color: Colors.blue),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    hintText: 'Ciudad, colonia, calle...',
+                    border: InputBorder.none,
+                    hintStyle: TextStyle(color: Colors.grey),
+                  ),
+                  onChanged: _searchPlaces,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.grey),
+                onPressed: () => setState(() {
+                  _showSearch = false;
+                  _searchResults = [];
+                  _searchController.clear();
+                }),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        // ── Resultados ──
+        if (_searchLoading)
+          const Padding(
+            padding: EdgeInsets.all(20),
+            child: CircularProgressIndicator(),
+          )
+        else if (_searchResults.isEmpty && _searchController.text.length >= 3)
+          const Padding(
+            padding: EdgeInsets.all(20),
+            child: Text('Sin resultados', style: TextStyle(color: Colors.grey)),
+          )
+        else
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _searchResults.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (_, i) {
+              final place = _searchResults[i];
+              return ListTile(
+                leading: const Icon(Icons.location_on_outlined, color: Colors.blue),
+                title: Text(
+                  place['name'] as String,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+                subtitle: Text(
+                  place['full_name'] as String,
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () => _selectSearchResult(place),
+              );
+            },
+          ),
+        const SizedBox(height: 8),
+      ],
+    ),
+  );
+}
+  
   // ── Libro de viajes UI ────────────────────────────────
   Widget _buildTripBook() {
     return Scaffold(
@@ -887,6 +1028,39 @@ IconData _maneuverIcon(String instruction) {
                   ),
                 ),
 
+// ── Botón búsqueda ────────────────────────
+if (!_navigating)
+  Positioned(
+    top: 50, right: 16,
+    child: GestureDetector(
+      onTap: () => setState(() {
+        _showSearch = !_showSearch;
+        if (!_showSearch) {
+          _searchResults = [];
+          _searchController.clear();
+        }
+      }),
+      child: Container(
+        width: 46, height: 46,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: const [
+            BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 2)),
+          ],
+        ),
+        child: const Icon(Icons.search, color: Colors.blue, size: 24),
+      ),
+    ),
+  ),
+
+// ── Modal búsqueda ────────────────────────
+if (_showSearch && !_navigating)
+  Positioned(
+    top: 0, left: 0, right: 0,
+    child: _buildSearchModal(),
+  ),
+                
                 // ── Botón recentrar ────────────────────
                 if (_userIsExploring && !_navigating)
                   Positioned(
