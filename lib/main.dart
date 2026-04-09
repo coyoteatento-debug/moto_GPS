@@ -1368,7 +1368,6 @@ if (_navigating && _currentInstruction.isNotEmpty)
             ),
     );
   }
-}
 
   // ── BUILD ─────────────────────────────────────────────
   @override
@@ -1428,5 +1427,5 @@ if (_navigating && _currentInstruction.isNotEmpty)
         ],
       ),
     );
-   }     
-  } 
+  }     
+} 
