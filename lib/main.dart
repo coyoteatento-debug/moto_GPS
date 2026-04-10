@@ -730,15 +730,30 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
 
   void _fitRouteBounds(double destLat, double destLng) {
     if (_currentPosition == null) return;
+
+    // Calcular distancia para ajustar zoom dinámicamente
+    final dist = _distanceBetween(
+      _currentPosition!.latitude, _currentPosition!.longitude,
+      destLat, destLng,
+    );
+
+    // Zoom según distancia total de la ruta
+    double zoom;
+    if (dist < 5000)        zoom = 13.0;
+    else if (dist < 20000)  zoom = 11.0;
+    else if (dist < 80000)  zoom = 9.0;
+    else if (dist < 200000) zoom = 7.5;
+    else                    zoom = 6.0;
+
     mapboxMap?.flyTo(
       mapbox.CameraOptions(
         center: mapbox.Point(coordinates: mapbox.Position(
           (_currentPosition!.longitude + destLng) / 2,
           (_currentPosition!.latitude  + destLat) / 2,
         )),
-        zoom: 12.0, bearing: 0.0, pitch: 0.0,
+        zoom: zoom, bearing: 0.0, pitch: 0.0,
       ),
-      mapbox.MapAnimationOptions(duration: 1500, startDelay: 0),
+      mapbox.MapAnimationOptions(duration: 1800, startDelay: 0),
     );
   }
 
