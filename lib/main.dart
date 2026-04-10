@@ -724,7 +724,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         SnackBar(content: Text('Error ruta: $e'), backgroundColor: Colors.red),
       );
     }
-
+  }
   Future<void> _drawRouteOnMap(Map<String, dynamic> geometry) async {
     final style = await mapboxMap!.style;
     try { await style.removeStyleLayer('route-layer');  } catch (_) {}
