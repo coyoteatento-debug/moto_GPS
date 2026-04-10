@@ -96,7 +96,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
 
   List<List<double>> _routeCoordinates = [];
 
-  bool _userIsExploring   = false;
+  bool _userIsExploring    = false;
   bool _isProgrammaticMove = false;
   bool _initialLocationSet = false;
 
@@ -150,88 +150,78 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     }
   }
 
-Future<void> _initTts() async {
-  await _tts.setLanguage('es-MX');
-  await _tts.setSpeechRate(0.52);
-  await _tts.setVolume(1.0);
-  await _tts.setPitch(1.0);
-}
-
-Future<void> _speak(String text) async {
-  if (text.isEmpty || text == _lastSpokenInstruction) return;
-  _lastSpokenInstruction = text;
-  await _tts.stop();
-  await _tts.speak(text);
-}
-
-Future<void> _searchPlaces(String query) async {
-  if (query.trim().length < 3) {
-    setState(() => _searchResults = []);
-    return;
+  Future<void> _initTts() async {
+    await _tts.setLanguage('es-MX');
+    await _tts.setSpeechRate(0.52);
+    await _tts.setVolume(1.0);
+    await _tts.setPitch(1.0);
   }
-  setState(() => _searchLoading = true);
-  try {
-    const types = 'place,locality,neighborhood,address,district';
 
-    // Usar posición actual como punto de proximidad
-    final proximity = _currentPosition != null
-        ? '&proximity=${_currentPosition!.longitude},${_currentPosition!.latitude}'
-        : '';
+  Future<void> _speak(String text) async {
+    if (text.isEmpty || text == _lastSpokenInstruction) return;
+    _lastSpokenInstruction = text;
+    await _tts.stop();
+    await _tts.speak(text);
+  }
 
-    final url =
-        'https://api.mapbox.com/geocoding/v5/mapbox.places/'
-        '${Uri.encodeComponent(query)}.json'
-        '?access_token=$_mapboxToken'
-        '&language=es'
-        '&country=MX'
-        '&types=$types'
-        '&limit=7'
-        '$proximity';   // ← prioriza resultados cercanos a ti
-
-    final response = await http.get(Uri.parse(url));
-    if (response.statusCode == 200) {
-      final features = json.decode(response.body)['features'] as List;
-      setState(() {
-        _searchResults = features.map((f) {
-          // Extraer coordenadas del bbox central si existe, sino usar center
-          final center = f['center'] as List;
-          double lat = (center[1] as num).toDouble();
-          double lng = (center[0] as num).toDouble();
-
-          // Si tiene bbox, usar el centro real del bbox para mayor precisión
-          if (f['bbox'] != null) {
-            final bbox = f['bbox'] as List;
-            lng = ((bbox[0] as num) + (bbox[2] as num)) / 2;
-            lat = ((bbox[1] as num) + (bbox[3] as num)) / 2;
-          }
-
-          return {
-            'name':      f['text'] as String,
-            'full_name': f['place_name'] as String,
-            'lat':       lat,
-            'lng':       lng,
-          };
-        }).toList();
-      });
+  Future<void> _searchPlaces(String query) async {
+    if (query.trim().length < 3) {
+      setState(() => _searchResults = []);
+      return;
     }
-  } catch (_) {}
-  setState(() => _searchLoading = false);
-}
+    setState(() => _searchLoading = true);
+    try {
+      const types = 'place,locality,neighborhood,address,district';
+      final proximity = _currentPosition != null
+          ? '&proximity=${_currentPosition!.longitude},${_currentPosition!.latitude}'
+          : '';
+      final url =
+          'https://api.mapbox.com/geocoding/v5/mapbox.places/'
+          '${Uri.encodeComponent(query)}.json'
+          '?access_token=$_mapboxToken'
+          '&language=es'
+          '&country=MX'
+          '&types=$types'
+          '&limit=7'
+          '$proximity';
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final features = json.decode(response.body)['features'] as List;
+        setState(() {
+          _searchResults = features.map((f) {
+            final center = f['center'] as List;
+            double lat = (center[1] as num).toDouble();
+            double lng = (center[0] as num).toDouble();
+            if (f['bbox'] != null) {
+              final bbox = f['bbox'] as List;
+              lng = ((bbox[0] as num) + (bbox[2] as num)) / 2;
+              lat = ((bbox[1] as num) + (bbox[3] as num)) / 2;
+            }
+            return {
+              'name':      f['text'] as String,
+              'full_name': f['place_name'] as String,
+              'lat':       lat,
+              'lng':       lng,
+            };
+          }).toList();
+        });
+      }
+    } catch (_) {}
+    setState(() => _searchLoading = false);
+  }
 
   Future<void> _selectSearchResult(Map<String, dynamic> place) async {
-  final lat = place['lat'] as double;
-  final lng = place['lng'] as double;
-  // Cerrar modal y limpiar
-  setState(() {
-    _showSearch = false;
-    _searchResults = [];
-    _searchController.clear();
-    _selectedPlace = place;
-  });
-  // Poner marcador y trazar ruta
-  await _addDestinationMarker(lat, lng);
-  await _getRoute(lat, lng);
-}
+    final lat = place['lat'] as double;
+    final lng = place['lng'] as double;
+    setState(() {
+      _showSearch = false;
+      _searchResults = [];
+      _searchController.clear();
+      _selectedPlace = place;
+    });
+    await _addDestinationMarker(lat, lng);
+    await _getRoute(lat, lng);
+  }
   
   Future<void> _saveTrips() async {
     final prefs = await SharedPreferences.getInstance();
@@ -242,9 +232,9 @@ Future<void> _searchPlaces(String query) async {
   }
 
   void _startTripTracking() {
-    _tripStartTime              = DateTime.now();
-    _tripAccumulatedDistance    = 0.0;
-    _lastTripPosition           = _currentPosition;
+    _tripStartTime           = DateTime.now();
+    _tripAccumulatedDistance = 0.0;
+    _lastTripPosition        = _currentPosition;
   }
 
   void _accumulateTripDistance(Position position) {
@@ -454,35 +444,35 @@ Future<void> _searchPlaces(String query) async {
   }
 
   void _updateTurnByTurn(double lat, double lng) {
-  if (_routeSteps.isEmpty || _currentStepIndex >= _routeSteps.length) return;
+    if (_routeSteps.isEmpty || _currentStepIndex >= _routeSteps.length) return;
 
-  final step     = _routeSteps[_currentStepIndex];
-  final loc      = step['location'] as List;
-  final stepLng  = (loc[0] as num).toDouble();
-  final stepLat  = (loc[1] as num).toDouble();
-  final distToManeuver = _distanceBetween(lat, lng, stepLat, stepLng);
+    final step    = _routeSteps[_currentStepIndex];
+    final loc     = step['location'] as List;
+    final stepLng = (loc[0] as num).toDouble();
+    final stepLat = (loc[1] as num).toDouble();
+    final distToManeuver = _distanceBetween(lat, lng, stepLat, stepLng);
 
-  setState(() => _distanceToNextManeuver = distToManeuver);
+    setState(() => _distanceToNextManeuver = distToManeuver);
 
-  // Avanza al siguiente paso si estás a menos de 30 m
-  if (distToManeuver < 30 && _currentStepIndex < _routeSteps.length - 1) {
-  _currentStepIndex++;
-  final next = _routeSteps[_currentStepIndex];
-  final instr = next['instruction'] as String;
-  setState(() {
-    _currentInstruction     = instr;
-    _distanceToNextManeuver = next['distance'] as double;
-  });
-  _speak(instr);   // ← voz aquí
-}
+    // Avanza al siguiente paso si estás a menos de 30 m
+    if (distToManeuver < 30 && _currentStepIndex < _routeSteps.length - 1) {
+      _currentStepIndex++;
+      final next  = _routeSteps[_currentStepIndex];
+      final instr = next['instruction'] as String;
+      setState(() {
+        _currentInstruction     = instr;
+        _distanceToNextManeuver = next['distance'] as double;
+      });
+      _speak(instr);
+    }
 
-// Aviso anticipado a 200 m
-if (distToManeuver < 200 && distToManeuver >= 170) {
-  final preview = _routeSteps[_currentStepIndex]['instruction'] as String;
-  _speak('En 200 metros, $preview');
+    // Aviso anticipado a 200 m
+    if (distToManeuver < 200 && distToManeuver >= 170) {
+      final preview = _routeSteps[_currentStepIndex]['instruction'] as String;
+      _speak('En 200 metros, $preview');
+    }
   }
-    
- }
+
   // ── Tap mapa ──────────────────────────────────────────
   void _onMapTap(mapbox.MapContentGestureContext context) {
     if (_navigating) return;
@@ -709,18 +699,18 @@ if (distToManeuver < 200 && distToManeuver >= 170) {
           _routeDrawn       = true;
           _routeCoordinates = coords;
           _routeSteps = (route['legs'][0]['steps'] as List)
-                 .map((s) => {
-                       'instruction': (s['maneuver']['instruction'] as String?) ?? '',
-                       'distance':    (s['distance'] as num).toDouble(),
-                       'location':    s['maneuver']['location'] as List,
-                     })
-                 .toList();
-             _currentStepIndex   = 0;
-             _currentInstruction = _routeSteps.isNotEmpty
-                 ? _routeSteps[0]['instruction'] as String : '';
-             _distanceToNextManeuver = _routeSteps.isNotEmpty
-                 ? _routeSteps[0]['distance'] as double : 0.0;
-           });
+              .map((s) => {
+                    'instruction': (s['maneuver']['instruction'] as String?) ?? '',
+                    'distance':    (s['distance'] as num).toDouble(),
+                    'location':    s['maneuver']['location'] as List,
+                  })
+              .toList();
+          _currentStepIndex   = 0;
+          _currentInstruction = _routeSteps.isNotEmpty
+              ? _routeSteps[0]['instruction'] as String : '';
+          _distanceToNextManeuver = _routeSteps.isNotEmpty
+              ? _routeSteps[0]['distance'] as double : 0.0;
+        });
         await _drawRouteOnMap(geometry);
         _fitRouteBounds(destLat, destLng);
       }
@@ -755,6 +745,7 @@ if (distToManeuver < 200 && distToManeuver >= 170) {
     );
   }
 
+  // ── FIX 1: _tts.stop() movido FUERA de setState ───────
   Future<void> _cancelRoute() async {
     if (_navigating) await _finishAndSaveTrip();
     if (mapboxMap != null) {
@@ -771,9 +762,9 @@ if (distToManeuver < 200 && distToManeuver >= 170) {
     await _tts.stop();
     _lastSpokenInstruction = '';
     setState(() {
-      _selectedPlace = null; _routeDrawn = false; _navigating = false;
-      _showTapConfirm = false; _tappedLat = null; _tappedLng = null;
-      _routeDistance = ''; _routeDuration = ''; _routeCoordinates = [];
+      _selectedPlace  = null; _routeDrawn  = false; _navigating = false;
+      _showTapConfirm = false; _tappedLat  = null;  _tappedLng  = null;
+      _routeDistance  = '';   _routeDuration = '';  _routeCoordinates = [];
     });
   }
   
@@ -792,91 +783,89 @@ if (distToManeuver < 200 && distToManeuver >= 170) {
     }
   }
 
-
+  // ── Buscador UI ───────────────────────────────────────
   Widget _buildSearchModal() {
-  return Container(
-    margin: const EdgeInsets.fromLTRB(16, 60, 16, 16),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(20),
-      boxShadow: const [
-        BoxShadow(color: Colors.black26, blurRadius: 16, offset: Offset(0, 4)),
-      ],
-    ),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // ── Barra de búsqueda ──
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Row(
-            children: [
-              const Icon(Icons.search, color: Colors.blue),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: _searchController,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    hintText: 'Ciudad, colonia, calle...',
-                    border: InputBorder.none,
-                    hintStyle: TextStyle(color: Colors.grey),
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 60, 16, 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 16, offset: Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Row(
+              children: [
+                const Icon(Icons.search, color: Colors.blue),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      hintText: 'Ciudad, colonia, calle...',
+                      border: InputBorder.none,
+                      hintStyle: TextStyle(color: Colors.grey),
+                    ),
+                    onChanged: _searchPlaces,
                   ),
-                  onChanged: _searchPlaces,
                 ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.close, color: Colors.grey),
-                onPressed: () => setState(() {
-                  _showSearch = false;
-                  _searchResults = [];
-                  _searchController.clear();
-                }),
-              ),
-            ],
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.grey),
+                  onPressed: () => setState(() {
+                    _showSearch = false;
+                    _searchResults = [];
+                    _searchController.clear();
+                  }),
+                ),
+              ],
+            ),
           ),
-        ),
-        const Divider(height: 1),
-        // ── Resultados ──
-        if (_searchLoading)
-          const Padding(
-            padding: EdgeInsets.all(20),
-            child: CircularProgressIndicator(),
-          )
-        else if (_searchResults.isEmpty && _searchController.text.length >= 3)
-          const Padding(
-            padding: EdgeInsets.all(20),
-            child: Text('Sin resultados', style: TextStyle(color: Colors.grey)),
-          )
-        else
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _searchResults.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (_, i) {
-              final place = _searchResults[i];
-              return ListTile(
-                leading: const Icon(Icons.location_on_outlined, color: Colors.blue),
-                title: Text(
-                  place['name'] as String,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-                subtitle: Text(
-                  place['full_name'] as String,
-                  style: const TextStyle(fontSize: 11, color: Colors.grey),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                onTap: () => _selectSearchResult(place),
-              );
-            },
-          ),
-        const SizedBox(height: 8),
-      ],
-    ),
-  );
-}
+          const Divider(height: 1),
+          if (_searchLoading)
+            const Padding(
+              padding: EdgeInsets.all(20),
+              child: CircularProgressIndicator(),
+            )
+          else if (_searchResults.isEmpty && _searchController.text.length >= 3)
+            const Padding(
+              padding: EdgeInsets.all(20),
+              child: Text('Sin resultados', style: TextStyle(color: Colors.grey)),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _searchResults.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (_, i) {
+                final place = _searchResults[i];
+                return ListTile(
+                  leading: const Icon(Icons.location_on_outlined, color: Colors.blue),
+                  title: Text(
+                    place['name'] as String,
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  subtitle: Text(
+                    place['full_name'] as String,
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onTap: () => _selectSearchResult(place),
+                );
+              },
+            ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
   
   // ── Libro de viajes UI ────────────────────────────────
   Widget _buildTripBook() {
@@ -923,10 +912,7 @@ if (distToManeuver < 200 && distToManeuver >= 170) {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: const [
-                      BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 6,
-                          offset: Offset(0, 2)),
+                      BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
                     ],
                   ),
                   child: Padding(
@@ -936,14 +922,12 @@ if (distToManeuver < 200 && distToManeuver >= 170) {
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.location_on,
-                                color: Colors.red, size: 18),
+                            const Icon(Icons.location_on, color: Colors.red, size: 18),
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
                                 trip.destination,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 15),
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -953,15 +937,11 @@ if (distToManeuver < 200 && distToManeuver >= 170) {
                         const SizedBox(height: 10),
                         Row(
                           children: [
-                            _tripStat(Icons.straighten,
-                                '${trip.distanceKm} km', Colors.blue),
+                            _tripStat(Icons.straighten, '${trip.distanceKm} km', Colors.blue),
                             const SizedBox(width: 20),
-                            _tripStat(Icons.timer_outlined,
-                                '${trip.durationMin} min', Colors.orange),
+                            _tripStat(Icons.timer_outlined, '${trip.durationMin} min', Colors.orange),
                             const Spacer(),
-                            Text(dateStr,
-                                style: const TextStyle(
-                                    color: Colors.grey, fontSize: 11)),
+                            Text(dateStr, style: const TextStyle(color: Colors.grey, fontSize: 11)),
                           ],
                         ),
                       ],
@@ -973,399 +953,353 @@ if (distToManeuver < 200 && distToManeuver >= 170) {
     );
   }
 
-IconData _maneuverIcon(String instruction) {
-  final i = instruction.toLowerCase();
-  if (i.contains('izquierda'))  return Icons.turn_left;
-  if (i.contains('derecha'))    return Icons.turn_right;
-  if (i.contains('derecha'))    return Icons.turn_right;
-  if (i.contains('gira'))       return Icons.turn_slight_right;
-  if (i.contains('rotonda') || i.contains('redondel')) return Icons.roundabout_left;
-  if (i.contains('destino') || i.contains('llegada'))  return Icons.flag;
-  if (i.contains('continúa') || i.contains('sigue'))   return Icons.straight;
-  return Icons.navigation;
-}
+  IconData _maneuverIcon(String instruction) {
+    final i = instruction.toLowerCase();
+    if (i.contains('izquierda')) return Icons.turn_left;
+    if (i.contains('derecha'))   return Icons.turn_right;
+    if (i.contains('gira'))      return Icons.turn_slight_right;
+    if (i.contains('rotonda') || i.contains('redondel')) return Icons.roundabout_left;
+    if (i.contains('destino') || i.contains('llegada'))  return Icons.flag;
+    if (i.contains('continúa') || i.contains('sigue'))   return Icons.straight;
+    return Icons.navigation;
+  }
     
   Widget _tripStat(IconData icon, String label, Color color) {
     return Row(
       children: [
         Icon(icon, color: color, size: 16),
         const SizedBox(width: 4),
-        Text(label,
-            style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.w600,
-                fontSize: 13)),
+        Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13)),
       ],
     );
   }
 
   Widget _buildMapTab() {
-  return Stack(
-    children: [
-      // ── Mapa ──────────────────────────────
-                SizedBox.expand(
-                  child: mapbox.MapWidget(
-                    key: const ValueKey("mapWidget"),
-                    onMapCreated: _onMapCreated,
-                    styleUri: 'mapbox://styles/mapbox/streets-v12',
-                    onTapListener: _onMapTap,
-                    cameraOptions: mapbox.CameraOptions(zoom: 15.0, pitch: 0.0),
-                    onCameraChangeListener: (state) async {
-                      if (_isProgrammaticMove) {
-                        Future.delayed(const Duration(milliseconds: 1200), () {
-                          if (mounted) setState(() => _isProgrammaticMove = false);
-                        });
-                      } else {
-                        if (!_userIsExploring) setState(() => _userIsExploring = true);
-                      }
-                    },
-                  ),
-                ),
-      // ── Botón búsqueda ────────────────────────
-if (!_navigating)
-  Positioned(
-    top: 50, right: 16,
-    child: GestureDetector(
-      onTap: () => setState(() {
-        _showSearch = !_showSearch;
-        if (!_showSearch) {
-          _searchResults = [];
-          _searchController.clear();
-        }
-      }),
-      child: Container(
-        width: 46, height: 46,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: const [
-            BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 2)),
-          ],
+    return Stack(
+      children: [
+        // ── Mapa ──────────────────────────────
+        SizedBox.expand(
+          child: mapbox.MapWidget(
+            key: const ValueKey("mapWidget"),
+            onMapCreated: _onMapCreated,
+            styleUri: 'mapbox://styles/mapbox/streets-v12',
+            onTapListener: _onMapTap,
+            cameraOptions: mapbox.CameraOptions(zoom: 15.0, pitch: 0.0),
+            onCameraChangeListener: (state) async {
+              if (_isProgrammaticMove) {
+                Future.delayed(const Duration(milliseconds: 1200), () {
+                  if (mounted) setState(() => _isProgrammaticMove = false);
+                });
+              } else {
+                if (!_userIsExploring) setState(() => _userIsExploring = true);
+              }
+            },
+          ),
         ),
-        child: const Icon(Icons.search, color: Colors.blue, size: 24),
-      ),
-    ),
-  ),
 
-// ── Modal búsqueda ────────────────────────
-if (_showSearch && !_navigating)
-  Positioned(
-    top: 0, left: 0, right: 0,
-    child: _buildSearchModal(),
-  ),
-                
-                // ── Botón recentrar ────────────────────
-                if (_userIsExploring && !_navigating)
-                  Positioned(
-                    bottom: 110, right: 16,
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() => _userIsExploring = false);
-                        if (_currentPosition != null) {
-                          _isProgrammaticMove = true;
-                          mapboxMap?.flyTo(
-                            mapbox.CameraOptions(
-                              center: mapbox.Point(coordinates: mapbox.Position(
-                                _currentPosition!.longitude,
-                                _currentPosition!.latitude,
-                              )),
-                              zoom: _calculateDynamicZoom(_currentSpeed),
-                              bearing: _currentPosition!.heading,
-                              pitch: 0.0,
-                            ),
-                            mapbox.MapAnimationOptions(duration: 800, startDelay: 0),
-                          );
-                        }
-                      },
-                      child: Container(
-                        width: 46, height: 46,
-                        decoration: BoxDecoration(
-                          color: Colors.blue[700],
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: const [
-                            BoxShadow(color: Colors.black38, blurRadius: 8,
-                                offset: Offset(0, 2)),
-                          ],
-                        ),
-                        child: const Icon(Icons.my_location,
-                            color: Colors.white, size: 22),
-                      ),
-                    ),
-                  ),
-
-                // ── Confirmar tap ──────────────────────
-                if (_showTapConfirm && !_navigating)
-                  Positioned(
-                    bottom: 30, left: 16, right: 16,
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: const [BoxShadow(
-                            color: Colors.black26, blurRadius: 10,
-                            offset: Offset(0, 4))],
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.location_on,
-                              color: Colors.red, size: 32),
-                          const SizedBox(height: 8),
-                          const Text('¿Ir a este lugar?',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 16)),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Lat: ${_tappedLat?.toStringAsFixed(5)}  '
-                            'Lng: ${_tappedLng?.toStringAsFixed(5)}',
-                            style: const TextStyle(
-                                color: Colors.grey, fontSize: 12),
-                          ),
-                          const SizedBox(height: 14),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: _cancelTap,
-                                  icon: const Icon(Icons.close,
-                                      color: Colors.red),
-                                  label: const Text('Cancelar',
-                                      style: TextStyle(color: Colors.red)),
-                                  style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(color: Colors.red),
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 12),
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(10)),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: _confirmTappedDestination,
-                                  icon: const Icon(Icons.directions,
-                                      color: Colors.white),
-                                  label: const Text('Trazar ruta',
-                                      style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold)),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.blue[700],
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 12),
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(10)),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                // ── Panel ruta ─────────────────────────
-                if (_routeDrawn && !_navigating && !_showTapConfirm)
-                  Positioned(
-                    bottom: 30, left: 16, right: 16,
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: const [BoxShadow(
-                            color: Colors.black26, blurRadius: 10,
-                            offset: Offset(0, 4))],
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _selectedPlace?['name'] ?? '',
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 14),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.directions_bike,
-                                  color: Colors.blue, size: 18),
-                              const SizedBox(width: 6),
-                              Text('$_routeDistance  •  $_routeDuration',
-                                  style: TextStyle(
-                                      color: Colors.grey[700], fontSize: 14)),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: _cancelRoute,
-                                  icon: const Icon(Icons.close,
-                                      color: Colors.red),
-                                  label: const Text('Cancelar',
-                                      style: TextStyle(color: Colors.red)),
-                                  style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(color: Colors.red),
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 12),
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(10)),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  onPressed: _startNavigation,
-                                  icon: const Icon(Icons.navigation,
-                                      color: Colors.white),
-                                  label: const Text('¡Ir!',
-                                      style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16)),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.blue[700],
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 12),
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(10)),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                // ── Panel navegando ────────────────────
-                if (_navigating)
-                  Positioned(
-                    bottom: 30, left: 20, right: 20,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(15),
-                          decoration: BoxDecoration(
-                              color: Colors.black87,
-                              borderRadius: BorderRadius.circular(15)),
-                          child: Column(
-                            children: [
-                              Text(
-                                '${_currentSpeed.toStringAsFixed(0)}',
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 40,
-                                    fontWeight: FontWeight.bold),
-                              ),
-                              const Text('km/h',
-                                  style: TextStyle(color: Colors.white70)),
-                            ],
-                          ),
-                        ),
-                        ElevatedButton.icon(
-                          onPressed: _cancelRoute,
-                          icon: const Icon(Icons.close, color: Colors.white),
-                          label: const Text('Salir',
-                              style: TextStyle(color: Colors.white)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red[700],
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 12),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-// ── Banner instrucción turn-by-turn ─────────────────
-if (_navigating && _currentInstruction.isNotEmpty)
-  Positioned(
-    top: 0, left: 0, right: 0,
-    child: Container(
-      padding: const EdgeInsets.fromLTRB(16, 48, 16, 16),
-      decoration: const BoxDecoration(
-        color: Color(0xFF1565C0),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
-        boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 10, offset: Offset(0, 3))],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Icon(_maneuverIcon(_currentInstruction), color: Colors.white, size: 36),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _currentInstruction,
-                  style: const TextStyle(
-                      color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+        // ── Botón búsqueda ────────────────────────
+        if (!_navigating)
+          Positioned(
+            top: 50, right: 16,
+            child: GestureDetector(
+              onTap: () => setState(() {
+                _showSearch = !_showSearch;
+                if (!_showSearch) {
+                  _searchResults = [];
+                  _searchController.clear();
+                }
+              }),
+              child: Container(
+                width: 46, height: 46,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 2)),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  _distanceToNextManeuver >= 1000
-                      ? '${(_distanceToNextManeuver / 1000).toStringAsFixed(1)} km'
-                      : '${_distanceToNextManeuver.toStringAsFixed(0)} m',
-                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                child: const Icon(Icons.search, color: Colors.blue, size: 24),
+              ),
+            ),
+          ),
+
+        // ── Modal búsqueda ────────────────────────
+        if (_showSearch && !_navigating)
+          Positioned(
+            top: 0, left: 0, right: 0,
+            child: _buildSearchModal(),
+          ),
+
+        // ── Botón recentrar ────────────────────
+        if (_userIsExploring && !_navigating)
+          Positioned(
+            bottom: 110, right: 16,
+            child: GestureDetector(
+              onTap: () {
+                setState(() => _userIsExploring = false);
+                if (_currentPosition != null) {
+                  _isProgrammaticMove = true;
+                  mapboxMap?.flyTo(
+                    mapbox.CameraOptions(
+                      center: mapbox.Point(coordinates: mapbox.Position(
+                        _currentPosition!.longitude, _currentPosition!.latitude,
+                      )),
+                      zoom: _calculateDynamicZoom(_currentSpeed),
+                      bearing: _currentPosition!.heading,
+                      pitch: 0.0,
+                    ),
+                    mapbox.MapAnimationOptions(duration: 800, startDelay: 0),
+                  );
+                }
+              },
+              child: Container(
+                width: 46, height: 46,
+                decoration: BoxDecoration(
+                  color: Colors.blue[700],
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 2)),
+                  ],
+                ),
+                child: const Icon(Icons.my_location, color: Colors.white, size: 22),
+              ),
+            ),
+          ),
+
+        // ── Confirmar tap ──────────────────────
+        if (_showTapConfirm && !_navigating)
+          Positioned(
+            bottom: 30, left: 16, right: 16,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: const [BoxShadow(
+                    color: Colors.black26, blurRadius: 10, offset: Offset(0, 4))],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.location_on, color: Colors.red, size: 32),
+                  const SizedBox(height: 8),
+                  const Text('¿Ir a este lugar?',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Lat: ${_tappedLat?.toStringAsFixed(5)}  '
+                    'Lng: ${_tappedLng?.toStringAsFixed(5)}',
+                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _cancelTap,
+                          icon: const Icon(Icons.close, color: Colors.red),
+                          label: const Text('Cancelar', style: TextStyle(color: Colors.red)),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.red),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _confirmTappedDestination,
+                          icon: const Icon(Icons.directions, color: Colors.white),
+                          label: const Text('Trazar ruta',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue[700],
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+        // ── Panel ruta ─────────────────────────
+        if (_routeDrawn && !_navigating && !_showTapConfirm)
+          Positioned(
+            bottom: 30, left: 16, right: 16,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: const [BoxShadow(
+                    color: Colors.black26, blurRadius: 10, offset: Offset(0, 4))],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _selectedPlace?['name'] ?? '',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.directions_bike, color: Colors.blue, size: 18),
+                      const SizedBox(width: 6),
+                      Text('$_routeDistance  •  $_routeDuration',
+                          style: TextStyle(color: Colors.grey[700], fontSize: 14)),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _cancelRoute,
+                          icon: const Icon(Icons.close, color: Colors.red),
+                          label: const Text('Cancelar', style: TextStyle(color: Colors.red)),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.red),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _startNavigation,
+                          icon: const Icon(Icons.navigation, color: Colors.white),
+                          label: const Text('¡Ir!',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue[700],
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+        // ── Panel navegando ────────────────────
+        if (_navigating)
+          Positioned(
+            bottom: 30, left: 20, right: 20,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(15),
+                  decoration: BoxDecoration(
+                      color: Colors.black87,
+                      borderRadius: BorderRadius.circular(15)),
+                  child: Column(
+                    children: [
+                      Text(
+                        '${_currentSpeed.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 40, fontWeight: FontWeight.bold),
+                      ),
+                      const Text('km/h', style: TextStyle(color: Colors.white70)),
+                    ],
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: _cancelRoute,
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  label: const Text('Salir', style: TextStyle(color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red[700],
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
-    ),
-  ),
-                
-                // ── Velocímetro modo libre ─────────────
-                if (!_navigating && !_routeDrawn && !_showTapConfirm)
-                  Positioned(
-                    bottom: 30, left: 20,
-                    child: Container(
-                      padding: const EdgeInsets.all(15),
-                      decoration: BoxDecoration(
-                          color: Colors.black87,
-                          borderRadius: BorderRadius.circular(15)),
-                      child: Column(
-                        children: [
-                          Text(
-                            '${_currentSpeed.toStringAsFixed(0)}',
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 40,
-                                fontWeight: FontWeight.bold),
-                          ),
-                          const Text('km/h',
-                              style: TextStyle(color: Colors.white70)),
-                        ],
-                      ),
+
+        // ── Banner instrucción turn-by-turn ─────────────────
+        if (_navigating && _currentInstruction.isNotEmpty)
+          Positioned(
+            top: 0, left: 0, right: 0,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(16, 48, 16, 16),
+              decoration: const BoxDecoration(
+                color: Color(0xFF1565C0),
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+                boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 10, offset: Offset(0, 3))],
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Icon(_maneuverIcon(_currentInstruction), color: Colors.white, size: 36),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _currentInstruction,
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _distanceToNextManeuver >= 1000
+                              ? '${(_distanceToNextManeuver / 1000).toStringAsFixed(1)} km'
+                              : '${_distanceToNextManeuver.toStringAsFixed(0)} m',
+                          style: const TextStyle(color: Colors.white70, fontSize: 13),
+                        ),
+                      ],
                     ),
                   ),
-
-              ],
+                ],
+              ),
             ),
+          ),
+
+        // ── Velocímetro modo libre ─────────────
+        if (!_navigating && !_routeDrawn && !_showTapConfirm)
+          Positioned(
+            bottom: 30, left: 20,
+            child: Container(
+              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                  color: Colors.black87,
+                  borderRadius: BorderRadius.circular(15)),
+              child: Column(
+                children: [
+                  Text(
+                    '${_currentSpeed.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 40, fontWeight: FontWeight.bold),
+                  ),
+                  const Text('km/h', style: TextStyle(color: Colors.white70)),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -1378,31 +1312,30 @@ if (_navigating && _currentInstruction.isNotEmpty)
           : BottomNavigationBar(
               currentIndex: _currentTabIndex,
               onTap: (i) {
-  setState(() => _currentTabIndex = i);
-  if (i == 0 && _currentPosition != null) {
-    Future.delayed(const Duration(milliseconds: 300), () {
-      _isProgrammaticMove = true;
-      mapboxMap?.flyTo(
-        mapbox.CameraOptions(
-          center: mapbox.Point(coordinates: mapbox.Position(
-            _currentPosition!.longitude,
-            _currentPosition!.latitude,
-          )),
-          zoom: _calculateDynamicZoom(_currentSpeed),
-          bearing: _currentPosition!.heading,
-          pitch: 0.0,
-        ),
-        mapbox.MapAnimationOptions(duration: 800, startDelay: 0),
-      );
-      // Restaurar marcador de moto
-      _updateMotoMarker(
-        _currentPosition!.latitude,
-        _currentPosition!.longitude,
-        _currentPosition!.heading,
-      );
-    });
-  }
-},
+                setState(() => _currentTabIndex = i);
+                if (i == 0 && _currentPosition != null) {
+                  Future.delayed(const Duration(milliseconds: 300), () {
+                    _isProgrammaticMove = true;
+                    mapboxMap?.flyTo(
+                      mapbox.CameraOptions(
+                        center: mapbox.Point(coordinates: mapbox.Position(
+                          _currentPosition!.longitude,
+                          _currentPosition!.latitude,
+                        )),
+                        zoom: _calculateDynamicZoom(_currentSpeed),
+                        bearing: _currentPosition!.heading,
+                        pitch: 0.0,
+                      ),
+                      mapbox.MapAnimationOptions(duration: 800, startDelay: 0),
+                    );
+                    _updateMotoMarker(
+                      _currentPosition!.latitude,
+                      _currentPosition!.longitude,
+                      _currentPosition!.heading,
+                    );
+                  });
+                }
+              },
               backgroundColor: Colors.black87,
               selectedItemColor: Colors.white,
               unselectedItemColor: Colors.grey,
@@ -1419,11 +1352,14 @@ if (_navigating && _currentInstruction.isNotEmpty)
                 ),
               ],
             ),
+      // ── FIX 2: cierre correcto de IndexedStack y Scaffold ──
       body: IndexedStack(
         index: _currentTabIndex,
         children: [
           _buildMapTab(),   // índice 0 — Mapa
           _buildTripBook(), // índice 1 — Libro de viaje
         ],
+      ),
     );
-  }      
+  }
+}
