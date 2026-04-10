@@ -189,21 +189,18 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         final features = json.decode(response.body)['features'] as List;
         setState(() {
           _searchResults = features.map((f) {
-            final center = f['center'] as List;
-            double lat = (center[1] as num).toDouble();
-            double lng = (center[0] as num).toDouble();
-            if (f['bbox'] != null) {
-              final bbox = f['bbox'] as List;
-              lng = ((bbox[0] as num) + (bbox[2] as num)) / 2;
-              lat = ((bbox[1] as num) + (bbox[3] as num)) / 2;
-            }
-            return {
-              'name':      f['text'] as String,
-              'full_name': f['place_name'] as String,
-              'lat':       lat,
-              'lng':       lng,
-            };
-          }).toList();
+             // Siempre usar center — es el punto representativo oficial de Mapbox
+          final center = f['center'] as List;
+          final double lat = (center[1] as num).toDouble();
+          final double lng = (center[0] as num).toDouble();
+
+          return {
+            'name':      f['text'] as String,
+            'full_name': f['place_name'] as String,
+            'lat':       lat,
+            'lng':       lng,
+          };
+        }).toList();
         });
       }
     } catch (_) {}
