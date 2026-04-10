@@ -697,7 +697,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         final route    = routes[0];
         final geometry = route['geometry'];
         final coords   = (geometry['coordinates'] as List)
-            .map((c) => [c[0] as double, c[1] as double]).toList();
+            .map((c) => [(c[0] as num).toDouble(), (c[1] as num).toDouble()]).toList();
         setState(() {
           _routeDistance = '${((route['distance'] as num).toDouble()/1000).toStringAsFixed(1)} km';
           _routeDuration = '${((route['duration'] as num).toDouble()/60).round()} min';
