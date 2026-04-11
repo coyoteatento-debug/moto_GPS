@@ -56,6 +56,53 @@ class TripRecord {
   );
 }
 
+class RoutePainter extends CustomPainter {
+  final List<List<double>> coords;
+  RoutePainter(this.coords);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (coords.length < 2) return;
+    final paint = Paint()
+      ..color = const Color(0xFF1976D2)
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    double minLng = coords.map((c) => c[0]).reduce(min);
+    double maxLng = coords.map((c) => c[0]).reduce(max);
+    double minLat = coords.map((c) => c[1]).reduce(min);
+    double maxLat = coords.map((c) => c[1]).reduce(max);
+
+    final rangeX = (maxLng - minLng).abs();
+    final rangeY = (maxLat - minLat).abs();
+    if (rangeX == 0 || rangeY == 0) return;
+
+    final pad = 12.0;
+    final path = Path();
+    for (int i = 0; i < coords.length; i++) {
+      final x = pad + (coords[i][0] - minLng) / rangeX * (size.width  - pad * 2);
+      final y = pad + (maxLat - coords[i][1]) / rangeY * (size.height - pad * 2);
+      i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
+    }
+    canvas.drawPath(path, paint);
+
+    // Punto inicio (verde) y fin (rojo)
+    final start = coords.first;
+    final end   = coords.last;
+    final sx = pad + (start[0] - minLng) / rangeX * (size.width  - pad * 2);
+    final sy = pad + (maxLat - start[1]) / rangeY * (size.height - pad * 2);
+    final ex = pad + (end[0]   - minLng) / rangeX * (size.width  - pad * 2);
+    final ey = pad + (maxLat - end[1])   / rangeY * (size.height - pad * 2);
+    canvas.drawCircle(Offset(sx, sy), 5, Paint()..color = Colors.green);
+    canvas.drawCircle(Offset(ex, ey), 5, Paint()..color = Colors.red);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter old) => false;
+}
+
 class MotoGPSApp extends StatefulWidget {
   const MotoGPSApp({super.key});
   @override
@@ -981,57 +1028,89 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     );
   }
 
-Future<void> _showTripRoute(TripRecord trip) async {
-    if (trip.routeCoords.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Este viaje no tiene ruta guardada'),
-        backgroundColor: Colors.orange,
-      ));
-      return;
-    }
-    // Cambiar a tab mapa
-    setState(() {
-      _currentTabIndex = 0;
-      _routeCoordinates = trip.routeCoords;
-      _routeDrawn = true;
-      _selectedPlace = {'name': trip.destination};
-      _routeDistance = '${trip.distanceKm} km';
-      _routeDuration = '${trip.durationMin} min';
-    });
-    // Dibujar ruta en mapa
-    await Future.delayed(const Duration(milliseconds: 400));
-    if (mapboxMap == null) return;
-    try {
-      final style = await mapboxMap!.style;
-      try { await style.removeStyleLayer('route-layer');  } catch (_) {}
-      try { await style.removeStyleSource('route-source'); } catch (_) {}
-      await style.addSource(mapbox.GeoJsonSource(
-        id: 'route-source',
-        data: json.encode({
-          'type': 'Feature',
-          'geometry': {'type': 'LineString', 'coordinates': trip.routeCoords},
-        }),
-      ));
-      await style.addLayer(mapbox.LineLayer(
-        id: 'route-layer', sourceId: 'route-source',
-        lineColor: 0xFF9C27B0, lineWidth: 5.0,
-        lineCap: mapbox.LineCap.ROUND, lineJoin: mapbox.LineJoin.ROUND,
-      ));
-    } catch (_) {}
-    // Centrar cámara en la ruta
-    final mid = trip.routeCoords[trip.routeCoords.length ~/ 2];
-    final dist = _distanceBetween(
-      trip.routeCoords.first[1], trip.routeCoords.first[0],
-      trip.routeCoords.last[1],  trip.routeCoords.last[0],
-    );
-    double zoom = dist < 5000 ? 13.0 : dist < 20000 ? 11.0
-        : dist < 80000 ? 9.0 : dist < 200000 ? 7.5 : 6.0;
-    mapboxMap?.flyTo(
-      mapbox.CameraOptions(
-        center: mapbox.Point(coordinates: mapbox.Position(mid[0], mid[1])),
-        zoom: zoom, bearing: 0.0, pitch: 0.0,
+void _showTripRoute(TripRecord trip) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        height: MediaQuery.of(context).size.height * 0.55,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            // Handle
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Título
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  const Icon(Icons.location_on, color: Colors.red, size: 18),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      trip.destination,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 16),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Stats
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  _tripStat(Icons.straighten, '${trip.distanceKm} km', Colors.blue),
+                  const SizedBox(width: 20),
+                  _tripStat(Icons.timer_outlined, '${trip.durationMin} min', Colors.orange),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Preview ruta
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                child: trip.routeCoords.length >= 2
+                    ? Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF5F0E8),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.grey[300]!),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: CustomPaint(
+                            painter: RoutePainter(trip.routeCoords),
+                            size: Size.infinite,
+                          ),
+                        ),
+                      )
+                    : const Center(
+                        child: Text('Sin datos de ruta',
+                            style: TextStyle(color: Colors.grey)),
+                      ),
+              ),
+            ),
+          ],
+        ),
       ),
-      mapbox.MapAnimationOptions(duration: 1500, startDelay: 0),
     );
   }
   
