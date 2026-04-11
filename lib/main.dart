@@ -11,6 +11,7 @@ import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'dart:ui' as ui;
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:image_picker/image_picker.dart';
 
 const String _mapboxToken = String.fromEnvironment('MAPBOX_TOKEN', defaultValue: '');
 
@@ -69,7 +70,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
   mapbox.PointAnnotation? destinationAnnotation;
 
   Uint8List? pinImage;
-  Uint8List? motoImage;
+  Uint8List? _userAvatarImage;
 
   double _currentSpeed = 0.0;
   Position? _currentPosition;
@@ -121,6 +122,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     _requestPermissions();
     _loadTrips();
     _initTts();
+    _loadUserAvatar();
   }
 
   @override
@@ -137,12 +139,73 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     return byteData!.buffer.asUint8List();
   }
 
+ Future<Uint8List> _makeCircularImage(Uint8List data, int size) async {
+    final codec = await ui.instantiateImageCodec(data,
+        targetWidth: size, targetHeight: size);
+    final frame = await codec.getNextFrame();
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final paint = Paint()..isAntiAlias = true;
+    final rect = Rect.fromLTWH(0, 0, size.toDouble(), size.toDouble());
+    canvas.clipPath(Path()..addOval(rect));
+    // Fondo blanco
+    canvas.drawRect(rect, paint..color = Colors.white);
+    // Imagen
+    canvas.drawImageRect(
+      frame.image,
+      Rect.fromLTWH(0, 0,
+          frame.image.width.toDouble(), frame.image.height.toDouble()),
+      rect,
+      paint,
+    );
+    // Borde
+    canvas.drawCircle(
+      Offset(size / 2, size / 2),
+      size / 2 - 2,
+      Paint()
+        ..color = Colors.blue
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4,
+    );
+    final picture = recorder.endRecording();
+    final img = await picture.toImage(size, size);
+    final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+    return byteData!.buffer.asUint8List();
+  }
+
+  Future<void> _pickUserAvatar() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    final circular = await _makeCircularImage(bytes, 120);
+    // Guardar en SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_avatar', base64Encode(circular));
+    setState(() => _userAvatarImage = circular);
+    // Actualizar marcador en mapa
+    if (_currentPosition != null) {
+      motoAnnotation = null; // forzar recreación
+      await _updateMotoMarker(
+        _currentPosition!.latitude,
+        _currentPosition!.longitude,
+        _currentPosition!.heading,
+      );
+    }
+  }
+
+  Future<void> _loadUserAvatar() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('user_avatar');
+    if (raw != null) {
+      setState(() => _userAvatarImage = base64Decode(raw));
+    }
+  }
+  
   Future<void> _loadImages() async {
     final ByteData pinData  = await rootBundle.load('assets/moto_pin.png');
-    final ByteData motoData = await rootBundle.load('assets/moto.png');
     final Uint8List pinResized  = await _resizeImage(pinData.buffer.asUint8List(), 120);
-    final Uint8List motoResized = await _resizeImage(motoData.buffer.asUint8List(), 100);
-    setState(() { pinImage = pinResized; motoImage = motoResized; });
+    setState(() { pinImage = pinResized; });
   }
 
   // ── Libro de viajes ───────────────────────────────────
@@ -532,11 +595,12 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
 
   // ── Marcadores ────────────────────────────────────────
   Future<void> _updateMotoMarker(double lat, double lng, double bearing) async {
-    if (annotationManager == null || motoImage == null) return;
+    final markerImage = _userAvatarImage ?? pinImage;
+    if (annotationManager == null || markerImage == null) return;
     if (motoAnnotation == null) {
       motoAnnotation = await annotationManager!.create(mapbox.PointAnnotationOptions(
         geometry: mapbox.Point(coordinates: mapbox.Position(lng, lat)),
-        image: motoImage, iconSize: 1.2,
+        image: markerImage, iconSize: 1.2,
         iconAnchor: mapbox.IconAnchor.CENTER, iconRotate: bearing,
       ));
     } else {
@@ -1164,6 +1228,35 @@ Future<void> _showTripRoute(TripRecord trip) async {
             ),
           ),
 
+// ── Botón avatar ───────────────────────
+        if (!_navigating)
+          Positioned(
+            top: 106, right: 16,
+            child: GestureDetector(
+              onTap: _pickUserAvatar,
+              child: Container(
+                width: 46, height: 46,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.blue, width: 2),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 2)),
+                  ],
+                  image: _userAvatarImage != null
+                      ? DecorationImage(
+                          image: MemoryImage(_userAvatarImage!),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
+                  color: Colors.white,
+                ),
+                child: _userAvatarImage == null
+                    ? const Icon(Icons.person_add, color: Colors.blue, size: 22)
+                    : null,
+              ),
+            ),
+          ),
+        
 // ── Botón satélite ─────────────────────
         if (!_navigating)
           Positioned(
