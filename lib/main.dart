@@ -230,9 +230,12 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('user_avatar', base64Encode(circular));
     setState(() => _userAvatarImage = circular);
-    // Actualizar marcador en mapa
+    // Eliminar marcador anterior y recrear con avatar
+    if (motoAnnotation != null && annotationManager != null) {
+      await annotationManager!.delete(motoAnnotation!);
+      motoAnnotation = null;
+    }
     if (_currentPosition != null) {
-      motoAnnotation = null; // forzar recreación
       await _updateMotoMarker(
         _currentPosition!.latitude,
         _currentPosition!.longitude,
