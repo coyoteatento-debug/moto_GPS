@@ -153,6 +153,13 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
   bool _userIsExploring    = false;
   bool _isSatellite        = false;
   bool _gasolinerasVisible = false;
+  List<Map<String, dynamic>> _alternateRoutes = [];
+  int _selectedRouteIndex = 0;
+  bool _isRecalculating = false;
+  DateTime? _lastRecalcTime;
+  bool _isRecalculating = false;
+  DateTime? _lastRecalcTime;
+  
   bool _isProgrammaticMove = false;
   bool _initialLocationSet = false;
 
@@ -425,32 +432,32 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     final List<Map<String, dynamic>> roadConfig = [
       {
         'layer': 'road-motorway-trunk',
-        'color': '#F5820C',
+        'color': '#FF6000',
         'width': ['interpolate', ['linear'], ['zoom'], 8, 1.5, 12, 4.0, 16, 10.0, 20, 16.0],
       },
       {
         'layer': 'road-motorway-trunk-case',
-        'color': '#C96800',
+        'color': '#CC4400',
         'width': ['interpolate', ['linear'], ['zoom'], 8, 2.5, 12, 6.0, 16, 13.0, 20, 20.0],
       },
       {
         'layer': 'road-primary',
-        'color': '#FFD600',
+        'color': '#FFE000',
         'width': ['interpolate', ['linear'], ['zoom'], 8, 1.0, 12, 3.0, 16, 8.0, 20, 14.0],
       },
       {
         'layer': 'road-primary-case',
-        'color': '#D4B000',
+        'color': '#CCA800',
         'width': ['interpolate', ['linear'], ['zoom'], 8, 2.0, 12, 5.0, 16, 11.0, 20, 18.0],
       },
       {
         'layer': 'road-secondary-tertiary',
-        'color': '#FFE566',
+        'color': '#FFD000',
         'width': ['interpolate', ['linear'], ['zoom'], 10, 0.8, 13, 2.0, 16, 6.0, 20, 10.0],
       },
       {
         'layer': 'road-secondary-tertiary-case',
-        'color': '#C8B040',
+        'color': '#C89800',
         'width': ['interpolate', ['linear'], ['zoom'], 10, 1.5, 13, 3.5, 16, 8.5, 20, 13.0],
       },
       {
@@ -570,6 +577,38 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     } catch (_) {}
   }
 
+void _checkRouteDeviation(double lat, double lng) {
+    if (!_navigating || _routeCoordinates.isEmpty || _isRecalculating) return;
+    // Limitar recálculos — máximo 1 cada 15 segundos
+    if (_lastRecalcTime != null &&
+        DateTime.now().difference(_lastRecalcTime!).inSeconds < 15) return;
+
+    // Encontrar distancia mínima a la ruta
+    double minDist = double.infinity;
+    for (final coord in _routeCoordinates) {
+      final d = _distanceBetween(lat, lng, coord[1], coord[0]);
+      if (d < minDist) minDist = d;
+    }
+
+    // Si está a más de 50m de la ruta → recalcular
+    if (minDist > 50) {
+      _lastRecalcTime = DateTime.now();
+      _recalculateRoute(lat, lng);
+    }
+  }
+
+  Future<void> _recalculateRoute(double lat, double lng) async {
+    if (_selectedPlace == null) return;
+    setState(() => _isRecalculating = true);
+    _speak('Recalculando ruta');
+
+    final destLat = (_selectedPlace!['lat'] as num).toDouble();
+    final destLng = (_selectedPlace!['lng'] as num).toDouble();
+
+    await _getRoute(destLat, destLng);
+    setState(() => _isRecalculating = false);
+  }
+  
   void _updateTurnByTurn(double lat, double lng) {
     if (_routeSteps.isEmpty || _currentStepIndex >= _routeSteps.length) return;
 
@@ -730,6 +769,8 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
         }
         _updateMotoMarker(snappedLat, snappedLng, bearing);
         _accumulateTripDistance(position);
+        // Detectar desvío de ruta
+        _checkRouteDeviation(position.latitude, position.longitude);
         _updateRemainingRoute(position.latitude, position.longitude);
         _updateTurnByTurn(position.latitude, position.longitude);
         mapboxMap?.flyTo(
@@ -832,13 +873,32 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
       final response = await http.get(Uri.parse(
         'https://api.mapbox.com/directions/v5/mapbox/driving/'
         '${_currentPosition!.longitude},${_currentPosition!.latitude};$destLng,$destLat'
-        '?geometries=geojson&steps=true&access_token=$_mapboxToken&language=es&overview=full&continue_straight=true',
+        '?geometries=geojson&steps=true&access_token=$_mapboxToken&language=es&overview=full&continue_straight=true&alternatives=true',
       ));
       if (response.statusCode == 200) {
         final data   = json.decode(response.body);
         final routes = data['routes'] as List;
         if (routes.isEmpty) return;
-        final route    = routes[0];
+        // Guardar todas las rutas disponibles
+        setState(() {
+          _alternateRoutes = routes.map<Map<String, dynamic>>((r) => {
+            'distance': '${((r['distance'] as num).toDouble()/1000).toStringAsFixed(1)} km',
+            'duration': '${((r['duration'] as num).toDouble()/60).round()} min',
+            'geometry': r['geometry'],
+            'coords': (r['geometry']['coordinates'] as List)
+                .map((c) => [(c[0] as num).toDouble(), (c[1] as num).toDouble()])
+                .toList(),
+            'steps': (r['legs'][0]['steps'] as List)
+                .map((s) => {
+                      'instruction': (s['maneuver']['instruction'] as String?) ?? '',
+                      'distance':    (s['distance'] as num).toDouble(),
+                      'location':    s['maneuver']['location'] as List,
+                    })
+                .toList(),
+          }).toList();
+          _selectedRouteIndex = 0;
+        });
+        final route = routes[0];
         final geometry = route['geometry'];
         final coords   = (geometry['coordinates'] as List)
             .map((c) => [(c[0] as num).toDouble(), (c[1] as num).toDouble()]).toList();
@@ -871,13 +931,34 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
   }
   Future<void> _drawRouteOnMap(Map<String, dynamic> geometry) async {
     final style = await mapboxMap!.style;
+    // Limpiar rutas anteriores
+    for (int i = 0; i < 3; i++) {
+      try { await style.removeStyleLayer('route-layer-$i'); } catch (_) {}
+      try { await style.removeStyleSource('route-source-$i'); } catch (_) {}
+    }
     try { await style.removeStyleLayer('route-layer');  } catch (_) {}
     try { await style.removeStyleSource('route-source'); } catch (_) {}
+
+    // Dibujar rutas alternas primero (gris)
+    for (int i = 1; i < _alternateRoutes.length; i++) {
+      await style.addSource(mapbox.GeoJsonSource(
+        id: 'route-source-$i',
+        data: json.encode({'type': 'Feature', 'geometry': _alternateRoutes[i]['geometry']}),
+      ));
+      await style.addLayer(mapbox.LineLayer(
+        id: 'route-layer-$i', sourceId: 'route-source-$i',
+        lineColor: 0xFF90A4AE, lineWidth: 5.0,
+        lineCap: mapbox.LineCap.ROUND, lineJoin: mapbox.LineJoin.ROUND,
+      ));
+    }
+
+    // Dibujar ruta principal (azul) encima
     await style.addSource(mapbox.GeoJsonSource(
-        id: 'route-source',
-        data: json.encode({'type': 'Feature', 'geometry': geometry})));
+      id: 'route-source-0',
+      data: json.encode({'type': 'Feature', 'geometry': geometry}),
+    ));
     await style.addLayer(mapbox.LineLayer(
-      id: 'route-layer', sourceId: 'route-source',
+      id: 'route-layer-0', sourceId: 'route-source-0',
       lineColor: 0xFF1976D2, lineWidth: 6.0,
       lineCap: mapbox.LineCap.ROUND, lineJoin: mapbox.LineJoin.ROUND,
     ));
@@ -1491,6 +1572,84 @@ void _showTripRoute(TripRecord trip) {
             ),
           ),
 
+// ── Selector rutas alternas ────────────
+                if (_routeDrawn && !_navigating && _alternateRoutes.length > 1)
+                  Positioned(
+                    bottom: 185, left: 16, right: 16,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: const [BoxShadow(
+                            color: Colors.black26, blurRadius: 8, offset: Offset(0, 2))],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: List.generate(_alternateRoutes.length, (i) {
+                          final r = _alternateRoutes[i];
+                          final selected = i == _selectedRouteIndex;
+                          return GestureDetector(
+                            onTap: () async {
+                              setState(() {
+                                _selectedRouteIndex     = i;
+                                _routeDistance          = r['distance'];
+                                _routeDuration          = r['duration'];
+                                _routeCoordinates       = List<List<double>>.from(r['coords']);
+                                _routeSteps             = List<Map<String,dynamic>>.from(r['steps']);
+                                _currentStepIndex       = 0;
+                                _currentInstruction     = _routeSteps.isNotEmpty
+                                    ? _routeSteps[0]['instruction'] as String : '';
+                                _distanceToNextManeuver = _routeSteps.isNotEmpty
+                                    ? _routeSteps[0]['distance'] as double : 0.0;
+                              });
+                              // Resaltar ruta seleccionada
+                              try {
+                                final style = await mapboxMap!.style;
+                                for (int j = 0; j < _alternateRoutes.length; j++) {
+                                  await style.setStyleLayerProperty(
+                                    'route-layer-$j', 'line-color',
+                                    json.encode(j == i ? '#1976D2' : '#90A4AE'),
+                                  );
+                                  await style.setStyleLayerProperty(
+                                    'route-layer-$j', 'line-width',
+                                    json.encode(j == i ? 6.0 : 4.0),
+                                  );
+                                }
+                              } catch (_) {}
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: selected ? Colors.blue[700] : Colors.grey[100],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text('Ruta ${i + 1}',
+                                      style: TextStyle(
+                                          fontSize: 11,
+                                          color: selected ? Colors.white : Colors.grey,
+                                          fontWeight: FontWeight.w600)),
+                                  Text(r['distance'],
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          color: selected ? Colors.white : Colors.black,
+                                          fontWeight: FontWeight.bold)),
+                                  Text(r['duration'],
+                                      style: TextStyle(
+                                          fontSize: 11,
+                                          color: selected ? Colors.white70 : Colors.grey)),
+                                ],
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                  ),
+        
         // ── Panel ruta ─────────────────────────
         if (_routeDrawn && !_navigating && !_showTapConfirm)
           Positioned(
@@ -1600,6 +1759,28 @@ void _showTripRoute(TripRecord trip) {
             ),
           ),
 
+// ── Banner recalculando ─────────────────
+                if (_navigating && _isRecalculating)
+                  Positioned(
+                    top: 0, left: 0, right: 0,
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(16, 48, 16, 16),
+                      color: Colors.orange[700],
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(width: 20, height: 20,
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2)),
+                          SizedBox(width: 12),
+                          Text('Recalculando ruta...',
+                              style: TextStyle(color: Colors.white,
+                                  fontWeight: FontWeight.bold, fontSize: 16)),
+                        ],
+                      ),
+                    ),
+                  ),
+        
         // ── Banner instrucción turn-by-turn ─────────────────
         if (_navigating && _currentInstruction.isNotEmpty)
           Positioned(
