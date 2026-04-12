@@ -281,9 +281,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     if (text.isEmpty || text == _lastSpokenInstruction) return;
     _lastSpokenInstruction = text;
     // Esperar a que termine antes de hablar
-    final isPlaying = await _tts.isSpeaking;
-    if (isPlaying == true) return; // no interrumpir si está hablando
-    await _tts.speak(text);
+     await _tts.speak(text);
   }
 
   Future<void> _searchPlaces(String query) async {
