@@ -157,8 +157,6 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
   int _selectedRouteIndex = 0;
   bool _isRecalculating = false;
   DateTime? _lastRecalcTime;
-  bool _isRecalculating = false;
-  DateTime? _lastRecalcTime;
   
   bool _isProgrammaticMove = false;
   bool _initialLocationSet = false;
