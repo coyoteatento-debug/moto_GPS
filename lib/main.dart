@@ -1373,6 +1373,7 @@ void _showTripRoute(TripRecord trip) {
                     _currentPosition!.longitude,
                   );
                 }
+              },   
               child: Container(
                 width: 46, height: 46,
                 decoration: BoxDecoration(
