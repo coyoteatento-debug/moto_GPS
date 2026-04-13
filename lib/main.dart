@@ -429,7 +429,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     // DEBUG — listar layers disponibles
     try {
       final layers = await style.getStyleLayers();
-      final ids = layers.map((l) => l.id).join('\n');
+      final ids = layers.map((l) => l.id ?? 'null').join('\n');
       debugPrint('=== LAYERS DISPONIBLES ===\n$ids');
     } catch (e) {
       debugPrint('Error layers: $e');
