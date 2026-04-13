@@ -427,80 +427,39 @@ class _MotoGPSAppState extends State<MotoGPSApp> {
     if (mapboxMap == null) return;
     final style = await mapboxMap!.style;
 
-    final List<Map<String, dynamic>> roadConfig = [
-      {
-        'layer': 'road-motorway-trunk',
-        'color': '#FF6000',
-        'width': ['interpolate', ['linear'], ['zoom'], 8, 1.5, 12, 4.0, 16, 10.0, 20, 16.0],
-      },
-      {
-        'layer': 'road-motorway-trunk-case',
-        'color': '#CC4400',
-        'width': ['interpolate', ['linear'], ['zoom'], 8, 2.5, 12, 6.0, 16, 13.0, 20, 20.0],
-      },
-      {
-        'layer': 'road-primary',
-        'color': '#FFE000',
-        'width': ['interpolate', ['linear'], ['zoom'], 8, 1.0, 12, 3.0, 16, 8.0, 20, 14.0],
-      },
-      {
-        'layer': 'road-primary-case',
-        'color': '#CCA800',
-        'width': ['interpolate', ['linear'], ['zoom'], 8, 2.0, 12, 5.0, 16, 11.0, 20, 18.0],
-      },
-      {
-        'layer': 'road-secondary-tertiary',
-        'color': '#FFD000',
-        'width': ['interpolate', ['linear'], ['zoom'], 10, 0.8, 13, 2.0, 16, 6.0, 20, 10.0],
-      },
-      {
-        'layer': 'road-secondary-tertiary-case',
-        'color': '#C89800',
-        'width': ['interpolate', ['linear'], ['zoom'], 10, 1.5, 13, 3.5, 16, 8.5, 20, 13.0],
-      },
-      {
-        'layer': 'road-street',
-        'color': '#FFFFFF',
-        'width': ['interpolate', ['linear'], ['zoom'], 13, 0.5, 16, 3.5, 20, 7.0],
-      },
-      {
-        'layer': 'road-street-low',
-        'color': '#FFFFFF',
-        'width': ['interpolate', ['linear'], ['zoom'], 13, 0.5, 16, 3.5, 20, 7.0],
-      },
-      {
-        'layer': 'road-street-case',
-        'color': '#CCCCCC',
-        'width': ['interpolate', ['linear'], ['zoom'], 13, 1.0, 16, 5.5, 20, 10.0],
-      },
-      {
-        'layer': 'road-path',
-        'color': '#D9CEBC',
-        'width': ['interpolate', ['linear'], ['zoom'], 14, 0.5, 17, 2.0, 20, 4.0],
-      },
-      {
-        'layer': 'road-pedestrian',
-        'color': '#EDE8DC',
-        'width': ['interpolate', ['linear'], ['zoom'], 14, 0.8, 17, 2.5, 20, 5.0],
-      },
-    ];
+    // Mapa de layers con sus colores
+    final Map<String, String> lineColors = {
+      // Autopistas — naranja intenso
+      'road-motorway-trunk':      '#FF5500',
+      'road-motorway-trunk-case': '#CC3300',
+      // Primarias — amarillo brillante
+      'road-primary':             '#FFD700',
+      'road-primary-case':        '#CC9900',
+      // Secundarias
+      'road-secondary-tertiary':      '#FFE033',
+      'road-secondary-tertiary-case': '#CC9900',
+      // Calles
+      'road-street':      '#FFFFFF',
+      'road-street-low':  '#FFFFFF',
+      'road-street-case': '#DDDDDD',
+      // Peatonal
+      'road-path':       '#D9CEBC',
+      'road-pedestrian': '#EDE8DC',
+    };
 
-    for (final road in roadConfig) {
+    for (final entry in lineColors.entries) {
       try {
         await style.setStyleLayerProperty(
-          road['layer'] as String, 'line-color', json.encode(road['color']),
-        );
-      } catch (_) {}
-      try {
-        await style.setStyleLayerProperty(
-          road['layer'] as String, 'line-width', json.encode(road['width']),
+          entry.key, 'line-color', json.encode(entry.value),
         );
       } catch (_) {}
     }
 
+    // Fondo del mapa
     try {
       await style.setStyleLayerProperty(
-          'land', 'background-color', json.encode('#F5F0E8'));
+        'land', 'background-color', json.encode('#F5F0E8'),
+      );
     } catch (_) {}
   }
 
