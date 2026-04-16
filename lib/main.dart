@@ -542,7 +542,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
     if (remaining.length < 2) return;
     try {
       final style = await mapboxMap!.style;
-      await style.setStyleSourceProperty('route-source', 'data', json.encode({
+      await style.setStyleSourceProperty('route-source-0', 'data', json.encode({
         'type': 'Feature',
         'geometry': {'type': 'LineString', 'coordinates': remaining},
       }));
@@ -553,6 +553,15 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
 void _checkRouteDeviation(double lat, double lng) {
   if (!_navigating || _routeCoordinates.isEmpty || _isRecalculating) return;
 
+  // ── NUEVO: suspender detección cerca de maniobras ──────
+  if (_routeSteps.isNotEmpty && _currentStepIndex < _routeSteps.length) {
+    final loc      = _routeSteps[_currentStepIndex]['location'] as List;
+    final stepLat  = (loc[1] as num).toDouble();
+    final stepLng  = (loc[0] as num).toDouble();
+    final distToManeuver = _distanceBetween(lat, lng, stepLat, stepLng);
+    if (distToManeuver < 120) return; // zona de giro — no recalcular
+  }
+  
   // Cooldown: máximo 1 recálculo cada 20 segundos
   if (_lastRecalcTime != null &&
       DateTime.now().difference(_lastRecalcTime!).inSeconds < 20) return;
@@ -948,6 +957,18 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
               ? _routeSteps[0]['distance'] as double : 0.0;
         });
         await _drawRouteOnMap(geometry);
+        // Redibujar marcador encima de la ruta
+        if (motoAnnotation != null && annotationManager != null) {
+          await annotationManager!.delete(motoAnnotation!);
+          motoAnnotation = null;
+        }
+        if (_currentPosition != null) {
+          await _updateMotoMarker(
+            _currentPosition!.latitude,
+            _currentPosition!.longitude,
+            _currentPosition!.heading,
+          );
+        }
         _fitRouteBounds(destLat, destLng);
       }
     } catch (e) {
