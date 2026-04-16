@@ -574,49 +574,42 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
 
 // REEMPLAZA todo el método:
 void _checkRouteDeviation(double lat, double lng) {
-  if (!_navigating || _routeCoordinates.isEmpty || _isRecalculating) return;
+    if (!_navigating || _routeCoordinates.isEmpty || _isRecalculating) return;
 
-  // ── NUEVO: suspender detección cerca de maniobras ──────
-  if (_routeSteps.isNotEmpty && _currentStepIndex < _routeSteps.length) {
-    final loc      = _routeSteps[_currentStepIndex]['location'] as List;
-    final stepLat  = (loc[1] as num).toDouble();
-    final stepLng  = (loc[0] as num).toDouble();
-    final distToManeuver = _distanceBetween(lat, lng, stepLat, stepLng);
-    if (distToManeuver < 120) return; // zona de giro — no recalcular
-  }
-  
-  // Cooldown: máximo 1 recálculo cada 20 segundos
-  if (_lastRecalcTime != null &&
-      DateTime.now().difference(_lastRecalcTime!).inSeconds < 20) return;
-
-  // Distancia mínima al segmento más cercano de la ruta
-  double minDist = double.infinity;
-  for (int i = 0; i < _routeCoordinates.length - 1; i++) {
-    final a = _routeCoordinates[i];
-    final b = _routeCoordinates[i + 1];
-    final abX = b[0] - a[0]; final abY = b[1] - a[1];
-    final apX = lng  - a[0]; final apY = lat  - a[1];
-    final ab2 = abX * abX + abY * abY;
-    if (ab2 == 0) continue;
-    final t = ((apX * abX + apY * abY) / ab2).clamp(0.0, 1.0);
-    final d = _distanceBetween(lat, lng, a[1] + t * abY, a[0] + t * abX);
-    if (d < minDist) minDist = d;
-  }
-
-  // Fuera de ruta → acumular lecturas consecutivas
-  if (minDist > 55) {
-    _deviationCount++;
-    // Solo recalcular si 3 lecturas seguidas confirman el desvío (~3 segundos)
-    if (_deviationCount >= 3) {
-      _deviationCount = 0;
-      _lastRecalcTime = DateTime.now();
-      _recalculateRoute(lat, lng);
+    if (_routeSteps.isNotEmpty && _currentStepIndex < _routeSteps.length) {
+      final loc     = _routeSteps[_currentStepIndex]['location'] as List;
+      final stepLat = (loc[1] as num).toDouble();
+      final stepLng = (loc[0] as num).toDouble();
+      if (_distanceBetween(lat, lng, stepLat, stepLng) < 120) return;
     }
-  } else {
-    // Dentro de ruta → resetear contador
-    _deviationCount = 0;
+
+    if (_lastRecalcTime != null &&
+        DateTime.now().difference(_lastRecalcTime!).inSeconds < 20) return;
+
+    double minDist = double.infinity;
+    for (int i = 0; i < _routeCoordinates.length - 1; i++) {
+      final a = _routeCoordinates[i];
+      final b = _routeCoordinates[i + 1];
+      final abX = b[0] - a[0]; final abY = b[1] - a[1];
+      final apX = lng  - a[0]; final apY = lat  - a[1];
+      final ab2 = abX * abX + abY * abY;
+      if (ab2 == 0) continue;
+      final t = ((apX * abX + apY * abY) / ab2).clamp(0.0, 1.0);
+      final d = _distanceBetween(lat, lng, a[1] + t * abY, a[0] + t * abX);
+      if (d < minDist) minDist = d;
+    }
+
+    if (minDist > 55) {
+      _deviationCount++;
+      if (_deviationCount >= 3) {
+        _deviationCount = 0;
+        _lastRecalcTime = DateTime.now();
+        _recalculateRoute(lat, lng);
+      }
+    } else {
+      _deviationCount = 0;
+    }
   }
-}
 
   Future<void> _recalculateRoute(double lat, double lng) async {
     if (_selectedPlace == null) return;
@@ -1982,3 +1975,4 @@ void _showTripRoute(TripRecord trip) {
       ),
     );
   }
+}
