@@ -407,8 +407,9 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
   Future<void> _requestPermissions() async {
     final status = await Permission.locationWhenInUse.request();
     if (status.isGranted) {
+      await _getInitialPosition();
       _startLocationTracking();
-    } else if (status.isPermanentlyDenied) {
+} else if (status.isPermanentlyDenied) {
       openAppSettings();
     }
   }
@@ -427,18 +428,23 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
     await _applyCustomRoadStyle();
   // Centrar en ubicación actual si ya se obtuvo
   if (_currentPosition != null) {
-    mapboxMap?.flyTo(
-      mapbox.CameraOptions(
-        center: mapbox.Point(coordinates: mapbox.Position(
-          _currentPosition!.longitude, _currentPosition!.latitude,
-        )),
-        zoom: 15.0, bearing: _currentPosition!.heading, pitch: 0.0,
-      ),
-      mapbox.MapAnimationOptions(duration: 1000, startDelay: 0),
-    );
-  }
-}
-    
+  _isProgrammaticMove = true;
+  mapboxMap?.flyTo(
+    mapbox.CameraOptions(
+      center: mapbox.Point(coordinates: mapbox.Position(
+        _currentPosition!.longitude, _currentPosition!.latitude,
+      )),
+      zoom: 15.0, bearing: _currentPosition!.heading, pitch: 0.0,
+    ),
+    mapbox.MapAnimationOptions(duration: 1000, startDelay: 0),
+  );
+  await _updateMotoMarker(
+    _currentPosition!.latitude,
+    _currentPosition!.longitude,
+    _currentPosition!.heading,
+  );
+ }
+}    
   // ── Estilo de carreteras tipo Riser ───────────────────
   Future<void> _applyCustomRoadStyle() async {
   if (mapboxMap == null) return;
@@ -773,6 +779,32 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
 
     _markerAnimController!.forward();
   }
+
+  Future<void> _getInitialPosition() async {
+  try {
+    final position = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+    if (!mounted) return;
+    setState(() {
+      _currentPosition = position;
+      _currentSpeed = position.speed * 3.6;
+    });
+    _initialLocationSet = true;
+    await _updateMotoMarker(position.latitude, position.longitude, position.heading);
+    if (mapboxMap != null) {
+      mapboxMap?.flyTo(
+        mapbox.CameraOptions(
+          center: mapbox.Point(coordinates: mapbox.Position(
+            position.longitude, position.latitude,
+          )),
+          zoom: 15.0, bearing: position.heading, pitch: 0.0,
+        ),
+        mapbox.MapAnimationOptions(duration: 1000, startDelay: 0),
+      );
+    }
+  } catch (_) {}
+}
   
   // ── GPS Tracking ──────────────────────────────────────
   void _startLocationTracking() {
