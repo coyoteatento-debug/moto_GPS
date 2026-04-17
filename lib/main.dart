@@ -156,6 +156,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
   bool _userIsExploring    = false;
   bool _isSatellite        = false;
   bool _gasolinerasVisible = false;
+  bool _gasolinerasLoading = false;
   List<Map<String, dynamic>> _alternateRoutes = [];
   int _selectedRouteIndex = 0;
   bool _isRecalculating = false;
@@ -888,9 +889,10 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
 
   // ── Gasolineras ───────────────────────────────────────
   Future<void> _fetchGasolineras(double lat, double lng) async {
-    if (mapboxMap == null) return;
-    const double radius = 8000;
-    final query =
+      if (mapboxMap == null) return;
+      setState(() => _gasolinerasLoading = true);   // ← feedback inmediato
+      const double radius = 8000;
+      final query =
         '[out:json][timeout:40];\n'
         '(\n'
         '  node[amenity=fuel](around:$radius,$lat,$lng);\n'
@@ -927,6 +929,7 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
         json.encode({'type': 'FeatureCollection', 'features': features}),
       );
     } catch (_) {}
+    if (mounted) setState(() => _gasolinerasLoading = false);
   }
 
   Future<void> _updateGasolineraLayer(String geoJson) async {
@@ -1537,46 +1540,55 @@ void _showTripRoute(TripRecord trip) {
           ),
 
 // ── Botón gasolineras ──────────────────
-        if (!_navigating)
-          Positioned(
-            bottom: 230, right: 16,
-            child: GestureDetector(
-              onTap: () async {
-                if (_currentPosition == null) return;
-                if (_gasolinerasVisible) {
-                  // Ocultar — remover layer
-                  try {
-                    final style = await mapboxMap!.style;
-                    try { await style.removeStyleLayer('gasolineras-layer');  } catch (_) {}
-                    try { await style.removeStyleSource('gasolineras-source'); } catch (_) {}
-                  } catch (_) {}
-                  setState(() => _gasolinerasVisible = false);
-                } else {
-                  // Mostrar
-                  await _fetchGasolineras(
-                    _currentPosition!.latitude,
-                    _currentPosition!.longitude,
-                  );
-                  setState(() => _gasolinerasVisible = true);
-                }
-              },
-              child: Container(
-                width: 46, height: 46,
-                decoration: BoxDecoration(
-                  color: _gasolinerasVisible ? Colors.orange[700] : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 2)),
-                  ],
+        // DESPUÉS
+if (!_navigating)
+  Positioned(
+    bottom: 230, right: 16,
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,          // ← bloquea tap al mapa
+      onTap: () async {
+        if (_currentPosition == null) return;
+        if (_gasolinerasLoading) return;         // ← evita doble toque durante carga
+        if (_gasolinerasVisible) {
+          setState(() => _gasolinerasVisible = false);  // ← UI optimista inmediata
+          try {
+            final style = await mapboxMap!.style;
+            try { await style.removeStyleLayer('gasolineras-layer');  } catch (_) {}
+            try { await style.removeStyleSource('gasolineras-source'); } catch (_) {}
+          } catch (_) {}
+        } else {
+          setState(() => _gasolinerasVisible = true);   // ← UI optimista inmediata
+          await _fetchGasolineras(
+            _currentPosition!.latitude,
+            _currentPosition!.longitude,
+          );
+        }
+      },
+      child: Container(
+        width: 46, height: 46,
+        decoration: BoxDecoration(
+          color: _gasolinerasVisible ? Colors.orange[700] : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: const [
+            BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 2)),
+          ],
+        ),
+        child: _gasolinerasLoading                  // ← indicador mientras carga
+            ? Padding(
+                padding: const EdgeInsets.all(12),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Colors.orange[700],
                 ),
-                child: Icon(
-                  Icons.local_gas_station,
-                  color: _gasolinerasVisible ? Colors.white : Colors.orange[700],
-                  size: 24,
-                ),
+              )
+            : Icon(
+                Icons.local_gas_station,
+                color: _gasolinerasVisible ? Colors.white : Colors.orange[700],
+                size: 24,
               ),
-            ),
-          ),
+      ),
+    ),
+  ),
         
 // ── Botón satélite ─────────────────────
         if (!_navigating)
