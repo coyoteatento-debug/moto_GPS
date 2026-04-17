@@ -100,7 +100,8 @@ class RoutePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter old) => false;
+  @override
+  bool shouldRepaint(covariant RoutePainter old) => old.coords != coords;
 }
 
 class MotoGPSApp extends StatefulWidget {
@@ -289,12 +290,16 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
     await _tts.setPitch(1.0);
   }
 
-  Future<void> _speak(String text) async {
-    if (text.isEmpty || text == _lastSpokenInstruction) return;
-    _lastSpokenInstruction = text;
-    // Esperar a que termine antes de hablar
-     await _tts.speak(text);
-  }
+  bool _isSpeaking = false;
+
+Future<void> _speak(String text) async {
+  if (text.isEmpty || text == _lastSpokenInstruction) return;
+  if (_isSpeaking) return;   // ← descartar si ya está hablando
+  _lastSpokenInstruction = text;
+  _isSpeaking = true;
+  await _tts.speak(text);
+  _isSpeaking = false;
+}
 
   Future<void> _searchPlaces(String query) async {
     if (query.trim().length < 3) {
@@ -563,6 +568,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
     if (!_navigating || _routeCoordinates.isEmpty || mapboxMap == null) return;
     final idx = _findClosestPointIndex(lat, lng);
     if (idx >= _routeCoordinates.length - 2) {
+      if (!_navigating) return;   // ← ya está siendo cancelado
       await _finishAndSaveTrip();
       await _cancelRoute();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -705,7 +711,7 @@ void _checkRouteDeviation(double lat, double lng) {
     await _getRoute(_tappedLat!, _tappedLng!);
   }
 
-  void _cancelTap() async {
+  Future<void> _cancelTap() async {
     if (destinationAnnotation != null && annotationManager != null) {
       await annotationManager!.delete(destinationAnnotation!);
       destinationAnnotation = null;
@@ -756,7 +762,9 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
     final double fromLng = _lastAnimatedLng ?? targetLng;
 
     _markerAnimController?.stop();
+    _markerAnimController?.removeListener(() {});  // limpiar listeners
     _markerAnimController?.dispose();
+    _markerAnimController = null;                  // null explícito antes de recrear
     _markerAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 850),
@@ -823,7 +831,7 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
     ).listen((Position position) {
       if (!mounted) return;
       setState(() {
-        _currentSpeed = position.speed * 3.6;
+        _currentSpeed = (position.speed < 0 ? 0 : position.speed) * 3.6;
         _currentPosition = position;
         // Si el usuario se mueve, retomar seguimiento automático
         if (_currentSpeed > 2 && !_navigating && !_routeDrawn) {
@@ -858,7 +866,7 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
         _animateMarkerTo(snappedLat, snappedLng, bearing);
         _accumulateTripDistance(position);
         // Detectar desvío de ruta
-        _checkRouteDeviation(position.latitude, position.longitude);
+        _checkRouteDeviation(snappedLat, snappedLng);
         _updateRemainingRoute(position.latitude, position.longitude);
         _updateTurnByTurn(position.latitude, position.longitude);
         mapboxMap?.flyTo(
@@ -904,7 +912,10 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
         Uri.parse('https://overpass-api.de/api/interpreter'),
         body: query,
       );
-      if (response.statusCode != 200) return;
+      if (response.statusCode != 200) {
+        if (mounted) setState(() => _gasolinerasLoading = false);
+        return;
+      }
       final elements = json.decode(response.body)['elements'] as List;
       final features = elements.map((e) {
         final pLat = e['type'] == 'node'
@@ -1034,7 +1045,7 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
   Future<void> _drawRouteOnMap(Map<String, dynamic> geometry) async {
     final style = await mapboxMap!.style;
     // Limpiar rutas anteriores
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 5; i++) { 
       try { await style.removeStyleLayer('route-layer-$i'); } catch (_) {}
       try { await style.removeStyleSource('route-source-$i'); } catch (_) {}
     }
@@ -1118,9 +1129,12 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
     await _tts.stop();
     _lastSpokenInstruction = '';
     setState(() {
-      _selectedPlace  = null; _routeDrawn  = false; _navigating = false;
-      _showTapConfirm = false; _tappedLat  = null;  _tappedLng  = null;
-      _routeDistance  = '';   _routeDuration = '';  _routeCoordinates = [];
+      _selectedPlace      = null; _routeDrawn      = false; _navigating = false;
+      _showTapConfirm     = false; _tappedLat      = null;  _tappedLng  = null;
+      _routeDistance      = '';   _routeDuration   = '';    _routeCoordinates = [];
+      _alternateRoutes    = [];   _selectedRouteIndex = 0;  // ← limpiar rutas alternas
+      _routeSteps         = [];   _currentInstruction = '';
+      _currentStepIndex   = 0;    _distanceToNextManeuver = 0.0;
     });
   }
   
@@ -1611,7 +1625,7 @@ if (!_navigating)
                 if (!_isSatellite) await _applyCustomRoadStyle();
                 // Restaurar gasolineras tras cambio de estilo
                 await Future.delayed(const Duration(milliseconds: 1500));
-                if (_currentPosition != null && mounted) {
+                if (_currentPosition != null && mounted && _gasolinerasVisible) {  // ← respetar estado
                   _fetchGasolineras(
                     _currentPosition!.latitude,
                     _currentPosition!.longitude,
