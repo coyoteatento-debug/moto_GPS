@@ -116,6 +116,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
   mapbox.PointAnnotationManager? annotationManager;
   mapbox.PointAnnotation? motoAnnotation;
   mapbox.PointAnnotation? destinationAnnotation;
+  StreamSubscription<Position>? _locationSubscription;
   AnimationController? _markerAnimController;
   double? _lastAnimatedLat;
   double? _lastAnimatedLng;
@@ -186,6 +187,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _locationSubscription?.cancel();
     _markerAnimController?.dispose();
     _searchController.dispose();
     super.dispose();
@@ -724,10 +726,10 @@ void _checkRouteDeviation(double lat, double lng) {
     final markerImage = _userAvatarImage ?? pinImage;
     if (annotationManager == null || markerImage == null) return;
     // Si ya existe el marcador con avatar, solo actualizar posición/rotación
-    if (motoAnnotation != null && _userAvatarImage != null) {
+    if (motoAnnotation != null) {
       motoAnnotation!.geometry = mapbox.Point(
           coordinates: mapbox.Position(lng, lat));
-      motoAnnotation!.iconRotate = 0.0;
+      motoAnnotation!.iconRotate = _userAvatarImage != null ? 0.0 : bearing;
       await annotationManager!.update(motoAnnotation!);
       return;
     }
@@ -761,10 +763,19 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
     final double fromLat = _lastAnimatedLat ?? targetLat;
     final double fromLng = _lastAnimatedLng ?? targetLng;
 
+    if (_lastAnimatedLat == null || _lastAnimatedLng == null) {
+      _lastAnimatedLat = targetLat;
+      _lastAnimatedLng = targetLng;
+      _updateMotoMarker(targetLat, targetLng, bearing);
+      return;
+    }
+    final dist = _distanceBetween(
+      _lastAnimatedLat!, _lastAnimatedLng!, targetLat, targetLng);
+    if (dist < 0.5) return;
+    if (!mounted) return;
     _markerAnimController?.stop();
-    _markerAnimController?.removeListener(() {});  // limpiar listeners
     _markerAnimController?.dispose();
-    _markerAnimController = null;                  // null explícito antes de recrear
+    _markerAnimController = null;
     _markerAnimController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 850),
@@ -799,6 +810,8 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
       _currentPosition = position;
       _currentSpeed = position.speed * 3.6;
     });
+    _lastAnimatedLat = position.latitude;
+    _lastAnimatedLng = position.longitude;
     _initialLocationSet = true;
     await _updateMotoMarker(position.latitude, position.longitude, position.heading);
     if (mapboxMap != null) {
@@ -817,7 +830,7 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
   
   // ── GPS Tracking ──────────────────────────────────────
   void _startLocationTracking() {
-    Geolocator.getPositionStream(
+     _locationSubscription = Geolocator.getPositionStream(
       locationSettings: AndroidSettings(
         accuracy: LocationAccuracy.high,
         distanceFilter: 2,
