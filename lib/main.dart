@@ -173,6 +173,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
   
   bool _isProgrammaticMove = false;
   bool _initialLocationSet = false;
+  bool _isUpdatingMarker   = false;
 
   // ── Libro de viajes ───────────────────────────────────
   List<TripRecord> _trips = [];
@@ -798,8 +799,15 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
         .animate(CurvedAnimation(parent: _markerAnimController!, curve: Curves.easeOut));
 
     _markerAnimController!.addListener(() {
-      if (!mounted) return;
-      _updateMotoMarker(animLat.value, animLng.value, bearing);
+      if (!mounted || _isUpdatingMarker) return;
+      _isUpdatingMarker = true;
+      final double lat = animLat.value;
+      final double lng = animLng.value;
+      _updateMotoMarker(lat, lng, bearing).then((_) {
+        if (mounted) _isUpdatingMarker = false;
+      }).catchError((_) {
+        if (mounted) _isUpdatingMarker = false;
+      });
     });
 
     _markerAnimController!.addStatusListener((status) {
@@ -894,6 +902,8 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
         _checkRouteDeviation(position.latitude, position.longitude);
         _updateRemainingRoute(position.latitude, position.longitude);
         _updateTurnByTurn(position.latitude, position.longitude);
+        mapboxMap?.flyTo(
+          _isProgrammaticMove = true;
         mapboxMap?.flyTo(
           mapbox.CameraOptions(
             center: mapbox.Point(coordinates: mapbox.Position(snappedLng, snappedLat)),
@@ -1053,6 +1063,8 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
           motoAnnotation = null;
         }
         if (_currentPosition != null) {
+          _lastAnimatedLat = _currentPosition!.latitude;
+          _lastAnimatedLng = _currentPosition!.longitude;
           await _updateMotoMarker(
             _currentPosition!.latitude,
             _currentPosition!.longitude,
@@ -1060,7 +1072,6 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
           );
         }
         _fitRouteBounds(destLat, destLng);
-      }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error ruta: $e'), backgroundColor: Colors.red),
