@@ -108,7 +108,7 @@ class RoutePainter extends CustomPainter {
     }
     return false;
   }
-
+}
 class MotoGPSApp extends StatefulWidget {
   const MotoGPSApp({super.key});
   @override
