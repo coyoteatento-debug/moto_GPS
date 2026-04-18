@@ -1078,6 +1078,7 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
       );
     }
   }
+    
   Future<void> _drawRouteOnMap(Map<String, dynamic> geometry) async {
     if (mapboxMap == null) return;
     final style = await mapboxMap!.style;
@@ -1444,10 +1445,10 @@ void _showTripRoute(TripRecord trip) {
                   ),
                 ),
               );
-              },
-            ),
-    );
-  }
+            },
+          ),
+   );
+ }
 
   IconData _maneuverIcon(String instruction) {
     final i = instruction.toLowerCase();
