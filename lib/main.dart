@@ -173,8 +173,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
   
   bool _isProgrammaticMove = false;
   bool _initialLocationSet = false;
-  bool _isUpdatingMarker   = false;
-
+  
   // ── Libro de viajes ───────────────────────────────────
   List<TripRecord> _trips = [];
   DateTime? _tripStartTime;
@@ -741,23 +740,30 @@ void _checkRouteDeviation(double lat, double lng) {
 
   // ── Marcadores ────────────────────────────────────────
   Future<void> _updateMotoMarker(double lat, double lng, double bearing) async {
-    final markerImage = _userAvatarImage ?? pinImage;
-    if (annotationManager == null || markerImage == null) return;
-    // Si ya existe el marcador con avatar, solo actualizar posición/rotación
+  final markerImage = _userAvatarImage ?? pinImage;
+  if (annotationManager == null || markerImage == null) return;
+  try {
     if (motoAnnotation != null) {
       motoAnnotation!.geometry = mapbox.Point(
           coordinates: mapbox.Position(lng, lat));
       motoAnnotation!.iconRotate = _userAvatarImage != null ? 0.0 : bearing;
       await annotationManager!.update(motoAnnotation!);
-      return;
+    } else {
+      motoAnnotation = await annotationManager!.create(
+        mapbox.PointAnnotationOptions(
+          geometry: mapbox.Point(coordinates: mapbox.Position(lng, lat)),
+          image: markerImage,
+          iconSize: 1.2,
+          iconAnchor: mapbox.IconAnchor.CENTER,
+          iconRotate: _userAvatarImage != null ? 0.0 : bearing,
+        ),
+      );
     }
-    motoAnnotation = await annotationManager!.create(mapbox.PointAnnotationOptions(
-      geometry: mapbox.Point(coordinates: mapbox.Position(lng, lat)),
-      image: markerImage, iconSize: 1.2,
-      iconAnchor: mapbox.IconAnchor.CENTER,
-      iconRotate: _userAvatarImage != null ? 0.0 : bearing,
-    ));
+  } catch (_) {
+    // Si el update falla (anotación inválida), forzar recreación
+    motoAnnotation = null;
   }
+}
 
   Future<void> _addDestinationMarker(double lat, double lng) async {
     if (annotationManager == null) return;
@@ -799,15 +805,10 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
         .animate(CurvedAnimation(parent: _markerAnimController!, curve: Curves.easeOut));
 
     _markerAnimController!.addListener(() {
-      if (!mounted || _isUpdatingMarker) return;
-      _isUpdatingMarker = true;
+      if (!mounted) return;
       final double lat = animLat.value;
       final double lng = animLng.value;
-      _updateMotoMarker(lat, lng, bearing).then((_) {
-        if (mounted) _isUpdatingMarker = false;
-      }).catchError((_) {
-        if (mounted) _isUpdatingMarker = false;
-      });
+      _updateMotoMarker(lat, lng, bearing);   // ← fire-and-forget, sin guard
     });
 
     _markerAnimController!.addStatusListener((status) {
@@ -853,8 +854,8 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
      _locationSubscription = Geolocator.getPositionStream(
       locationSettings: AndroidSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 2,
-        intervalDuration: const Duration(milliseconds: 1000),
+        distanceFilter: 0,                                    // ← sin filtro de distancia
+        intervalDuration: const Duration(milliseconds: 800),  // ← más frecuente
         foregroundNotificationConfig: const ForegroundNotificationConfig(
           notificationText: 'MotoGPS activo',
           notificationTitle: 'Navegación en curso',
