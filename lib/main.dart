@@ -10,10 +10,11 @@ import 'dart:math';
 import 'data/models/trip_record.dart';
 import 'presentation/widgets/route_painter.dart';
 import 'dart:async';
-import 'package:http/http.dart' as http;
 import 'dart:ui' as ui;
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'data/sources/mapbox_api.dart';
+import 'data/sources/overpass_api.dart';
 
 const String _mapboxToken = String.fromEnvironment('MAPBOX_TOKEN', defaultValue: '');
 
@@ -64,6 +65,8 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
 
   // ── Buscador ──────────────────────────────────────────
   bool _showSearch = false;
+  late final MapboxApi _mapboxApi = MapboxApi(_mapboxToken);
+  late final OverpassApi _overpassApi = const OverpassApi();
   List<Map<String, dynamic>> _searchResults = [];
   bool _searchLoading = false;
   int _searchToken = 0;
@@ -235,47 +238,23 @@ Future<void> _speak(String text) async {
 }
 
   Future<void> _searchPlaces(String query) async {
-  if (query.trim().length < 3) {
-    setState(() => _searchResults = []);
-    return;
-  }
-  final token = ++_searchToken;
-  setState(() => _searchLoading = true);
-  try {
-    const types = 'place,locality,neighborhood,address,district';
-    final proximity = _currentPosition != null
-        ? '&proximity=${_currentPosition!.longitude},${_currentPosition!.latitude}'
-        : '';
-    final url =
-        'https://api.mapbox.com/geocoding/v5/mapbox.places/'
-        '${Uri.encodeComponent(query)}.json'
-        '?access_token=$_mapboxToken'
-        '&language=es'
-        '&country=MX,US'
-        '&types=$types'
-        '&limit=7'
-        '$proximity';
-    final response = await http.get(Uri.parse(url));
-    if (token != _searchToken) return; // ← AQUÍ, después del await, fuera del .map()
-    if (response.statusCode == 200) {
-      final features = json.decode(response.body)['features'] as List;
-      setState(() {
-        _searchResults = features.map((f) {
-          final center = f['center'] as List;
-          final double lat = (center[1] as num).toDouble();
-          final double lng = (center[0] as num).toDouble();
-          return <String, dynamic>{
-            'name':      f['text'] as String,
-            'full_name': f['place_name'] as String,
-            'lat':       lat,
-            'lng':       lng,
-          };
-        }).toList();
-      });
+    if (query.trim().length < 3) {
+      setState(() => _searchResults = []);
+      return;
     }
-  } catch (_) {}
-  if (token == _searchToken) setState(() => _searchLoading = false);
-}
+    final token = ++_searchToken;
+    setState(() => _searchLoading = true);
+    try {
+      final results = await _mapboxApi.searchPlaces(
+        query,
+        proximityLat: _currentPosition?.latitude,
+        proximityLng: _currentPosition?.longitude,
+      );
+      if (token != _searchToken) return;
+      setState(() => _searchResults = results);
+    } catch (_) {}
+    if (token == _searchToken) setState(() => _searchLoading = false);
+  }
 
   Future<void> _selectSearchResult(Map<String, dynamic> place) async {
     final lat = place['lat'] as double;
@@ -625,14 +604,7 @@ void _checkRouteDeviation(double lat, double lng) {
     if (_tappedLat == null || _tappedLng == null) return;
     String placeName = 'Destino seleccionado';
     try {
-      final response = await http.get(Uri.parse(
-        'https://api.mapbox.com/geocoding/v5/mapbox.places/$_tappedLng,$_tappedLat.json'
-        '?access_token=$_mapboxToken&language=es&limit=1',
-      ));
-      if (response.statusCode == 200) {
-        final features = json.decode(response.body)['features'] as List;
-        if (features.isNotEmpty) placeName = features[0]['place_name'] as String;
-      }
+      placeName = await _mapboxApi.reverseGeocode(_tappedLat!, _tappedLng!);
     } catch (_) {}
     setState(() {
       _selectedPlace = {'name': placeName, 'lat': _tappedLat, 'lng': _tappedLng};
@@ -843,48 +815,13 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
 
   // ── Gasolineras ───────────────────────────────────────
   Future<void> _fetchGasolineras(double lat, double lng) async {
-      if (mapboxMap == null) return;
-      setState(() => _gasolinerasLoading = true);   // ← feedback inmediato
-      const double radius = 8000;
-      final query =
-        '[out:json][timeout:40];\n'
-        '(\n'
-        '  node[amenity=fuel](around:$radius,$lat,$lng);\n'
-        '  way[amenity=fuel](around:$radius,$lat,$lng);\n'
-        ');\n'
-        'out center;\n';
+    if (mapboxMap == null) return;
+    setState(() => _gasolinerasLoading = true);
     try {
-      final response = await http.post(
-        Uri.parse('https://overpass-api.de/api/interpreter'),
-        body: query,
-      );
-      if (response.statusCode != 200) {
-        if (mounted) setState(() => _gasolinerasLoading = false);
-        return;
+      final geoJson = await _overpassApi.fetchGasolineras(lat, lng);
+      if (geoJson != null && mounted) {
+        await _updateGasolineraLayer(geoJson);
       }
-      final elements = json.decode(response.body)['elements'] as List;
-      final features = elements.map((e) {
-        final pLat = e['type'] == 'node'
-            ? (e['lat'] as num).toDouble()
-            : (e['center']?['lat'] as num?)?.toDouble() ?? 0.0;
-        final pLng = e['type'] == 'node'
-            ? (e['lon'] as num).toDouble()
-            : (e['center']?['lon'] as num?)?.toDouble() ?? 0.0;
-        if (pLat == 0.0 && pLng == 0.0) return null;
-        return {
-          'type': 'Feature',
-          'geometry': {'type': 'Point', 'coordinates': [pLng, pLat]},
-          'properties': {
-            'name': (e['tags']?['name'] as String?)
-                ?? (e['tags']?['brand'] as String?)
-                ?? 'Gasolinera',
-          },
-        };
-      }).whereType<Map>().toList();
-      if (!mounted) return;
-      await _updateGasolineraLayer(
-        json.encode({'type': 'FeatureCollection', 'features': features}),
-      );
     } catch (_) {}
     if (mounted) setState(() => _gasolinerasLoading = false);
   }
@@ -917,13 +854,13 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
   Future<void> _getRoute(double destLat, double destLng) async {
     if (_currentPosition == null) return;
     try {
-      final response = await http.get(Uri.parse(
-        'https://api.mapbox.com/directions/v5/mapbox/driving/'
-        '${_currentPosition!.longitude},${_currentPosition!.latitude};$destLng,$destLat'
-        '?geometries=geojson&steps=true&access_token=$_mapboxToken&language=es&overview=full&continue_straight=true&alternatives=true',
-      ));
-      if (response.statusCode == 200) {
-        final data   = json.decode(response.body);
+      final data = await _mapboxApi.getRoute(
+        originLat: _currentPosition!.latitude,
+        originLng: _currentPosition!.longitude,
+        destLat: destLat,
+        destLng: destLng,
+      );
+      if (data != null) {
         final routes = data['routes'] as List;
         if (routes.isEmpty) return;
         // Guardar todas las rutas disponibles
