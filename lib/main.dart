@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:typed_data';
 import 'dart:convert';
 import 'dart:math';
+import 'data/models/trip_record.dart';
+import 'presentation/widgets/route_painter.dart';
 import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'dart:ui' as ui;
@@ -21,94 +23,6 @@ void main() async {
   runApp(const MaterialApp(home: MotoGPSApp()));
 }
 
-// ── Modelo de viaje ───────────────────────────────────────
-class TripRecord {
-  final String destination;
-  final double distanceKm;
-  final int durationMin;
-  final DateTime date;
-  final List<List<double>> routeCoords;
-
-  TripRecord({
-    required this.destination,
-    required this.distanceKm,
-    required this.durationMin,
-    required this.date,
-    this.routeCoords = const [],
-  });
-
-  Map<String, dynamic> toJson() => {
-    'destination': destination,
-    'distanceKm': distanceKm,
-    'durationMin': durationMin,
-    'date': date.toIso8601String(),
-    'routeCoords': routeCoords,
-  };
-
-  factory TripRecord.fromJson(Map<String, dynamic> j) => TripRecord(
-    destination: j['destination'],
-    distanceKm: (j['distanceKm'] as num).toDouble(),
-    durationMin: j['durationMin'],
-    date: DateTime.parse(j['date']),
-    routeCoords: (j['routeCoords'] as List? ?? [])
-        .map((c) => (c as List).map((v) => (v as num).toDouble()).toList())
-        .toList(),
-  );
-}
-
-class RoutePainter extends CustomPainter {
-  final List<List<double>> coords;
-  RoutePainter(this.coords);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (coords.length < 2) return;
-    final paint = Paint()
-      ..color = const Color(0xFF1976D2)
-      ..strokeWidth = 2.5
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    double minLng = coords.map((c) => c[0]).reduce(min);
-    double maxLng = coords.map((c) => c[0]).reduce(max);
-    double minLat = coords.map((c) => c[1]).reduce(min);
-    double maxLat = coords.map((c) => c[1]).reduce(max);
-
-    final rangeX = (maxLng - minLng).abs();
-    final rangeY = (maxLat - minLat).abs();
-    if (rangeX == 0 || rangeY == 0) return;
-
-    final pad = 12.0;
-    final path = Path();
-    for (int i = 0; i < coords.length; i++) {
-      final x = pad + (coords[i][0] - minLng) / rangeX * (size.width  - pad * 2);
-      final y = pad + (maxLat - coords[i][1]) / rangeY * (size.height - pad * 2);
-      i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
-    }
-    canvas.drawPath(path, paint);
-
-    // Punto inicio (verde) y fin (rojo)
-    final start = coords.first;
-    final end   = coords.last;
-    final sx = pad + (start[0] - minLng) / rangeX * (size.width  - pad * 2);
-    final sy = pad + (maxLat - start[1]) / rangeY * (size.height - pad * 2);
-    final ex = pad + (end[0]   - minLng) / rangeX * (size.width  - pad * 2);
-    final ey = pad + (maxLat - end[1])   / rangeY * (size.height - pad * 2);
-    canvas.drawCircle(Offset(sx, sy), 5, Paint()..color = Colors.green);
-    canvas.drawCircle(Offset(ex, ey), 5, Paint()..color = Colors.red);
-  }
-
-  @override
-  bool shouldRepaint(covariant RoutePainter old) {
-    if (old.coords.length != coords.length) return true;
-    for (int i = 0; i < coords.length; i++) {
-      if (old.coords[i][0] != coords[i][0] ||
-          old.coords[i][1] != coords[i][1]) return true;
-    }
-    return false;
-  }
-}
 class MotoGPSApp extends StatefulWidget {
   const MotoGPSApp({super.key});
   @override
