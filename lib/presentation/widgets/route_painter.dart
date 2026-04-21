@@ -33,8 +33,8 @@ class RoutePainter extends CustomPainter {
     }
     canvas.drawPath(path, paint);
 
-    const startPaint = Paint()..color = Colors.green;
-    const endPaint   = Paint()..color = Colors.red;
+    final startPaint = Paint()..color = Colors.green;
+    final endPaint   = Paint()..color = Colors.red;
 
     final start = coords.first;
     final end   = coords.last;
