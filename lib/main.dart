@@ -475,47 +475,44 @@ Future<void> _speak(String text) async {
   if (mapboxMap == null) return;
   final style = await mapboxMap!.style;
 
-  // Layer IDs reales de streets-v12 con colores estilo Calimoto iluminados
   final Map<String, String> lineColors = {
-    // Autopistas
-    'road-motorway':                    '#F5780A',
-    'road-motorway-case':               '#C45500',
-    'road-motorway-link':               '#F5780A',
-    'road-motorway-link-case':          '#C45500',
-    // Tronco
-    'road-trunk':                       '#F5780A',
-    'road-trunk-case':                  '#C45500',
-    'road-trunk-link':                  '#F5780A',
-    'road-trunk-link-case':             '#C45500',
-    // Primarias
-    'road-primary':                     '#F7C521',
-    'road-primary-case':                '#D4A017',
-    'road-primary-link':                '#F7C521',
-    // Secundarias
-    'road-secondary':                   '#F5D040',
-    'road-secondary-case':              '#C8A820',
-    'road-secondary-link':              '#F5D040',
-    // Terciarias
-    'road-tertiary':                    '#F5D040',
-    'road-tertiary-case':               '#C8A820',
-    // Calles
-    'road-street':                      '#FAFAF5',
-    'road-street-case':                 '#E0DDD4',
-    'road-street-low':                  '#FAFAF5',
-    // Secundaria-terciaria combinada
-    'road-secondary-tertiary':          '#F5D040',
-    'road-secondary-tertiary-case':     '#C8A820',
-    // Motorway-trunk combinada
-    'road-motorway-trunk':              '#F5780A',
-    'road-motorway-trunk-case':         '#C45500',
-    // Peatonal y caminos
-    'road-pedestrian':                  '#F0EBE0',
-    'road-pedestrian-case':             '#E0DDD4',
-    'road-path':                        '#E8E2D0',
-    'road-path-bg':                     '#E0DDD4',
-    // Servicio
-    'road-service':                     '#FAFAF5',
-    'road-service-case':                '#E0DDD4',
+    // ── Autopistas → Naranja brillante ──────────────────
+    'road-motorway':                '#FF6500',
+    'road-motorway-case':           '#CC4E00',
+    'road-motorway-link':           '#FF6500',
+    'road-motorway-link-case':      '#CC4E00',
+    'road-motorway-trunk':          '#FF6500',
+    'road-motorway-trunk-case':     '#CC4E00',
+    // ── Tronco (trunk) → Naranja brillante ──────────────
+    'road-trunk':                   '#FF6500',
+    'road-trunk-case':              '#CC4E00',
+    'road-trunk-link':              '#FF6500',
+    'road-trunk-link-case':         '#CC4E00',
+    // ── Primarias / Boulevards → Amarillo vivo ───────────
+    'road-primary':                 '#FFD600',
+    'road-primary-case':            '#C9A800',
+    'road-primary-link':            '#FFD600',
+    // ── Secundarias → Amarillo suave ────────────────────
+    'road-secondary':               '#FFE566',
+    'road-secondary-case':          '#C9B400',
+    'road-secondary-link':          '#FFE566',
+    'road-secondary-tertiary':      '#FFE566',
+    'road-secondary-tertiary-case': '#C9B400',
+    // ── Terciarias → Amarillo pálido ────────────────────
+    'road-tertiary':                '#FFF0A0',
+    'road-tertiary-case':           '#D4C87A',
+    // ── Calles normales → Gris claro ────────────────────
+    'road-street':                  '#D6D6D6',
+    'road-street-case':             '#B0B0B0',
+    'road-street-low':              '#D6D6D6',
+    // ── Servicio → Gris medio ────────────────────────────
+    'road-service':                 '#C4C4C4',
+    'road-service-case':            '#A0A0A0',
+    // ── Peatonal y caminos → Gris muy suave ─────────────
+    'road-pedestrian':              '#E0E0E0',
+    'road-pedestrian-case':         '#C8C8C8',
+    'road-path':                    '#DADADA',
+    'road-path-bg':                 '#C8C8C8',
   };
 
   for (final entry in lineColors.entries) {
@@ -525,12 +522,12 @@ Future<void> _speak(String text) async {
       );
     } catch (_) {}
   }
-    
-  // Fondo beige cálido
+
+  // ── Fondo gris muy claro (contraste limpio con las vías) ─
   for (final bg in ['land', 'background', 'landcover']) {
     try {
       await style.setStyleLayerProperty(
-        bg, 'background-color', json.encode('#F0EDE4'),
+        bg, 'background-color', json.encode('#EFEFEF'),
       );
     } catch (_) {}
   }
