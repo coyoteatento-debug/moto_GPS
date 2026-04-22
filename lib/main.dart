@@ -16,6 +16,7 @@ import 'data/sources/overpass_api.dart';
 import 'presentation/widgets/search_modal.dart';
 import 'presentation/widgets/trip_book.dart';
 import 'data/sources/prefs_source.dart';
+import 'dart:convert';
 
 const String _mapboxToken = String.fromEnvironment('MAPBOX_TOKEN', defaultValue: '');
 
