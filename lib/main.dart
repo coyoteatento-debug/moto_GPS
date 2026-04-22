@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
-import 'package:geolocator/geolocator.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'dart:typed_data';
 import 'dart:math';
 import 'data/models/trip_record.dart';
@@ -17,6 +15,7 @@ import 'core/utils/image_utils.dart';
 import 'core/utils/geo_utils.dart';
 import 'core/services/tts_service.dart';
 import 'core/services/map_service.dart';
+import 'core/services/gps_service.dart';
 import 'dart:convert';
 
 const String _mapboxToken = String.fromEnvironment('MAPBOX_TOKEN', defaultValue: '');
@@ -59,6 +58,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
   // ── TTS ───────────────────────────────────────────────
   final TtsService _tts = TtsService();
   final MapService _mapService = const MapService();
+  final GpsService _gpsService = const GpsService();
   
   // ── Turn-by-turn ──────────────────────────────────────
   List<Map<String, dynamic>> _routeSteps = [];
@@ -251,12 +251,10 @@ Future<void> _speak(String text) async {
 
   // ── Permisos ──────────────────────────────────────────
   Future<void> _requestPermissions() async {
-    final status = await Permission.locationWhenInUse.request();
-    if (status.isGranted) {
+    final granted = await _gpsService.requestPermissions();
+    if (granted) {
       await _getInitialPosition();
       _startLocationTracking();
-} else if (status.isPermanentlyDenied) {
-      openAppSettings();
     }
   }
 
@@ -507,19 +505,17 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
   }
 
   Future<void> _getInitialPosition() async {
-  try {
-    final position = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
-    );
-    if (!mounted) return;
+    final position = await _gpsService.getInitialPosition();
+    if (position == null || !mounted) return;
     setState(() {
       _currentPosition = position;
-      _currentSpeed = position.speed * 3.6;
+      _currentSpeed    = position.speed * 3.6;
     });
-    _lastAnimatedLat = position.latitude;
-    _lastAnimatedLng = position.longitude;
+    _lastAnimatedLat    = position.latitude;
+    _lastAnimatedLng    = position.longitude;
     _initialLocationSet = true;
-    await _updateMotoMarker(position.latitude, position.longitude, position.heading);
+    await _updateMotoMarker(
+        position.latitude, position.longitude, position.heading);
     if (mapboxMap != null) {
       mapboxMap?.flyTo(
         mapbox.CameraOptions(
@@ -531,23 +527,11 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
         mapbox.MapAnimationOptions(duration: 1000, startDelay: 0),
       );
     }
-  } catch (_) {}
-}
+  }
   
   // ── GPS Tracking ──────────────────────────────────────
   void _startLocationTracking() {
-     _locationSubscription = Geolocator.getPositionStream(
-      locationSettings: AndroidSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 0,                                    // ← sin filtro de distancia
-        intervalDuration: const Duration(milliseconds: 800),  // ← más frecuente
-        foregroundNotificationConfig: const ForegroundNotificationConfig(
-          notificationText: 'MotoGPS activo',
-          notificationTitle: 'Navegación en curso',
-          enableWakeLock: true,
-        ),
-      ),
-    ).listen((Position position) {
+     _locationSubscription = _gpsService.startTracking((Position position) {
       if (!mounted) return;
       setState(() {
         _currentSpeed = (position.speed < 0 ? 0 : position.speed) * 3.6;
