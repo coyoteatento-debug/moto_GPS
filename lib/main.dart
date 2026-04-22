@@ -8,7 +8,6 @@ import 'dart:math';
 import 'data/models/trip_record.dart';
 import 'presentation/widgets/route_painter.dart';
 import 'dart:async';
-import 'package:flutter_tts/flutter_tts.dart';
 import 'data/sources/mapbox_api.dart';
 import 'data/sources/overpass_api.dart';
 import 'presentation/widgets/search_modal.dart';
@@ -16,6 +15,7 @@ import 'presentation/widgets/trip_book.dart';
 import 'data/sources/prefs_source.dart';
 import 'core/utils/image_utils.dart';
 import 'core/utils/geo_utils.dart';
+import 'core/services/tts_service.dart';
 import 'dart:convert';
 
 const String _mapboxToken = String.fromEnvironment('MAPBOX_TOKEN', defaultValue: '');
@@ -56,8 +56,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
   String _routeDuration = '';
 
   // ── TTS ───────────────────────────────────────────────
-  final FlutterTts _tts = FlutterTts();
-  String _lastSpokenInstruction = '';
+  final TtsService _tts = TtsService();
   
   // ── Turn-by-turn ──────────────────────────────────────
   List<Map<String, dynamic>> _routeSteps = [];
@@ -157,30 +156,16 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
   }
   
   Future<void> _initTts() async {
-    await _tts.setLanguage('es-MX');
-    await _tts.setSpeechRate(0.52);
-    await _tts.setVolume(1.0);
-    await _tts.setPitch(1.0);
+    await _tts.init();
   }
 
-  bool _isSpeaking = false;
   final PrefsSource _prefsSource = PrefsSource();
   final ImageUtils _imageUtils = const ImageUtils();
   final GeoUtils _geo = const GeoUtils();
 
 Future<void> _speak(String text) async {
-  if (text.isEmpty || text == _lastSpokenInstruction) return;
-  if (_isSpeaking) return;
-  _lastSpokenInstruction = text;
-  _isSpeaking = true;
-  try {
     await _tts.speak(text);
-  } catch (_) {
-    _lastSpokenInstruction = ''; // permite reintentar el mismo texto
-  } finally {
-    _isSpeaking = false;         // siempre se libera, pase lo que pase
   }
-}
 
   Future<void> _searchPlaces(String query) async {
     if (query.trim().length < 3) {
@@ -890,8 +875,7 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
       await annotationManager!.delete(destinationAnnotation!);
       destinationAnnotation = null;
     }
-    await _tts.stop();
-    _lastSpokenInstruction = '';
+     await _tts.stop();
     setState(() {
       _selectedPlace      = null; _routeDrawn      = false; _navigating = false;
       _showTapConfirm     = false; _tappedLat      = null;  _tappedLng  = null;
