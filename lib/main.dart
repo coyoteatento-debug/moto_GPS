@@ -17,6 +17,7 @@ import 'core/services/tts_service.dart';
 import 'core/services/map_service.dart';
 import 'core/services/gps_service.dart';
 import 'dart:convert';
+import 'package:geolocator/geolocator.dart';
 
 const String _mapboxToken = String.fromEnvironment('MAPBOX_TOKEN', defaultValue: '');
 
