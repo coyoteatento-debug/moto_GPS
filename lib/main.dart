@@ -1124,12 +1124,9 @@ if (!_navigating)
                                 _distanceToNextManeuver = _routeSteps.isNotEmpty
                                     ? _routeSteps[0]['distance'] as double : 0.0;
                               });
-                            }
-                              // Resaltar ruta seleccionada
-                              try {
-                                if (mapboxMap != null) {
+                              if (mapboxMap != null) {
                                 await _mapService.highlightRoute(
-                                  mapboxMap!, i, _alternateRoutes.length);
+                                    mapboxMap!, i, _alternateRoutes.length);
                               }
                             },
                             child: Container(
