@@ -8,14 +8,13 @@ import 'dart:math';
 import 'data/models/trip_record.dart';
 import 'presentation/widgets/route_painter.dart';
 import 'dart:async';
-import 'dart:ui' as ui;
 import 'package:flutter_tts/flutter_tts.dart';
-import 'package:image_picker/image_picker.dart';
 import 'data/sources/mapbox_api.dart';
 import 'data/sources/overpass_api.dart';
 import 'presentation/widgets/search_modal.dart';
 import 'presentation/widgets/trip_book.dart';
 import 'data/sources/prefs_source.dart';
+import 'core/utils/image_utils.dart';
 import 'dart:convert';
 
 const String _mapboxToken = String.fromEnvironment('MAPBOX_TOKEN', defaultValue: '');
@@ -119,58 +118,12 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
   }
 
   // ── Imágenes ──────────────────────────────────────────
-  Future<Uint8List> _resizeImage(Uint8List data, int targetWidth) async {
-    final codec    = await ui.instantiateImageCodec(data, targetWidth: targetWidth);
-    final frame    = await codec.getNextFrame();
-    final byteData = await frame.image.toByteData(format: ui.ImageByteFormat.png);
-    if (byteData == null) throw Exception('Error al redimensionar imagen');
-    return byteData.buffer.asUint8List();
-  }
-
- Future<Uint8List> _makeCircularImage(Uint8List data, int size) async {
-    final codec = await ui.instantiateImageCodec(data,
-        targetWidth: size, targetHeight: size);
-    final frame = await codec.getNextFrame();
-    final recorder = ui.PictureRecorder();
-    final canvas = Canvas(recorder);
-    final paint = Paint()..isAntiAlias = true;
-    final rect = Rect.fromLTWH(0, 0, size.toDouble(), size.toDouble());
-    canvas.clipPath(Path()..addOval(rect));
-    // Fondo blanco
-    canvas.drawRect(rect, paint..color = Colors.white);
-    // Imagen
-    canvas.drawImageRect(
-      frame.image,
-      Rect.fromLTWH(0, 0,
-          frame.image.width.toDouble(), frame.image.height.toDouble()),
-      rect,
-      paint,
-    );
-    // Borde
-    canvas.drawCircle(
-      Offset(size / 2, size / 2),
-      size / 2 - 2,
-      Paint()
-        ..color = Colors.blue
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 4,
-    );
-    final picture = recorder.endRecording();
-    final img = await picture.toImage(size, size);
-    final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
-    if (byteData == null) throw Exception('Error al procesar imagen circular');
-    return byteData.buffer.asUint8List();
-  }
-
   Future<void> _pickUserAvatar() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
-    if (picked == null) return;
-    final bytes = await picked.readAsBytes();
-    final circular = await _makeCircularImage(bytes, 70);
+    final bytes = await _imageUtils.pickImageFromGallery();
+    if (bytes == null) return;
+    final circular = await _imageUtils.makeCircularImage(bytes, 70);
     await _prefsSource.saveAvatar(circular);
     setState(() => _userAvatarImage = circular);
-    // Eliminar marcador anterior y recrear con avatar
     if (motoAnnotation != null && annotationManager != null) {
       await annotationManager!.delete(motoAnnotation!);
       motoAnnotation = null;
@@ -190,9 +143,10 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
   }
   
   Future<void> _loadImages() async {
-    final ByteData pinData  = await rootBundle.load('assets/moto_pin.png');
-    final Uint8List pinResized  = await _resizeImage(pinData.buffer.asUint8List(), 120);
-    setState(() { pinImage = pinResized; });
+    final ByteData pinData   = await rootBundle.load('assets/moto_pin.png');
+    final Uint8List pinResized = await _imageUtils.resizeImage(
+        pinData.buffer.asUint8List(), 120);
+    setState(() => pinImage = pinResized);
   }
 
   // ── Libro de viajes ───────────────────────────────────
@@ -210,6 +164,7 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
 
   bool _isSpeaking = false;
   final PrefsSource _prefsSource = PrefsSource();
+  final ImageUtils _imageUtils = const ImageUtils();
 
 Future<void> _speak(String text) async {
   if (text.isEmpty || text == _lastSpokenInstruction) return;
