@@ -140,11 +140,11 @@ Future<void> _speak(String text) async {
 
   Future<void> _searchPlaces(String query) async {
     if (query.trim().length < 3) {
-      setState(() => _s.searchResults = []);
+      _n.setSearchResults([]);
       return;
     }
     final token = ++_searchToken;
-    setState(() => _s.searchLoading = true);
+    _n.setSearchLoading(true);
     try {
       final results = await _mapboxApi.searchPlaces(
         query,
@@ -152,9 +152,9 @@ Future<void> _speak(String text) async {
         proximityLng: _s.currentPosition?.longitude,
       );
       if (token != _searchToken) return;
-      setState(() => _s.searchResults = results);
+      _n.setSearchResults(results);
     } catch (_) {}
-    if (token == _searchToken) setState(() => _s.searchLoading = false);
+    if (token == _searchToken) _n.setSearchLoading(false);
   }
 
   Future<void> _selectSearchResult(Map<String, dynamic> place) async {
@@ -196,7 +196,7 @@ Future<void> _speak(String text) async {
     await _applyCustomRoadStyle();
   // Centrar en ubicación actual si ya se obtuvo
   if (_s.currentPosition != null) {
-  _s.isProgrammaticMove = true;
+  _n.setIsProgrammaticMove(true);
   mapboxMap?.flyTo(
     mapbox.CameraOptions(
       center: mapbox.Point(coordinates: mapbox.Position(
@@ -230,7 +230,7 @@ Future<void> _speak(String text) async {
         existingTrips: _s.trips,
       );
       if (record != null && mounted) {
-        setState(() => _s.trips = [record, ..._s.trips]);
+        _n.setTrips([record, ..._s.trips]);
       }
       await _cancelRoute();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
@@ -289,11 +289,11 @@ void _checkRouteDeviation(double lat, double lng) {
     final update = _navService.updateTurn(
         lat, lng, _s.routeSteps, _s.currentStepIndex);
     if (update == null) return;
-    setState(() {
-      _s.distanceToNextManeuver = update.distanceToManeuver;
-      _s.currentStepIndex       = update.nextStepIndex;
-      _s.currentInstruction     = update.nextInstruction;
-    });
+    _n.updateTurn(
+      distance:    update.distanceToManeuver,
+      stepIndex:   update.nextStepIndex,
+      instruction: update.nextInstruction,
+    );
     if (update.announceText != null) _speak(update.announceText!);
   }
 
@@ -320,8 +320,10 @@ void _checkRouteDeviation(double lat, double lng) {
       placeName = await _mapboxApi.reverseGeocode(_s.tappedLat!, _s.tappedLng!);
     } catch (_) {}
     setState(() {
-      _s.selectedPlace = {'name': placeName, 'lat': _s.tappedLat, 'lng': _s.tappedLng};
-      _s.showTapConfirm = false;
+      _n.update((s) => s.copyWith(
+        selectedPlace:  {'name': placeName, 'lat': s.tappedLat, 'lng': s.tappedLng},
+        showTapConfirm: false,
+      ));
     });
     await _getRoute(_s.tappedLat!, _s.tappedLng!);
   }
@@ -332,7 +334,7 @@ void _checkRouteDeviation(double lat, double lng) {
           annotationManager!, destinationAnnotation!);
       destinationAnnotation = null;
     }
-    setState(() { _s.showTapConfirm = false; _s.tappedLat = null; _s.tappedLng = null; });
+    _n.clearTap();
   }
 
   // ── Marcadores ────────────────────────────────────────
@@ -358,7 +360,7 @@ void _checkRouteDeviation(double lat, double lng) {
       current: destinationAnnotation,
       lat:     lat,
       lng:     lng,
-      _s.pinImage: _s.pinImage!,
+      pinImage: _s.pinImage!,
     );
   }
 
@@ -410,12 +412,14 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
     final position = await _gpsService.getInitialPosition();
     if (position == null || !mounted) return;
     setState(() {
-      _s.currentPosition = position;
-      _s.currentSpeed    = position.speed * 3.6;
+      _n.update((s) => s.copyWith(
+        currentPosition: position,
+        currentSpeed:    position.speed * 3.6,
+      ));
     });
     _lastAnimatedLat    = position.latitude;
     _lastAnimatedLng    = position.longitude;
-    _s.initialLocationSet = true;
+    _n.setInitialLocationSet(true);
     await _updateMotoMarker(
         position.latitude, position.longitude, position.heading);
     if (mapboxMap != null) {
@@ -443,8 +447,8 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
             ? false : s.userIsExploring,
       ));
       if (!_s.initialLocationSet && mapboxMap != null) {
-  _s.initialLocationSet = true;
-  _s.isProgrammaticMove = true;
+  _n.setInitialLocationSet(true);
+  _n.setIsProgrammaticMove(true);
   mapboxMap?.flyTo(
     mapbox.CameraOptions(
       center: mapbox.Point(coordinates: mapbox.Position(
@@ -474,7 +478,7 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
         _checkRouteDeviation(position.latitude, position.longitude);
         _updateRemainingRoute(position.latitude, position.longitude);
         _updateTurnByTurn(position.latitude, position.longitude);
-          _s.isProgrammaticMove = true;
+          _n.setIsProgrammaticMove(true);
         mapboxMap?.flyTo(
           mapbox.CameraOptions(
             center: mapbox.Point(coordinates: mapbox.Position(snappedLng, snappedLat)),
@@ -485,7 +489,7 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
       } else {
         _animateMarkerTo(position.latitude, position.longitude, position.heading);
         if (!_s.routeDrawn && !_s.showTapConfirm && !_s.userIsExploring) {
-          _s.isProgrammaticMove = true;
+          _n.setIsProgrammaticMove(true);
           mapboxMap?.flyTo(
             mapbox.CameraOptions(
               center: mapbox.Point(coordinates: mapbox.Position(
@@ -504,14 +508,14 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
   // ── Gasolineras ───────────────────────────────────────
   Future<void> _fetchGasolineras(double lat, double lng) async {
     if (mapboxMap == null) return;
-    setState(() => _s.gasolinerasLoading = true);
+    _n.setGasolinerasLoading(true);
     try {
       final geoJson = await _overpassApi.fetchGasolineras(lat, lng);
       if (geoJson != null && mounted) {
         await _updateGasolineraLayer(geoJson);
       }
     } catch (_) {}
-    if (mounted) setState(() => _s.gasolinerasLoading = false);
+    if (mounted) _n.setGasolinerasLoading(false);
   }
 
   Future<void> _updateGasolineraLayer(String geoJson) async {
@@ -530,26 +534,19 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
         destLng:   destLng,
       );
       if (routes.isEmpty) return;
-      setState(() {
-        _s.alternateRoutes = routes.map((r) => <String, dynamic>{
-          'distance': r.distance,
-          'duration': r.duration,
-          'geometry': r.geometry,
-          'coords':   r.coords,
-          'steps':    r.steps,
-        }).toList();
-        _s.selectedRouteIndex     = 0;
-        _s.routeDistance          = routes[0].distance;
-        _s.routeDuration          = routes[0].duration;
-        _s.routeDrawn             = true;
-        _s.routeCoordinates       = routes[0].coords;
-        _s.routeSteps             = routes[0].steps;
-        _s.currentStepIndex       = 0;
-        _s.currentInstruction     = _s.routeSteps.isNotEmpty
-            ? _s.routeSteps[0]['instruction'] as String : '';
-        _s.distanceToNextManeuver = _s.routeSteps.isNotEmpty
-            ? _s.routeSteps[0]['distance'] as double : 0.0;
-      });
+      _n.setRouteData(
+          distance:  routes[0].distance,
+          duration:  routes[0].duration,
+          coords:    routes[0].coords,
+          steps:     routes[0].steps,
+          alternates: routes.map((r) => <String, dynamic>{
+            'distance': r.distance,
+            'duration': r.duration,
+            'geometry': r.geometry,
+            'coords':   r.coords,
+            'steps':    r.steps,
+          }).toList(),
+        );
       await _drawRouteOnMap(routes[0].geometry);
       if (motoAnnotation != null && annotationManager != null) {
         await _mapService.deleteAnnotation(
@@ -606,7 +603,7 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
         routeCoords:  _s.routeCoordinates,
         existingTrips: _s.trips,
       );
-      if (record != null) setState(() => _s.trips = [record, ..._s.trips]);
+      if (record != null) _n.setTrips([record, ..._s.trips]);
     }
     if (mapboxMap != null) await _mapService.clearRouteLayers(mapboxMap!);
     if (destinationAnnotation != null && annotationManager != null) {
@@ -658,6 +655,7 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
   }
     
   Widget _buildMapTab() {
+    final s = _s;
     return MapTab(
       navigating:              s.navigating,
       showSearch:              s.showSearch,
@@ -687,30 +685,30 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
       onCameraChange:          (state) async {
         if (s.isProgrammaticMove) {
           Future.delayed(const Duration(milliseconds: 1200), () {
-            if (mounted) setState(() => s.isProgrammaticMove = false);
+            if (mounted) _n.setIsProgrammaticMove(false);
           });
         } else {
-          if (!s.userIsExploring) setState(() => s.userIsExploring = true);
+          if (!_s.userIsExploring) _n.setUserIsExploring(true);
         }
       },
       onSearchToggle:          () => setState(() {
-        s.showSearch = !s.showSearch;
-        if (!s.showSearch) {
-          s.searchResults = [];
+        _n.update((st) => st.copyWith(
+          showSearch:    !st.showSearch,
+          searchResults: !st.showSearch ? const [] : st.searchResults,
+        ));
           _searchController.clear();
         }
       }),
       onSearchClose:           () => setState(() {
-        s.showSearch = false;
-        s.searchResults = [];
+        _n.clearSearch();
         _searchController.clear();
       }),
       onSearchChanged:         _searchPlaces,
       onSearchSelect:          _selectSearchResult,
       onRecenter:              () {
-        setState(() => s.userIsExploring = false);
+        _n.setUserIsExploring(false);
         if (s.currentPosition != null) {
-          s.isProgrammaticMove = true;
+          _n.setIsProgrammaticMove(true);
           mapboxMap?.flyTo(
             mapbox.CameraOptions(
               center: mapbox.Point(coordinates: mapbox.Position(
@@ -734,14 +732,14 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
       onGasolinerasToggle:     () async {
         if (s.currentPosition == null || s.gasolinerasLoading) return;
         if (s.gasolinerasVisible) {
-          setState(() => s.gasolinerasVisible = false);
+          _n.setGasolinerasVisible(false)
           try {
             final style = await mapboxMap!.style;
             try { await style.removeStyleLayer('gasolineras-layer');  } catch (_) {}
             try { await style.removeStyleSource('gasolineras-source'); } catch (_) {}
           } catch (_) {}
         } else {
-          setState(() => s.gasolinerasVisible = true);
+          _n.setGasolinerasVisible(true);
           await _fetchGasolineras(
             s.currentPosition!.latitude,
             s.currentPosition!.longitude,
@@ -749,7 +747,7 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
         }
       },
       onSatelliteToggle:       () async {
-        setState(() => s.isSatellite = !_s.isSatellite);
+        _n.setSatellite(!_s.isSatellite);
         await mapboxMap?.loadStyleURI(
           s.isSatellite
               ? 'mapbox://styles/mapbox/satellite-streets-v12'
@@ -777,16 +775,7 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
       onRouteSelect:           (i) async {
         final r = s.alternateRoutes[i];
         setState(() {
-          s.selectedRouteIndex     = i;
-          s.routeDistance          = r['distance'];
-          s.routeDuration          = r['duration'];
-          s.routeCoordinates       = List<List<double>>.from(r['coords']);
-          s.routeSteps             = List<Map<String, dynamic>>.from(r['steps']);
-          s.currentStepIndex       = 0;
-          s.currentInstruction     = s.routeSteps.isNotEmpty
-              ? s.routeSteps[0]['instruction'] as String : '';
-          s.distanceToNextManeuver = s.routeSteps.isNotEmpty
-              ? s.routeSteps[0]['distance'] as double : 0.0;
+          _n.selectRoute(i, _s.alternateRoutes);
         });
         if (mapboxMap != null) {
           await _mapService.highlightRoute(
@@ -806,10 +795,10 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
           : BottomNavigationBar(
               currentIndex: s.currentTabIndex,
               onTap: (i) {
-                setState(() => s.currentTabIndex = i);
+                _n.setTabIndex(i);
                 if (i == 0 && s.currentPosition != null) {
                   Future.delayed(const Duration(milliseconds: 300), () {
-                    s.isProgrammaticMove = true;
+                    _n.setIsProgrammaticMove(true);
                     mapboxMap?.flyTo(
                       mapbox.CameraOptions(
                         center: mapbox.Point(coordinates: mapbox.Position(
