@@ -641,8 +641,7 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
       results: _s.searchResults,
       onChanged: _searchPlaces,
       onClose: () => setState(() {
-        _s.showSearch = false;
-        _s.searchResults = [];
+        _n.clearSearch();
         _searchController.clear();
       }),
       onSelect: _selectSearchResult,
@@ -691,18 +690,18 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
           if (!_s.userIsExploring) _n.setUserIsExploring(true);
         }
       },
-      onSearchToggle:          () => setState(() {
+      onSearchToggle: () {
         _n.update((st) => st.copyWith(
           showSearch:    !st.showSearch,
           searchResults: !st.showSearch ? const [] : st.searchResults,
         ));
-          _searchController.clear();
-        }
+        if (_s.showSearch) _searchController.clear();
+      },
       }),
-      onSearchClose:           () => setState(() {
+      onSearchClose: () {
         _n.clearSearch();
         _searchController.clear();
-      }),
+      },
       onSearchChanged:         _searchPlaces,
       onSearchSelect:          _selectSearchResult,
       onRecenter:              () {
@@ -783,7 +782,6 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
         }
       },
     );
-  }
 
   // ── BUILD ─────────────────────────────────────────────
   @override
