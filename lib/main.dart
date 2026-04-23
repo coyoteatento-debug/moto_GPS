@@ -100,7 +100,7 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp> with TickerProviderStat
       motoAnnotation = null;
     }
     if (_s.currentPosition != null) {
-      await _updateMotoMarker(
+     _updateMotoMarker(
         _s.currentPosition!.latitude,
         _s.currentPosition!.longitude,
         _s.currentPosition!.heading,
@@ -206,7 +206,7 @@ Future<void> _speak(String text) async {
     ),
     mapbox.MapAnimationOptions(duration: 1000, startDelay: 0),
   );
-  await _updateMotoMarker(
+ _updateMotoMarker(
     _s.currentPosition!.latitude,
     _s.currentPosition!.longitude,
     _s.currentPosition!.heading,
@@ -485,7 +485,7 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
           mapbox.MapAnimationOptions(duration: 900, startDelay: 0),
         );
       } else {
-        await _updateMotoMarker(
+       _updateMotoMarker(
           position.latitude, position.longitude, position.heading);
         _animateMarkerTo(position.latitude, position.longitude, position.heading);
         if (!_s.routeDrawn && !_s.showTapConfirm && !_s.userIsExploring) {
@@ -556,7 +556,7 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
       if (_s.currentPosition != null) {
         _lastAnimatedLat = _s.currentPosition!.latitude;
         _lastAnimatedLng = _s.currentPosition!.longitude;
-        await _updateMotoMarker(
+       _updateMotoMarker(
           _s.currentPosition!.latitude,
           _s.currentPosition!.longitude,
           _s.currentPosition!.heading,
