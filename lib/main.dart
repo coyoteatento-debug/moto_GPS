@@ -21,23 +21,29 @@ import 'core/services/trip_service.dart';
 import 'core/services/navigation_service.dart';
 import 'dart:convert';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'presentation/state/map_notifier.dart';
 
 const String _mapboxToken = String.fromEnvironment('MAPBOX_TOKEN', defaultValue: '');
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   mapbox.MapboxOptions.setAccessToken(_mapboxToken);
-  runApp(const MaterialApp(home: MotoGPSApp()));
+  runApp(const ProviderScope(
+    child: MaterialApp(home: MotoGPSApp()),
+  ));
 }
 
-class MotoGPSApp extends StatefulWidget {
+class MotoGPSApp extends ConsumerStatefulWidget {
   const MotoGPSApp({super.key});
   @override
-  State<MotoGPSApp> createState() => _MotoGPSAppState();
+  ConsumerState<MotoGPSApp> createState() => _MotoGPSAppState();
 }
 
-class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
+class _MotoGPSAppState extends ConsumerState<MotoGPSApp> with TickerProviderStateMixin {
 
+  MapNotifier get _n => ref.read(mapProvider.notifier);
+  MapState    get _s => ref.read(mapProvider);
   mapbox.MapboxMap? mapboxMap;
   mapbox.PointAnnotationManager? annotationManager;
   mapbox.PointAnnotation? motoAnnotation;
@@ -47,62 +53,21 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
   double? _lastAnimatedLat;
   double? _lastAnimatedLng;
 
-  Uint8List? pinImage;
-  Uint8List? _userAvatarImage;
-
-  double _currentSpeed = 0.0;
-  Position? _currentPosition;
-
-  Map<String, dynamic>? _selectedPlace;
-  bool _routeDrawn = false;
-  bool _navigating = false;
-  String _routeDistance = '';
-  String _routeDuration = '';
-
   final TtsService _tts = TtsService();
   final MapService _mapService = const MapService();
   final GpsService _gpsService = const GpsService();
   late final TripService _tripService = TripService(_prefsSource);
   late final NavigationService _navService =
       NavigationService(MapboxApi(_mapboxToken), const GeoUtils());
-  
-  // ── Turn-by-turn ──────────────────────────────────────
-  List<Map<String, dynamic>> _routeSteps = [];
-  String _currentInstruction = '';
-  double _distanceToNextManeuver = 0.0;
-  int _currentStepIndex = 0;
 
   // ── Buscador ──────────────────────────────────────────
-  bool _showSearch = false;
   late final MapboxApi _mapboxApi = MapboxApi(_mapboxToken);
   late final OverpassApi _overpassApi = const OverpassApi();
-  List<Map<String, dynamic>> _searchResults = [];
-  bool _searchLoading = false;
   int _searchToken = 0;
   final TextEditingController _searchController = TextEditingController();
-  
-  bool _showTapConfirm = false;
-  double? _tappedLat;
-  double? _tappedLng;
 
-  List<List<double>> _routeCoordinates = [];
-
-  bool _userIsExploring    = false;
-  bool _isSatellite        = false;
-  bool _gasolinerasVisible = false;
-  bool _gasolinerasLoading = false;
-  List<Map<String, dynamic>> _alternateRoutes = [];
-  int _selectedRouteIndex = 0;
-  bool _isRecalculating = false;
   int _deviationCount = 0;
   DateTime? _lastRecalcTime;
-  
-  bool _isProgrammaticMove = false;
-  bool _initialLocationSet = false;
-  
-  // ── Libro de viajes ───────────────────────────────────
-  List<TripRecord> _trips = [];
-  int _currentTabIndex = 0;
 
   @override
   void initState() {
@@ -128,37 +93,37 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
     if (bytes == null) return;
     final circular = await _imageUtils.makeCircularImage(bytes, 70);
     await _prefsSource.saveAvatar(circular);
-    setState(() => _userAvatarImage = circular);
+    _n.setUserAvatar(circular);
     if (motoAnnotation != null && annotationManager != null) {
       await _mapService.deleteAnnotation(
           annotationManager!, motoAnnotation!);
       motoAnnotation = null;
     }
-    if (_currentPosition != null) {
+    if (_s.currentPosition != null) {
       await _updateMotoMarker(
-        _currentPosition!.latitude,
-        _currentPosition!.longitude,
-        _currentPosition!.heading,
+        _s.currentPosition!.latitude,
+        _s.currentPosition!.longitude,
+        _s.currentPosition!.heading,
       );
     }
   }
 
   Future<void> _loadUserAvatar() async {
     final bytes = await _prefsSource.loadAvatar();
-    if (bytes != null && mounted) setState(() => _userAvatarImage = bytes);
+    if (bytes != null && mounted) _n.setUserAvatar(bytes);
   }
   
   Future<void> _loadImages() async {
     final ByteData pinData   = await rootBundle.load('assets/moto_pin.png');
     final Uint8List pinResized = await _imageUtils.resizeImage(
         pinData.buffer.asUint8List(), 120);
-    setState(() => pinImage = pinResized);
+    _n.setPinImage(pinResized);
   }
 
   // ── Libro de viajes ───────────────────────────────────
   Future<void> _loadTrips() async {
     final trips = await _prefsSource.loadTrips();
-    if (mounted) setState(() => _trips = trips);
+    if (mounted) _n.setTrips(trips);
   }
   
   Future<void> _initTts() async {
@@ -175,32 +140,33 @@ Future<void> _speak(String text) async {
 
   Future<void> _searchPlaces(String query) async {
     if (query.trim().length < 3) {
-      setState(() => _searchResults = []);
+      setState(() => _s.searchResults = []);
       return;
     }
     final token = ++_searchToken;
-    setState(() => _searchLoading = true);
+    setState(() => _s.searchLoading = true);
     try {
       final results = await _mapboxApi.searchPlaces(
         query,
-        proximityLat: _currentPosition?.latitude,
-        proximityLng: _currentPosition?.longitude,
+        proximityLat: _s.currentPosition?.latitude,
+        proximityLng: _s.currentPosition?.longitude,
       );
       if (token != _searchToken) return;
-      setState(() => _searchResults = results);
+      setState(() => _s.searchResults = results);
     } catch (_) {}
-    if (token == _searchToken) setState(() => _searchLoading = false);
+    if (token == _searchToken) setState(() => _s.searchLoading = false);
   }
 
   Future<void> _selectSearchResult(Map<String, dynamic> place) async {
     final lat = place['lat'] as double;
     final lng = place['lng'] as double;
-    setState(() {
-      _showSearch = false;
-      _searchResults = [];
+    _n.update((s) => s.copyWith(
+        showSearch:     false,
+        searchResults:  const [],
+        selectedPlace:  place,
+        showTapConfirm: false,
+      ));
       _searchController.clear();
-      _selectedPlace = place;
-    });
     await _addDestinationMarker(lat, lng);
     // Mover cámara al destino SIEMPRE, independiente de si la ruta funciona
     mapboxMap?.flyTo(
@@ -229,21 +195,21 @@ Future<void> _speak(String text) async {
     await Future.delayed(const Duration(milliseconds: 600));
     await _applyCustomRoadStyle();
   // Centrar en ubicación actual si ya se obtuvo
-  if (_currentPosition != null) {
-  _isProgrammaticMove = true;
+  if (_s.currentPosition != null) {
+  _s.isProgrammaticMove = true;
   mapboxMap?.flyTo(
     mapbox.CameraOptions(
       center: mapbox.Point(coordinates: mapbox.Position(
-        _currentPosition!.longitude, _currentPosition!.latitude,
+        _s.currentPosition!.longitude, _s.currentPosition!.latitude,
       )),
-      zoom: 15.0, bearing: _currentPosition!.heading, pitch: 0.0,
+      zoom: 15.0, bearing: _s.currentPosition!.heading, pitch: 0.0,
     ),
     mapbox.MapAnimationOptions(duration: 1000, startDelay: 0),
   );
   await _updateMotoMarker(
-    _currentPosition!.latitude,
-    _currentPosition!.longitude,
-    _currentPosition!.heading,
+    _s.currentPosition!.latitude,
+    _s.currentPosition!.longitude,
+    _s.currentPosition!.heading,
   );
  }
 }    
@@ -254,17 +220,17 @@ Future<void> _speak(String text) async {
   }
 
   Future<void> _updateRemainingRoute(double lat, double lng) async {
-    if (!_navigating || _routeCoordinates.isEmpty || mapboxMap == null) return;
+    if (!_s.navigating || _s.routeCoordinates.isEmpty || mapboxMap == null) return;
 
-    if (_navService.hasArrived(lat, lng, _routeCoordinates)) {
-      if (!_navigating) return;
+    if (_navService.hasArrived(lat, lng, _s.routeCoordinates)) {
+      if (!_s.navigating) return;
       final record = await _tripService.finishAndSave(
-        destination:   _selectedPlace?['name'] ?? 'Destino',
-        routeCoords:   _routeCoordinates,
-        existingTrips: _trips,
+        destination:   _s.selectedPlace?['name'] ?? 'Destino',
+        routeCoords:   _s.routeCoordinates,
+        existingTrips: _s.trips,
       );
       if (record != null && mounted) {
-        setState(() => _trips = [record, ..._trips]);
+        setState(() => _s.trips = [record, ..._s.trips]);
       }
       await _cancelRoute();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
@@ -277,16 +243,16 @@ Future<void> _speak(String text) async {
       return;
     }
 
-    final idx       = _geo.findClosestPointIndex(lat, lng, _routeCoordinates);
-    final remaining = _routeCoordinates.sublist(idx);
+    final idx       = _geo.findClosestPointIndex(lat, lng, _s.routeCoordinates);
+    final remaining = _s.routeCoordinates.sublist(idx);
     await _mapService.updateRemainingRoute(mapboxMap!, remaining);
   }
 
 void _checkRouteDeviation(double lat, double lng) {
-    if (!_navigating || _routeCoordinates.isEmpty || _isRecalculating) return;
+    if (!_s.navigating || _s.routeCoordinates.isEmpty || _s.isRecalculating) return;
 
-    if (_routeSteps.isNotEmpty && _currentStepIndex < _routeSteps.length) {
-      final loc     = _routeSteps[_currentStepIndex]['location'] as List;
+    if (_s.routeSteps.isNotEmpty && _s.currentStepIndex < _s.routeSteps.length) {
+      final loc     = _s.routeSteps[_s.currentStepIndex]['location'] as List;
       final stepLat = (loc[1] as num).toDouble();
       final stepLng = (loc[0] as num).toDouble();
       if (_geo.distanceBetween(lat, lng, stepLat, stepLng) < 120) return;
@@ -295,7 +261,7 @@ void _checkRouteDeviation(double lat, double lng) {
     if (_lastRecalcTime != null &&
         DateTime.now().difference(_lastRecalcTime!).inSeconds < 20) return;
 
-    if (_navService.isDeviated(lat, lng, _routeCoordinates)) {
+    if (_navService.isDeviated(lat, lng, _s.routeCoordinates)) {
       _deviationCount++;
       if (_deviationCount >= 3) {
         _deviationCount = 0;
@@ -308,35 +274,35 @@ void _checkRouteDeviation(double lat, double lng) {
   }
 
   Future<void> _recalculateRoute(double lat, double lng) async {
-    if (_selectedPlace == null) return;
-    setState(() => _isRecalculating = true);
+    if (_s.selectedPlace == null) return;
+    _n.setIsRecalculating(true);
     _speak('Recalculando ruta');
 
-    final destLat = (_selectedPlace!['lat'] as num).toDouble();
-    final destLng = (_selectedPlace!['lng'] as num).toDouble();
+    final destLat = (_s.selectedPlace!['lat'] as num).toDouble();
+    final destLng = (_s.selectedPlace!['lng'] as num).toDouble();
 
     await _getRoute(destLat, destLng);
-    setState(() => _isRecalculating = false);
+    _n.setIsRecalculating(false);
   }
   
   void _updateTurnByTurn(double lat, double lng) {
     final update = _navService.updateTurn(
-        lat, lng, _routeSteps, _currentStepIndex);
+        lat, lng, _s.routeSteps, _s.currentStepIndex);
     if (update == null) return;
     setState(() {
-      _distanceToNextManeuver = update.distanceToManeuver;
-      _currentStepIndex       = update.nextStepIndex;
-      _currentInstruction     = update.nextInstruction;
+      _s.distanceToNextManeuver = update.distanceToManeuver;
+      _s.currentStepIndex       = update.nextStepIndex;
+      _s.currentInstruction     = update.nextInstruction;
     });
     if (update.announceText != null) _speak(update.announceText!);
   }
 
   // ── Tap mapa ──────────────────────────────────────────
   void _onMapTap(mapbox.MapContentGestureContext context) {
-    if (_navigating) return;
+    if (_s.navigating) return;
     final lat = context.point.coordinates.lat.toDouble();
     final lng = context.point.coordinates.lng.toDouble();
-    setState(() { _tappedLat = lat; _tappedLng = lng; _showTapConfirm = true; });
+    _n.setTappedLocation(lat, lng);
     _addDestinationMarker(lat, lng);
     mapboxMap?.flyTo(
       mapbox.CameraOptions(
@@ -348,16 +314,16 @@ void _checkRouteDeviation(double lat, double lng) {
   }
 
   Future<void> _confirmTappedDestination() async {
-    if (_tappedLat == null || _tappedLng == null) return;
+    if (_s.tappedLat == null || _s.tappedLng == null) return;
     String placeName = 'Destino seleccionado';
     try {
-      placeName = await _mapboxApi.reverseGeocode(_tappedLat!, _tappedLng!);
+      placeName = await _mapboxApi.reverseGeocode(_s.tappedLat!, _s.tappedLng!);
     } catch (_) {}
     setState(() {
-      _selectedPlace = {'name': placeName, 'lat': _tappedLat, 'lng': _tappedLng};
-      _showTapConfirm = false;
+      _s.selectedPlace = {'name': placeName, 'lat': _s.tappedLat, 'lng': _s.tappedLng};
+      _s.showTapConfirm = false;
     });
-    await _getRoute(_tappedLat!, _tappedLng!);
+    await _getRoute(_s.tappedLat!, _s.tappedLng!);
   }
 
   Future<void> _cancelTap() async {
@@ -366,13 +332,13 @@ void _checkRouteDeviation(double lat, double lng) {
           annotationManager!, destinationAnnotation!);
       destinationAnnotation = null;
     }
-    setState(() { _showTapConfirm = false; _tappedLat = null; _tappedLng = null; });
+    setState(() { _s.showTapConfirm = false; _s.tappedLat = null; _s.tappedLng = null; });
   }
 
   // ── Marcadores ────────────────────────────────────────
   Future<void> _updateMotoMarker(
       double lat, double lng, double bearing) async {
-    final markerImage = _userAvatarImage ?? pinImage;
+    final markerImage = _s.userAvatarImage ?? _s.pinImage;
     if (annotationManager == null || markerImage == null) return;
     motoAnnotation = await _mapService.updateMotoMarker(
       manager:     annotationManager!,
@@ -381,18 +347,18 @@ void _checkRouteDeviation(double lat, double lng) {
       lng:         lng,
       bearing:     bearing,
       markerImage: markerImage,
-      isAvatar:    _userAvatarImage != null,
+      isAvatar:    _s.userAvatarImage != null,
     );
   }
 
   Future<void> _addDestinationMarker(double lat, double lng) async {
-    if (annotationManager == null || pinImage == null) return;
+    if (annotationManager == null || _s.pinImage == null) return;
     destinationAnnotation = await _mapService.updateDestinationMarker(
       manager: annotationManager!,
       current: destinationAnnotation,
       lat:     lat,
       lng:     lng,
-      pinImage: pinImage!,
+      _s.pinImage: _s.pinImage!,
     );
   }
 
@@ -444,12 +410,12 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
     final position = await _gpsService.getInitialPosition();
     if (position == null || !mounted) return;
     setState(() {
-      _currentPosition = position;
-      _currentSpeed    = position.speed * 3.6;
+      _s.currentPosition = position;
+      _s.currentSpeed    = position.speed * 3.6;
     });
     _lastAnimatedLat    = position.latitude;
     _lastAnimatedLng    = position.longitude;
-    _initialLocationSet = true;
+    _s.initialLocationSet = true;
     await _updateMotoMarker(
         position.latitude, position.longitude, position.heading);
     if (mapboxMap != null) {
@@ -469,17 +435,16 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
   void _startLocationTracking() {
      _locationSubscription = _gpsService.startTracking((Position position) {
       if (!mounted) return;
-      setState(() {
-        _currentSpeed = (position.speed < 0 ? 0 : position.speed) * 3.6;
-        _currentPosition = position;
-        // Si el usuario se mueve, retomar seguimiento automático
-        if (_currentSpeed > 2 && !_navigating && !_routeDrawn) {
-          _userIsExploring = false;
-        }
-      });
-      if (!_initialLocationSet && mapboxMap != null) {
-  _initialLocationSet = true;
-  _isProgrammaticMove = true;
+      final speed = (position.speed < 0 ? 0 : position.speed) * 3.6;
+      _n.update((s) => s.copyWith(
+        currentSpeed:    speed,
+        currentPosition: position,
+        userIsExploring: speed > 2 && !s.navigating && !s.routeDrawn
+            ? false : s.userIsExploring,
+      ));
+      if (!_s.initialLocationSet && mapboxMap != null) {
+  _s.initialLocationSet = true;
+  _s.isProgrammaticMove = true;
   mapboxMap?.flyTo(
     mapbox.CameraOptions(
       center: mapbox.Point(coordinates: mapbox.Position(
@@ -491,16 +456,16 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
   );
 }
 
-      if (_navigating && _routeCoordinates.isNotEmpty) {
-        final snapped    = _geo.snapToRoute(position.latitude, position.longitude, _routeCoordinates);
+      if (_s.navigating && _s.routeCoordinates.isNotEmpty) {
+        final snapped    = _geo.snapToRoute(position.latitude, position.longitude, _s.routeCoordinates);
         final snappedLng = snapped[0];
         final snappedLat = snapped[1];
-        final idx        = _geo.findClosestPointIndex(position.latitude, position.longitude, _routeCoordinates);
+        final idx        = _geo.findClosestPointIndex(position.latitude, position.longitude, _s.routeCoordinates);
         double bearing   = position.heading;
-        if (idx < _routeCoordinates.length - 1) {
+        if (idx < _s.routeCoordinates.length - 1) {
           bearing = _geo.bearingBetween(
-              _routeCoordinates[idx][1], _routeCoordinates[idx][0],
-              _routeCoordinates[idx+1][1], _routeCoordinates[idx+1][0]);
+              _s.routeCoordinates[idx][1], _s.routeCoordinates[idx][0],
+              _s.routeCoordinates[idx+1][1], _s.routeCoordinates[idx+1][0]);
         }
         _animateMarkerTo(snappedLat, snappedLng, bearing);
         _tripService.accumulate(
@@ -509,7 +474,7 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
         _checkRouteDeviation(position.latitude, position.longitude);
         _updateRemainingRoute(position.latitude, position.longitude);
         _updateTurnByTurn(position.latitude, position.longitude);
-          _isProgrammaticMove = true;
+          _s.isProgrammaticMove = true;
         mapboxMap?.flyTo(
           mapbox.CameraOptions(
             center: mapbox.Point(coordinates: mapbox.Position(snappedLng, snappedLat)),
@@ -519,13 +484,13 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
         );
       } else {
         _animateMarkerTo(position.latitude, position.longitude, position.heading);
-        if (!_routeDrawn && !_showTapConfirm && !_userIsExploring) {
-          _isProgrammaticMove = true;
+        if (!_s.routeDrawn && !_s.showTapConfirm && !_s.userIsExploring) {
+          _s.isProgrammaticMove = true;
           mapboxMap?.flyTo(
             mapbox.CameraOptions(
               center: mapbox.Point(coordinates: mapbox.Position(
                   position.longitude, position.latitude)),
-              zoom: _geo.calculateDynamicZoom(_currentSpeed),
+              zoom: _geo.calculateDynamicZoom(_s.currentSpeed),
               bearing: position.heading,
               pitch: 0.0,
             ),
@@ -539,14 +504,14 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
   // ── Gasolineras ───────────────────────────────────────
   Future<void> _fetchGasolineras(double lat, double lng) async {
     if (mapboxMap == null) return;
-    setState(() => _gasolinerasLoading = true);
+    setState(() => _s.gasolinerasLoading = true);
     try {
       final geoJson = await _overpassApi.fetchGasolineras(lat, lng);
       if (geoJson != null && mounted) {
         await _updateGasolineraLayer(geoJson);
       }
     } catch (_) {}
-    if (mounted) setState(() => _gasolinerasLoading = false);
+    if (mounted) setState(() => _s.gasolinerasLoading = false);
   }
 
   Future<void> _updateGasolineraLayer(String geoJson) async {
@@ -556,34 +521,34 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
 
   // ── Ruta ──────────────────────────────────────────────
   Future<void> _getRoute(double destLat, double destLng) async {
-    if (_currentPosition == null) return;
+    if (_s.currentPosition == null) return;
     try {
       final routes = await _navService.getRoutes(
-        originLat: _currentPosition!.latitude,
-        originLng: _currentPosition!.longitude,
+        originLat: _s.currentPosition!.latitude,
+        originLng: _s.currentPosition!.longitude,
         destLat:   destLat,
         destLng:   destLng,
       );
       if (routes.isEmpty) return;
       setState(() {
-        _alternateRoutes = routes.map((r) => <String, dynamic>{
+        _s.alternateRoutes = routes.map((r) => <String, dynamic>{
           'distance': r.distance,
           'duration': r.duration,
           'geometry': r.geometry,
           'coords':   r.coords,
           'steps':    r.steps,
         }).toList();
-        _selectedRouteIndex     = 0;
-        _routeDistance          = routes[0].distance;
-        _routeDuration          = routes[0].duration;
-        _routeDrawn             = true;
-        _routeCoordinates       = routes[0].coords;
-        _routeSteps             = routes[0].steps;
-        _currentStepIndex       = 0;
-        _currentInstruction     = _routeSteps.isNotEmpty
-            ? _routeSteps[0]['instruction'] as String : '';
-        _distanceToNextManeuver = _routeSteps.isNotEmpty
-            ? _routeSteps[0]['distance'] as double : 0.0;
+        _s.selectedRouteIndex     = 0;
+        _s.routeDistance          = routes[0].distance;
+        _s.routeDuration          = routes[0].duration;
+        _s.routeDrawn             = true;
+        _s.routeCoordinates       = routes[0].coords;
+        _s.routeSteps             = routes[0].steps;
+        _s.currentStepIndex       = 0;
+        _s.currentInstruction     = _s.routeSteps.isNotEmpty
+            ? _s.routeSteps[0]['instruction'] as String : '';
+        _s.distanceToNextManeuver = _s.routeSteps.isNotEmpty
+            ? _s.routeSteps[0]['distance'] as double : 0.0;
       });
       await _drawRouteOnMap(routes[0].geometry);
       if (motoAnnotation != null && annotationManager != null) {
@@ -591,13 +556,13 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
             annotationManager!, motoAnnotation!);
         motoAnnotation = null;
       }
-      if (_currentPosition != null) {
-        _lastAnimatedLat = _currentPosition!.latitude;
-        _lastAnimatedLng = _currentPosition!.longitude;
+      if (_s.currentPosition != null) {
+        _lastAnimatedLat = _s.currentPosition!.latitude;
+        _lastAnimatedLng = _s.currentPosition!.longitude;
         await _updateMotoMarker(
-          _currentPosition!.latitude,
-          _currentPosition!.longitude,
-          _currentPosition!.heading,
+          _s.currentPosition!.latitude,
+          _s.currentPosition!.longitude,
+          _s.currentPosition!.heading,
         );
       }
       _fitRouteBounds(destLat, destLng);
@@ -611,20 +576,20 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
     
   Future<void> _drawRouteOnMap(Map<String, dynamic> geometry) async {
     if (mapboxMap == null) return;
-    await _mapService.drawRouteOnMap(mapboxMap!, geometry, _alternateRoutes);
+    await _mapService.drawRouteOnMap(mapboxMap!, geometry, _s.alternateRoutes);
   }
 
   void _fitRouteBounds(double destLat, double destLng) {
-    if (_currentPosition == null) return;
+    if (_s.currentPosition == null) return;
     final dist = _geo.distanceBetween(
-      _currentPosition!.latitude, _currentPosition!.longitude,
+      _s.currentPosition!.latitude, _s.currentPosition!.longitude,
       destLat, destLng,
     );
     mapboxMap?.flyTo(
       mapbox.CameraOptions(
         center: mapbox.Point(coordinates: mapbox.Position(
-          (_currentPosition!.longitude + destLng) / 2,
-          (_currentPosition!.latitude  + destLat) / 2,
+          (_s.currentPosition!.longitude + destLng) / 2,
+          (_s.currentPosition!.latitude  + destLat) / 2,
         )),
         zoom: _navService.fitZoom(dist),
         bearing: 0.0, pitch: 0.0,
@@ -635,13 +600,13 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
 
   // ── FIX 1: _tts.stop() movido FUERA de setState ───────
   Future<void> _cancelRoute() async {
-    if (_navigating) {
+    if (_s.navigating) {
       final record = await _tripService.finishAndSave(
-        destination:  _selectedPlace?['name'] ?? 'Destino',
-        routeCoords:  _routeCoordinates,
-        existingTrips: _trips,
+        destination:  _s.selectedPlace?['name'] ?? 'Destino',
+        routeCoords:  _s.routeCoordinates,
+        existingTrips: _s.trips,
       );
-      if (record != null) setState(() => _trips = [record, ..._trips]);
+      if (record != null) setState(() => _s.trips = [record, ..._s.trips]);
     }
     if (mapboxMap != null) await _mapService.clearRouteLayers(mapboxMap!);
     if (destinationAnnotation != null && annotationManager != null) {
@@ -650,28 +615,21 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
       destinationAnnotation = null;
     }
      await _tts.stop();
-    setState(() {
-      _selectedPlace      = null; _routeDrawn      = false; _navigating = false;
-      _showTapConfirm     = false; _tappedLat      = null;  _tappedLng  = null;
-      _routeDistance      = '';   _routeDuration   = '';    _routeCoordinates = [];
-      _alternateRoutes    = [];   _selectedRouteIndex = 0;  // ← limpiar rutas alternas
-      _routeSteps         = [];   _currentInstruction = '';
-      _currentStepIndex   = 0;    _distanceToNextManeuver = 0.0;
-    });
+    _n.clearRoute();
   }
   
   void _startNavigation() {
-    setState(() => _navigating = true);
-    if (_currentPosition != null) {
+    _n.setNavigating(true);
+    if (_s.currentPosition != null) {
       _tripService.startTracking(
-        _currentPosition!.latitude,
-        _currentPosition!.longitude,
+        _s.currentPosition!.latitude,
+        _s.currentPosition!.longitude,
       );
       mapboxMap?.flyTo(
         mapbox.CameraOptions(
           center: mapbox.Point(coordinates: mapbox.Position(
-              _currentPosition!.longitude, _currentPosition!.latitude)),
-          zoom: 17.0, bearing: _currentPosition!.heading, pitch: 50.0,
+              _s.currentPosition!.longitude, _s.currentPosition!.latitude)),
+          zoom: 17.0, bearing: _s.currentPosition!.heading, pitch: 50.0,
         ),
         mapbox.MapAnimationOptions(duration: 1500, startDelay: 0),
       );
@@ -682,12 +640,12 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
   Widget _buildSearchModal() {
     return SearchModal(
       controller: _searchController,
-      isLoading: _searchLoading,
-      results: _searchResults,
+      isLoading: _s.searchLoading,
+      results: _s.searchResults,
       onChanged: _searchPlaces,
       onClose: () => setState(() {
-        _showSearch = false;
-        _searchResults = [];
+        _s.showSearch = false;
+        _s.searchResults = [];
         _searchController.clear();
       }),
       onSelect: _selectSearchResult,
@@ -696,119 +654,119 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
   
   // ── Libro de viajes UI ────────────────────────────────
   Widget _buildTripBook() {
-    return TripBook(trips: _trips);
+    return TripBook(trips: _s.trips);
   }
     
   Widget _buildMapTab() {
     return MapTab(
-      navigating:              _navigating,
-      showSearch:              _showSearch,
-      userIsExploring:         _userIsExploring,
-      isSatellite:             _isSatellite,
-      gasolinerasVisible:      _gasolinerasVisible,
-      gasolinerasLoading:      _gasolinerasLoading,
-      routeDrawn:              _routeDrawn,
-      showTapConfirm:          _showTapConfirm,
-      isRecalculating:         _isRecalculating,
-      routeDistance:           _routeDistance,
-      routeDuration:           _routeDuration,
-      currentInstruction:      _currentInstruction,
-      distanceToNextManeuver:  _distanceToNextManeuver,
-      currentSpeed:            _currentSpeed,
-      tappedLat:               _tappedLat,
-      tappedLng:               _tappedLng,
-      selectedPlace:           _selectedPlace,
-      alternateRoutes:         _alternateRoutes,
-      selectedRouteIndex:      _selectedRouteIndex,
-      userAvatarImage:         _userAvatarImage,
+      navigating:              s.navigating,
+      showSearch:              s.showSearch,
+      userIsExploring:         s.userIsExploring,
+      isSatellite:             s.isSatellite,
+      gasolinerasVisible:      s.gasolinerasVisible,
+      gasolinerasLoading:      s.gasolinerasLoading,
+      routeDrawn:              s.routeDrawn,
+      showTapConfirm:          s.showTapConfirm,
+      isRecalculating:         s.isRecalculating,
+      routeDistance:           s.routeDistance,
+      routeDuration:           s.routeDuration,
+      currentInstruction:      s.currentInstruction,
+      distanceToNextManeuver:  s.distanceToNextManeuver,
+      currentSpeed:            s.currentSpeed,
+      tappedLat:               s.tappedLat,
+      tappedLng:               s.tappedLng,
+      selectedPlace:           s.selectedPlace,
+      alternateRoutes:         s.alternateRoutes,
+      selectedRouteIndex:      s.selectedRouteIndex,
+      userAvatarImage:         s.userAvatarImage,
       searchController:        _searchController,
-      searchLoading:           _searchLoading,
-      searchResults:           _searchResults,
+      searchLoading:           s.searchLoading,
+      searchResults:           s.searchResults,
       onMapCreated:            _onMapCreated,
       onMapTap:                _onMapTap,
       onCameraChange:          (state) async {
-        if (_isProgrammaticMove) {
+        if (s.isProgrammaticMove) {
           Future.delayed(const Duration(milliseconds: 1200), () {
-            if (mounted) setState(() => _isProgrammaticMove = false);
+            if (mounted) setState(() => s.isProgrammaticMove = false);
           });
         } else {
-          if (!_userIsExploring) setState(() => _userIsExploring = true);
+          if (!s.userIsExploring) setState(() => s.userIsExploring = true);
         }
       },
       onSearchToggle:          () => setState(() {
-        _showSearch = !_showSearch;
-        if (!_showSearch) {
-          _searchResults = [];
+        s.showSearch = !s.showSearch;
+        if (!s.showSearch) {
+          s.searchResults = [];
           _searchController.clear();
         }
       }),
       onSearchClose:           () => setState(() {
-        _showSearch = false;
-        _searchResults = [];
+        s.showSearch = false;
+        s.searchResults = [];
         _searchController.clear();
       }),
       onSearchChanged:         _searchPlaces,
       onSearchSelect:          _selectSearchResult,
       onRecenter:              () {
-        setState(() => _userIsExploring = false);
-        if (_currentPosition != null) {
-          _isProgrammaticMove = true;
+        setState(() => s.userIsExploring = false);
+        if (s.currentPosition != null) {
+          s.isProgrammaticMove = true;
           mapboxMap?.flyTo(
             mapbox.CameraOptions(
               center: mapbox.Point(coordinates: mapbox.Position(
-                _currentPosition!.longitude,
-                _currentPosition!.latitude,
+                s.currentPosition!.longitude,
+                s.currentPosition!.latitude,
               )),
-              zoom:    _geo.calculateDynamicZoom(_currentSpeed),
-              bearing: _currentPosition!.heading,
+              zoom:    _geo.calculateDynamicZoom(s.currentSpeed),
+              bearing: s.currentPosition!.heading,
               pitch:   0.0,
             ),
             mapbox.MapAnimationOptions(duration: 800, startDelay: 0),
           );
           _updateMotoMarker(
-            _currentPosition!.latitude,
-            _currentPosition!.longitude,
-            _currentPosition!.heading,
+            s.currentPosition!.latitude,
+            s.currentPosition!.longitude,
+            s.currentPosition!.heading,
           );
         }
       },
       onAvatarPick:            _pickUserAvatar,
       onGasolinerasToggle:     () async {
-        if (_currentPosition == null || _gasolinerasLoading) return;
-        if (_gasolinerasVisible) {
-          setState(() => _gasolinerasVisible = false);
+        if (s.currentPosition == null || s.gasolinerasLoading) return;
+        if (s.gasolinerasVisible) {
+          setState(() => s.gasolinerasVisible = false);
           try {
             final style = await mapboxMap!.style;
             try { await style.removeStyleLayer('gasolineras-layer');  } catch (_) {}
             try { await style.removeStyleSource('gasolineras-source'); } catch (_) {}
           } catch (_) {}
         } else {
-          setState(() => _gasolinerasVisible = true);
+          setState(() => s.gasolinerasVisible = true);
           await _fetchGasolineras(
-            _currentPosition!.latitude,
-            _currentPosition!.longitude,
+            s.currentPosition!.latitude,
+            s.currentPosition!.longitude,
           );
         }
       },
       onSatelliteToggle:       () async {
-        setState(() => _isSatellite = !_isSatellite);
+        setState(() => s.isSatellite = !_s.isSatellite);
         await mapboxMap?.loadStyleURI(
-          _isSatellite
+          s.isSatellite
               ? 'mapbox://styles/mapbox/satellite-streets-v12'
               : 'mapbox://styles/mapbox/streets-v12',
         );
-        if (!_isSatellite) await _applyCustomRoadStyle();
+        if (!s.isSatellite) await _applyCustomRoadStyle();
         await Future.delayed(const Duration(milliseconds: 1500));
-        if (_routeDrawn && _routeCoordinates.isNotEmpty && mounted) {
+        if (s.routeDrawn && _s.routeCoordinates.isNotEmpty && mounted) {
           await _drawRouteOnMap({
             'type': 'LineString',
-            'coordinates': _routeCoordinates,
+            'coordinates': _s.routeCoordinates,
           });
         }
-        if (_currentPosition != null && mounted && _gasolinerasVisible) {
+        if (s.currentPosition != null && mounted && s.gasolinerasVisible) {
           _fetchGasolineras(
-            _currentPosition!.latitude,
-            _currentPosition!.longitude,
+            s.currentPosition!.latitude,
+            s.currentPosition!.longitude,
           );
         }
       },
@@ -817,22 +775,22 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
       onCancelRoute:           _cancelRoute,
       onStartNavigation:       _startNavigation,
       onRouteSelect:           (i) async {
-        final r = _alternateRoutes[i];
+        final r = s.alternateRoutes[i];
         setState(() {
-          _selectedRouteIndex     = i;
-          _routeDistance          = r['distance'];
-          _routeDuration          = r['duration'];
-          _routeCoordinates       = List<List<double>>.from(r['coords']);
-          _routeSteps             = List<Map<String, dynamic>>.from(r['steps']);
-          _currentStepIndex       = 0;
-          _currentInstruction     = _routeSteps.isNotEmpty
-              ? _routeSteps[0]['instruction'] as String : '';
-          _distanceToNextManeuver = _routeSteps.isNotEmpty
-              ? _routeSteps[0]['distance'] as double : 0.0;
+          s.selectedRouteIndex     = i;
+          s.routeDistance          = r['distance'];
+          s.routeDuration          = r['duration'];
+          s.routeCoordinates       = List<List<double>>.from(r['coords']);
+          s.routeSteps             = List<Map<String, dynamic>>.from(r['steps']);
+          s.currentStepIndex       = 0;
+          s.currentInstruction     = s.routeSteps.isNotEmpty
+              ? s.routeSteps[0]['instruction'] as String : '';
+          s.distanceToNextManeuver = s.routeSteps.isNotEmpty
+              ? s.routeSteps[0]['distance'] as double : 0.0;
         });
         if (mapboxMap != null) {
           await _mapService.highlightRoute(
-              mapboxMap!, i, _alternateRoutes.length);
+              mapboxMap!, i, _s.alternateRoutes.length);
         }
       },
     );
@@ -841,32 +799,33 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
   // ── BUILD ─────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    final s = ref.watch(mapProvider);
     return Scaffold(
-      bottomNavigationBar: _navigating
+      bottomNavigationBar: s.navigating
           ? null
           : BottomNavigationBar(
-              currentIndex: _currentTabIndex,
+              currentIndex: s.currentTabIndex,
               onTap: (i) {
-                setState(() => _currentTabIndex = i);
-                if (i == 0 && _currentPosition != null) {
+                setState(() => s.currentTabIndex = i);
+                if (i == 0 && s.currentPosition != null) {
                   Future.delayed(const Duration(milliseconds: 300), () {
-                    _isProgrammaticMove = true;
+                    s.isProgrammaticMove = true;
                     mapboxMap?.flyTo(
                       mapbox.CameraOptions(
                         center: mapbox.Point(coordinates: mapbox.Position(
-                          _currentPosition!.longitude,
-                          _currentPosition!.latitude,
+                          s.currentPosition!.longitude,
+                          s.currentPosition!.latitude,
                         )),
-                        zoom: _geo.calculateDynamicZoom(_currentSpeed),
-                        bearing: _currentPosition!.heading,
+                        zoom: _geo.calculateDynamicZoom(s.currentSpeed),
+                        bearing: s.currentPosition!.heading,
                         pitch: 0.0,
                       ),
                       mapbox.MapAnimationOptions(duration: 800, startDelay: 0),
                     );
                     _updateMotoMarker(
-                      _currentPosition!.latitude,
-                      _currentPosition!.longitude,
-                      _currentPosition!.heading,
+                      s.currentPosition!.latitude,
+                      s.currentPosition!.longitude,
+                      s.currentPosition!.heading,
                     );
                   });
                 }
@@ -889,7 +848,7 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
             ),
       // ── FIX 2: cierre correcto de IndexedStack y Scaffold ──
       body: IndexedStack(
-        index: _currentTabIndex,
+        index: s.currentTabIndex,
         children: [
           _buildMapTab(),   // índice 0 — Mapa
           _buildTripBook(), // índice 1 — Libro de viaje
