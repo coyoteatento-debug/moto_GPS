@@ -1,0 +1,586 @@
+import 'dart:typed_data';
+import 'package:flutter/material.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
+import 'search_modal.dart';
+
+class MapTab extends StatelessWidget {
+  // ── Estado del mapa ───────────────────────────────────
+  final bool navigating;
+  final bool showSearch;
+  final bool userIsExploring;
+  final bool isSatellite;
+  final bool gasolinerasVisible;
+  final bool gasolinerasLoading;
+  final bool routeDrawn;
+  final bool showTapConfirm;
+  final bool isRecalculating;
+
+  // ── Datos de ruta ─────────────────────────────────────
+  final String routeDistance;
+  final String routeDuration;
+  final String currentInstruction;
+  final double distanceToNextManeuver;
+  final double currentSpeed;
+  final double? tappedLat;
+  final double? tappedLng;
+  final Map<String, dynamic>? selectedPlace;
+  final List<Map<String, dynamic>> alternateRoutes;
+  final int selectedRouteIndex;
+
+  // ── Avatar ─────────────────────────────────────────────
+  final Uint8List? userAvatarImage;
+
+  // ── Búsqueda ──────────────────────────────────────────
+  final TextEditingController searchController;
+  final bool searchLoading;
+  final List<Map<String, dynamic>> searchResults;
+
+  // ── Callbacks mapa ─────────────────────────────────────
+  final void Function(mapbox.MapboxMap) onMapCreated;
+  final void Function(mapbox.MapContentGestureContext) onMapTap;
+  final void Function(mapbox.CameraChangedEventData) onCameraChange;
+
+  // ── Callbacks UI ───────────────────────────────────────
+  final VoidCallback onSearchToggle;
+  final VoidCallback onSearchClose;
+  final ValueChanged<String> onSearchChanged;
+  final ValueChanged<Map<String, dynamic>> onSearchSelect;
+  final VoidCallback onRecenter;
+  final VoidCallback onAvatarPick;
+  final VoidCallback onGasolinerasToggle;
+  final VoidCallback onSatelliteToggle;
+  final VoidCallback onTapConfirm;
+  final VoidCallback onTapCancel;
+  final VoidCallback onCancelRoute;
+  final VoidCallback onStartNavigation;
+  final ValueChanged<int> onRouteSelect;
+
+  const MapTab({
+    super.key,
+    required this.navigating,
+    required this.showSearch,
+    required this.userIsExploring,
+    required this.isSatellite,
+    required this.gasolinerasVisible,
+    required this.gasolinerasLoading,
+    required this.routeDrawn,
+    required this.showTapConfirm,
+    required this.isRecalculating,
+    required this.routeDistance,
+    required this.routeDuration,
+    required this.currentInstruction,
+    required this.distanceToNextManeuver,
+    required this.currentSpeed,
+    required this.tappedLat,
+    required this.tappedLng,
+    required this.selectedPlace,
+    required this.alternateRoutes,
+    required this.selectedRouteIndex,
+    required this.userAvatarImage,
+    required this.searchController,
+    required this.searchLoading,
+    required this.searchResults,
+    required this.onMapCreated,
+    required this.onMapTap,
+    required this.onCameraChange,
+    required this.onSearchToggle,
+    required this.onSearchClose,
+    required this.onSearchChanged,
+    required this.onSearchSelect,
+    required this.onRecenter,
+    required this.onAvatarPick,
+    required this.onGasolinerasToggle,
+    required this.onSatelliteToggle,
+    required this.onTapConfirm,
+    required this.onTapCancel,
+    required this.onCancelRoute,
+    required this.onStartNavigation,
+    required this.onRouteSelect,
+  });
+
+  IconData _maneuverIcon(String instruction) {
+    final i = instruction.toLowerCase();
+    if (i.contains('izquierda'))                         return Icons.turn_left;
+    if (i.contains('derecha'))                           return Icons.turn_right;
+    if (i.contains('gira'))                              return Icons.turn_slight_right;
+    if (i.contains('rotonda') || i.contains('redondel')) return Icons.roundabout_left;
+    if (i.contains('destino') || i.contains('llegada'))  return Icons.flag;
+    if (i.contains('continúa') || i.contains('sigue'))   return Icons.straight;
+    return Icons.navigation;
+  }
+
+  Widget _tripStat(IconData icon, String label, Color color) {
+    return Row(children: [
+      Icon(icon, color: color, size: 16),
+      const SizedBox(width: 4),
+      Text(label, style: TextStyle(
+          color: color, fontWeight: FontWeight.w600, fontSize: 13)),
+    ]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(children: [
+
+      // ── Mapa ───────────────────────────────────────────
+      SizedBox.expand(
+        child: mapbox.MapWidget(
+          key: const ValueKey('mapWidget'),
+          onMapCreated: onMapCreated,
+          styleUri: 'mapbox://styles/mapbox/streets-v12',
+          onTapListener: onMapTap,
+          cameraOptions: mapbox.CameraOptions(zoom: 15.0, pitch: 0.0),
+          onCameraChangeListener: onCameraChange,
+        ),
+      ),
+
+      // ── Botón búsqueda ─────────────────────────────────
+      if (!navigating)
+        Positioned(
+          top: 50, right: 16,
+          child: GestureDetector(
+            onTap: onSearchToggle,
+            child: Container(
+              width: 46, height: 46,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [BoxShadow(
+                    color: Colors.black38, blurRadius: 8,
+                    offset: Offset(0, 2))],
+              ),
+              child: const Icon(Icons.search, color: Colors.blue, size: 24),
+            ),
+          ),
+        ),
+
+      // ── Modal búsqueda ─────────────────────────────────
+      if (showSearch && !navigating)
+        Positioned(
+          top: 0, left: 0, right: 0,
+          child: SearchModal(
+            controller:  searchController,
+            isLoading:   searchLoading,
+            results:     searchResults,
+            onChanged:   onSearchChanged,
+            onClose:     onSearchClose,
+            onSelect:    onSearchSelect,
+          ),
+        ),
+
+      // ── Botón recentrar ────────────────────────────────
+      if (userIsExploring && !navigating)
+        Positioned(
+          bottom: 110, right: 16,
+          child: GestureDetector(
+            onTap: onRecenter,
+            child: Container(
+              width: 46, height: 46,
+              decoration: BoxDecoration(
+                color: Colors.blue[700],
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [BoxShadow(
+                    color: Colors.black38, blurRadius: 8,
+                    offset: Offset(0, 2))],
+              ),
+              child: const Icon(
+                  Icons.my_location, color: Colors.white, size: 22),
+            ),
+          ),
+        ),
+
+      // ── Botón avatar ───────────────────────────────────
+      if (!navigating && !showSearch)
+        Positioned(
+          top: 106, right: 16,
+          child: GestureDetector(
+            onTap: onAvatarPick,
+            child: Container(
+              width: 46, height: 46,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.blue, width: 2),
+                boxShadow: const [BoxShadow(
+                    color: Colors.black38, blurRadius: 8,
+                    offset: Offset(0, 2))],
+                image: userAvatarImage != null
+                    ? DecorationImage(
+                        image: MemoryImage(userAvatarImage!),
+                        fit: BoxFit.cover)
+                    : null,
+                color: Colors.white,
+              ),
+              child: userAvatarImage == null
+                  ? const Icon(Icons.person_add,
+                      color: Colors.blue, size: 22)
+                  : null,
+            ),
+          ),
+        ),
+
+      // ── Botón gasolineras ──────────────────────────────
+      if (!navigating)
+        Positioned(
+          bottom: 230, right: 16,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onGasolinerasToggle,
+            child: Container(
+              width: 46, height: 46,
+              decoration: BoxDecoration(
+                color: gasolinerasVisible
+                    ? Colors.orange[700] : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [BoxShadow(
+                    color: Colors.black38, blurRadius: 8,
+                    offset: Offset(0, 2))],
+              ),
+              child: gasolinerasLoading
+                  ? Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Colors.orange[700]),
+                    )
+                  : Icon(Icons.local_gas_station,
+                      color: gasolinerasVisible
+                          ? Colors.white : Colors.orange[700],
+                      size: 24),
+            ),
+          ),
+        ),
+
+      // ── Botón satélite ─────────────────────────────────
+      if (!navigating)
+        Positioned(
+          bottom: 170, right: 16,
+          child: GestureDetector(
+            onTap: onSatelliteToggle,
+            child: Container(
+              width: 46, height: 46,
+              decoration: BoxDecoration(
+                color: isSatellite ? Colors.blue[700] : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [BoxShadow(
+                    color: Colors.black38, blurRadius: 8,
+                    offset: Offset(0, 2))],
+              ),
+              child: Icon(Icons.satellite_alt,
+                  color: isSatellite ? Colors.white : Colors.blue,
+                  size: 24),
+            ),
+          ),
+        ),
+
+      // ── Confirmar tap ──────────────────────────────────
+      if (showTapConfirm && !navigating)
+        Positioned(
+          bottom: 30, left: 16, right: 16,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: const [BoxShadow(
+                  color: Colors.black26, blurRadius: 10,
+                  offset: Offset(0, 4))],
+            ),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.location_on, color: Colors.red, size: 32),
+              const SizedBox(height: 8),
+              const Text('¿Ir a este lugar?',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 4),
+              Text(
+                'Lat: ${tappedLat?.toStringAsFixed(5)}  '
+                'Lng: ${tappedLng?.toStringAsFixed(5)}',
+                style: const TextStyle(color: Colors.grey, fontSize: 12),
+              ),
+              const SizedBox(height: 14),
+              Row(children: [
+                Expanded(child: OutlinedButton.icon(
+                  onPressed: onTapCancel,
+                  icon: const Icon(Icons.close, color: Colors.red),
+                  label: const Text('Cancelar',
+                      style: TextStyle(color: Colors.red)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.red),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                )),
+                const SizedBox(width: 12),
+                Expanded(child: ElevatedButton.icon(
+                  onPressed: onTapConfirm,
+                  icon: const Icon(Icons.directions, color: Colors.white),
+                  label: const Text('Trazar ruta',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[700],
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                )),
+              ]),
+            ]),
+          ),
+        ),
+
+      // ── Selector rutas alternas ────────────────────────
+      if (routeDrawn && !navigating && alternateRoutes.length > 1)
+        Positioned(
+          bottom: 185, left: 16, right: 16,
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: const [BoxShadow(
+                  color: Colors.black26, blurRadius: 8,
+                  offset: Offset(0, 2))],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: List.generate(alternateRoutes.length, (i) {
+                final r        = alternateRoutes[i];
+                final selected = i == selectedRouteIndex;
+                return GestureDetector(
+                  onTap: () => onRouteSelect(i),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? Colors.blue[700] : Colors.grey[100],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Ruta ${i + 1}', style: TextStyle(
+                            fontSize: 11,
+                            color: selected
+                                ? Colors.white : Colors.grey,
+                            fontWeight: FontWeight.w600)),
+                        Text(r['distance'], style: TextStyle(
+                            fontSize: 13,
+                            color: selected
+                                ? Colors.white : Colors.black,
+                            fontWeight: FontWeight.bold)),
+                        Text(r['duration'], style: TextStyle(
+                            fontSize: 11,
+                            color: selected
+                                ? Colors.white70 : Colors.grey)),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ),
+
+      // ── Panel ruta ─────────────────────────────────────
+      if (routeDrawn && !navigating && !showTapConfirm)
+        Positioned(
+          bottom: 30, left: 16, right: 16,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: const [BoxShadow(
+                  color: Colors.black26, blurRadius: 10,
+                  offset: Offset(0, 4))],
+            ),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(selectedPlace?['name'] ?? '',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 14),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.directions_bike,
+                      color: Colors.blue, size: 18),
+                  const SizedBox(width: 6),
+                  Text('$routeDistance  •  $routeDuration',
+                      style: TextStyle(
+                          color: Colors.grey[700], fontSize: 14)),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(children: [
+                Expanded(child: OutlinedButton.icon(
+                  onPressed: onCancelRoute,
+                  icon: const Icon(Icons.close, color: Colors.red),
+                  label: const Text('Cancelar',
+                      style: TextStyle(color: Colors.red)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.red),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                )),
+                const SizedBox(width: 12),
+                Expanded(child: ElevatedButton.icon(
+                  onPressed: onStartNavigation,
+                  icon: const Icon(Icons.navigation, color: Colors.white),
+                  label: const Text('¡Ir!', style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[700],
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                )),
+              ]),
+            ]),
+          ),
+        ),
+
+      // ── Panel navegando ────────────────────────────────
+      if (navigating)
+        Positioned(
+          bottom: 30, left: 20, right: 20,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                    color: Colors.black87,
+                    borderRadius: BorderRadius.circular(15)),
+                child: Column(children: [
+                  Text('${currentSpeed.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 40,
+                          fontWeight: FontWeight.bold)),
+                  const Text('km/h',
+                      style: TextStyle(color: Colors.white70)),
+                ]),
+              ),
+              ElevatedButton.icon(
+                onPressed: onCancelRoute,
+                icon: const Icon(Icons.close, color: Colors.white),
+                label: const Text('Salir',
+                    style: TextStyle(color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red[700],
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+      // ── Banner recalculando ────────────────────────────
+      if (navigating && isRecalculating)
+        Positioned(
+          top: 0, left: 0, right: 0,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 48, 16, 16),
+            color: Colors.orange[700],
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(width: 20, height: 20,
+                    child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2)),
+                SizedBox(width: 12),
+                Text('Recalculando ruta...',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16)),
+              ],
+            ),
+          ),
+        ),
+
+      // ── Banner turn-by-turn ────────────────────────────
+      if (navigating && currentInstruction.isNotEmpty)
+        Positioned(
+          top: 0, left: 0, right: 0,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 48, 16, 16),
+            decoration: const BoxDecoration(
+              color: Color(0xFF1565C0),
+              borderRadius: BorderRadius.vertical(
+                  bottom: Radius.circular(20)),
+              boxShadow: [BoxShadow(
+                  color: Colors.black38, blurRadius: 10,
+                  offset: Offset(0, 3))],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Icon(_maneuverIcon(currentInstruction),
+                    color: Colors.white, size: 36),
+                const SizedBox(width: 12),
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(currentInstruction,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 4),
+                    Text(
+                      distanceToNextManeuver >= 1000
+                          ? '${(distanceToNextManeuver / 1000).toStringAsFixed(1)} km'
+                          : '${distanceToNextManeuver.toStringAsFixed(0)} m',
+                      style: const TextStyle(
+                          color: Colors.white70, fontSize: 13),
+                    ),
+                  ],
+                )),
+              ],
+            ),
+          ),
+        ),
+
+      // ── Velocímetro modo libre ─────────────────────────
+      if (!navigating && !routeDrawn && !showTapConfirm)
+        Positioned(
+          bottom: 30, left: 20,
+          child: Container(
+            padding: const EdgeInsets.all(15),
+            decoration: BoxDecoration(
+                color: Colors.black87,
+                borderRadius: BorderRadius.circular(15)),
+            child: Column(children: [
+              Text('${currentSpeed.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 40,
+                      fontWeight: FontWeight.bold)),
+              const Text('km/h',
+                  style: TextStyle(color: Colors.white70)),
+            ]),
+          ),
+        ),
+    ]);
+  }
+}
