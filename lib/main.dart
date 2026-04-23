@@ -725,9 +725,9 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
         }
       },
       onAvatarPick:            _pickUserAvatar,
-      onGasolinerasToggle:     () async {
-        if (s.currentPosition == null || s.gasolinerasLoading) return;
-        if (s.gasolinerasVisible) {
+      onGasolinerasToggle: () async {
+        if (_s.currentPosition == null || _s.gasolinerasLoading) return;
+        if (_s.gasolinerasVisible) {
           _n.setGasolinerasVisible(false);
           try {
             final style = await mapboxMap!.style;
@@ -737,30 +737,31 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
         } else {
           _n.setGasolinerasVisible(true);
           await _fetchGasolineras(
-            s.currentPosition!.latitude,
-            s.currentPosition!.longitude,
+            _s.currentPosition!.latitude,
+            _s.currentPosition!.longitude,
           );
         }
       },
-      onSatelliteToggle:       () async {
-        _n.setSatellite(!_s.isSatellite);
+      onSatelliteToggle: () async {
+        final newValue = !_s.isSatellite;
+        _n.setSatellite(newValue);
         await mapboxMap?.loadStyleURI(
-          s.isSatellite
+          newValue
               ? 'mapbox://styles/mapbox/satellite-streets-v12'
               : 'mapbox://styles/mapbox/streets-v12',
         );
-        if (!s.isSatellite) await _applyCustomRoadStyle();
+        if (!newValue) await _applyCustomRoadStyle();
         await Future.delayed(const Duration(milliseconds: 1500));
-        if (s.routeDrawn && _s.routeCoordinates.isNotEmpty && mounted) {
+        if (_s.routeDrawn && _s.routeCoordinates.isNotEmpty && mounted) {
           await _drawRouteOnMap({
             'type': 'LineString',
             'coordinates': _s.routeCoordinates,
           });
         }
-        if (s.currentPosition != null && mounted && s.gasolinerasVisible) {
+        if (_s.currentPosition != null && mounted && _s.gasolinerasVisible) {
           _fetchGasolineras(
-            s.currentPosition!.latitude,
-            s.currentPosition!.longitude,
+            _s.currentPosition!.latitude,
+            _s.currentPosition!.longitude,
           );
         }
       },
