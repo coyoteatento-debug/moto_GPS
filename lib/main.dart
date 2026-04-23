@@ -389,11 +389,11 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
     final animLng = Tween<double>(begin: fromLng, end: targetLng)
         .animate(CurvedAnimation(parent: _markerAnimController!, curve: Curves.easeOut));
 
-    _markerAnimController!.addListener(() {
+    _markerAnimController!.addListener(() async {
       if (!mounted) return;
       final double lat = animLat.value;
       final double lng = animLng.value;
-      _updateMotoMarker(lat, lng, bearing);   // ← fire-and-forget, sin guard
+      await _updateMotoMarker(lat, lng, bearing);
     });
 
     _markerAnimController!.addStatusListener((status) {
@@ -485,6 +485,8 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
           mapbox.MapAnimationOptions(duration: 900, startDelay: 0),
         );
       } else {
+        await _updateMotoMarker(
+          position.latitude, position.longitude, position.heading);
         _animateMarkerTo(position.latitude, position.longitude, position.heading);
         if (!_s.routeDrawn && !_s.showTapConfirm && !_s.userIsExploring) {
           _n.setIsProgrammaticMove(true);
