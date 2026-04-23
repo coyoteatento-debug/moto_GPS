@@ -16,6 +16,7 @@ import 'core/utils/geo_utils.dart';
 import 'core/services/tts_service.dart';
 import 'core/services/map_service.dart';
 import 'core/services/gps_service.dart';
+import 'core/services/trip_service.dart';
 import 'dart:convert';
 import 'package:geolocator/geolocator.dart';
 
@@ -56,10 +57,10 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
   String _routeDistance = '';
   String _routeDuration = '';
 
-  // ── TTS ───────────────────────────────────────────────
   final TtsService _tts = TtsService();
   final MapService _mapService = const MapService();
   final GpsService _gpsService = const GpsService();
+  late final TripService _tripService = TripService(_prefsSource);
   
   // ── Turn-by-turn ──────────────────────────────────────
   List<Map<String, dynamic>> _routeSteps = [];
@@ -97,9 +98,6 @@ class _MotoGPSAppState extends State<MotoGPSApp> with TickerProviderStateMixin {
   
   // ── Libro de viajes ───────────────────────────────────
   List<TripRecord> _trips = [];
-  DateTime? _tripStartTime;
-  double _tripAccumulatedDistance = 0.0;
-  Position? _lastTripPosition;
   int _currentTabIndex = 0;
 
   @override
@@ -210,46 +208,6 @@ Future<void> _speak(String text) async {
     );
     await _getRoute(lat, lng);
   }
-  
-  Future<void> _saveTrips() async {
-    await _prefsSource.saveTrips(_trips);
-  }
-
-  void _startTripTracking() {
-    _tripStartTime           = DateTime.now();
-    _tripAccumulatedDistance = 0.0;
-    _lastTripPosition        = _currentPosition;
-  }
-
-  void _accumulateTripDistance(Position position) {
-    if (_lastTripPosition != null) {
-      _tripAccumulatedDistance += _geo.distanceBetween(
-        _lastTripPosition!.latitude,
-        _lastTripPosition!.longitude,
-        position.latitude,
-        position.longitude,
-      );
-    }
-    _lastTripPosition = position;
-  }
-
-  Future<void> _finishAndSaveTrip() async {
-    if (_tripStartTime == null) return;
-    final duration = DateTime.now().difference(_tripStartTime!);
-    final record = TripRecord(
-      destination: _selectedPlace?['name'] ?? 'Destino',
-      distanceKm:  double.parse(
-          (_tripAccumulatedDistance / 1000).toStringAsFixed(2)),
-      durationMin: duration.inMinutes,
-      date:        _tripStartTime!,
-      routeCoords: List<List<double>>.from(_routeCoordinates), // ← AGREGAR
-    );
-    setState(() => _trips.insert(0, record));
-    await _saveTrips();
-    _tripStartTime           = null;
-    _tripAccumulatedDistance = 0.0;
-    _lastTripPosition        = null;
-  }
 
   // ── Permisos ──────────────────────────────────────────
   Future<void> _requestPermissions() async {
@@ -296,7 +254,14 @@ Future<void> _speak(String text) async {
     final idx = _geo.findClosestPointIndex(lat, lng, _routeCoordinates);
     if (idx >= _routeCoordinates.length - 2) {
       if (!_navigating) return;
-      await _finishAndSaveTrip();
+      final record = await _tripService.finishAndSave(
+        destination:   _selectedPlace?['name'] ?? 'Destino',
+        routeCoords:   _routeCoordinates,
+        existingTrips: _trips,
+      );
+      if (record != null && mounted) {
+        setState(() => _trips = [record, ..._trips]);
+      }
       await _cancelRoute();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -558,7 +523,8 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
               _routeCoordinates[idx+1][1], _routeCoordinates[idx+1][0]);
         }
         _animateMarkerTo(snappedLat, snappedLng, bearing);
-        _accumulateTripDistance(position);
+        _tripService.accumulate(
+            position.latitude, position.longitude);
         // Detectar desvío de ruta
         _checkRouteDeviation(position.latitude, position.longitude);
         _updateRemainingRoute(position.latitude, position.longitude);
@@ -723,7 +689,14 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
 
   // ── FIX 1: _tts.stop() movido FUERA de setState ───────
   Future<void> _cancelRoute() async {
-    if (_navigating) await _finishAndSaveTrip();
+    if (_navigating) {
+      final record = await _tripService.finishAndSave(
+        destination:  _selectedPlace?['name'] ?? 'Destino',
+        routeCoords:  _routeCoordinates,
+        existingTrips: _trips,
+      );
+      if (record != null) setState(() => _trips = [record, ..._trips]);
+    }
     if (mapboxMap != null) await _mapService.clearRouteLayers(mapboxMap!);
     if (destinationAnnotation != null && annotationManager != null) {
       await _mapService.deleteAnnotation(
@@ -743,8 +716,11 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
   
   void _startNavigation() {
     setState(() => _navigating = true);
-    _startTripTracking();
     if (_currentPosition != null) {
+      _tripService.startTracking(
+        _currentPosition!.latitude,
+        _currentPosition!.longitude,
+      );
       mapboxMap?.flyTo(
         mapbox.CameraOptions(
           center: mapbox.Point(coordinates: mapbox.Position(
