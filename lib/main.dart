@@ -52,6 +52,7 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp> with TickerProviderStat
   AnimationController? _markerAnimController;
   double? _lastAnimatedLat;
   double? _lastAnimatedLng;
+  bool _isUpdatingMarker = false;
 
   final TtsService _tts = TtsService();
   final MapService _mapService = const MapService();
@@ -338,17 +339,23 @@ void _checkRouteDeviation(double lat, double lng) {
   // ── Marcadores ────────────────────────────────────────
   Future<void> _updateMotoMarker(
       double lat, double lng, double bearing) async {
-    final markerImage = _s.userAvatarImage ?? _s.pinImage;
-    if (annotationManager == null || markerImage == null) return;
-    motoAnnotation = await _mapService.updateMotoMarker(
-      manager:     annotationManager!,
-      current:     motoAnnotation,
-      lat:         lat,
-      lng:         lng,
-      bearing:     bearing,
-      markerImage: markerImage,
-      isAvatar:    _s.userAvatarImage != null,
-    );
+    if (_isUpdatingMarker) return;
+    _isUpdatingMarker = true;
+    try {
+      final markerImage = _s.userAvatarImage ?? _s.pinImage;
+      if (annotationManager == null || markerImage == null) return;
+      motoAnnotation = await _mapService.updateMotoMarker(
+        manager:     annotationManager!,
+        current:     motoAnnotation,
+        lat:         lat,
+        lng:         lng,
+        bearing:     bearing,
+        markerImage: markerImage,
+        isAvatar:    _s.userAvatarImage != null,
+      );
+    } finally {
+      _isUpdatingMarker = false;
+    }
   }
 
   Future<void> _addDestinationMarker(double lat, double lng) async {
@@ -513,8 +520,31 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
       final geoJson = await _overpassApi.fetchGasolineras(lat, lng);
       if (geoJson != null && mounted) {
         await _updateGasolineraLayer(geoJson);
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⛽ Gasolineras cargadas'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ Sin gasolineras en el área'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 2),
+          ),
+        );
       }
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Error gasolineras: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
     if (mounted) _n.setGasolinerasLoading(false);
   }
 
