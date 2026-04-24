@@ -370,47 +370,51 @@ void _checkRouteDeviation(double lat, double lng) {
   }
 
 void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
-    final double fromLat = _lastAnimatedLat ?? targetLat;
-    final double fromLng = _lastAnimatedLng ?? targetLng;
-
     if (_lastAnimatedLat == null || _lastAnimatedLng == null) {
       _lastAnimatedLat = targetLat;
       _lastAnimatedLng = targetLng;
       _updateMotoMarker(targetLat, targetLng, bearing);
       return;
     }
+
     final dist = _geo.distanceBetween(
-      _lastAnimatedLat!, _lastAnimatedLng!, targetLat, targetLng);
+        _lastAnimatedLat!, _lastAnimatedLng!, targetLat, targetLng);
     if (dist < 0.5) return;
+
+    // Actualizar coordenadas ANTES de animar para que el próximo
+    // tick compare desde la posición correcta
+    _lastAnimatedLat = targetLat;
+    _lastAnimatedLng = targetLng;
+
     if (!mounted) return;
     _markerAnimController?.stop();
     _markerAnimController?.dispose();
     _markerAnimController = null;
+
     _markerAnimController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 850),
+      duration: const Duration(milliseconds: 600),
     );
 
+    final fromLat = _lastAnimatedLat!;
+    final fromLng = _lastAnimatedLng!;
+
     final animLat = Tween<double>(begin: fromLat, end: targetLat)
-        .animate(CurvedAnimation(parent: _markerAnimController!, curve: Curves.easeOut));
+        .animate(CurvedAnimation(
+            parent: _markerAnimController!, curve: Curves.easeOut));
     final animLng = Tween<double>(begin: fromLng, end: targetLng)
-        .animate(CurvedAnimation(parent: _markerAnimController!, curve: Curves.easeOut));
+        .animate(CurvedAnimation(
+            parent: _markerAnimController!, curve: Curves.easeOut));
 
     _markerAnimController!.addListener(() {
       if (!mounted) return;
-      final double lat = animLat.value;
-      final double lng = animLng.value;
-      _updateMotoMarker(lat, lng, bearing);
-    });
-
-    _markerAnimController!.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        _lastAnimatedLat = targetLat;
-        _lastAnimatedLng = targetLng;
-      }
+      _updateMotoMarker(animLat.value, animLng.value, bearing);
     });
 
     _markerAnimController!.forward();
+
+    // Update directo inmediato sin esperar animación
+    _updateMotoMarker(targetLat, targetLng, bearing);
   }
 
   Future<void> _getInitialPosition() async {
