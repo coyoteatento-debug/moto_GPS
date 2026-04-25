@@ -30,16 +30,13 @@ class GpsService {
   StreamSubscription<Position> startTracking(
       void Function(Position position) onPosition) {
     return Geolocator.getPositionStream(
-      locationSettings: AndroidSettings(
+      locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
         distanceFilter: 0,
-        intervalDuration: const Duration(milliseconds: 800),
-        foregroundNotificationConfig: const ForegroundNotificationConfig(
-          notificationText: 'MotoGPS activo',
-          notificationTitle: 'Navegación en curso',
-          enableWakeLock: true,
-        ),
       ),
-    ).listen(onPosition);
+    ).listen(
+      onPosition,
+      onError: (e) => debugPrint('❌ GPS stream error: $e'),
+    );
   }
 }
