@@ -15,7 +15,8 @@ class OverpassApi {
         'out center;\n';
     final response = await http.post(
       Uri.parse('https://overpass-api.de/api/interpreter'),
-      body: query,
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'data=${Uri.encodeComponent(query)}',
     );
     if (response.statusCode != 200) {
       throw Exception('Overpass HTTP ${response.statusCode}');
