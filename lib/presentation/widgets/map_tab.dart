@@ -21,6 +21,7 @@ class MapTab extends StatelessWidget {
   final String currentInstruction;
   final double distanceToNextManeuver;
   final double currentSpeed;
+  final int gpsTickCount;
   final double? tappedLat;
   final double? tappedLng;
   final Map<String, dynamic>? selectedPlace;
@@ -71,6 +72,7 @@ class MapTab extends StatelessWidget {
     required this.currentInstruction,
     required this.distanceToNextManeuver,
     required this.currentSpeed,
+    required this.gpsTickCount,
     required this.tappedLat,
     required this.tappedLng,
     required this.selectedPlace,
