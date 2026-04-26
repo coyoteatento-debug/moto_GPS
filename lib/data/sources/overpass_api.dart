@@ -50,3 +50,4 @@ class OverpassApi {
     if (features.isEmpty) return null;
     return json.encode({'type': 'FeatureCollection', 'features': features});
   }
+}
