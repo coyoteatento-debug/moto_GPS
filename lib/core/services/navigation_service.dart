@@ -1,8 +1,6 @@
 import '../utils/geo_utils.dart';
 import '../../data/sources/mapbox_api.dart';
 
-const _geo = GeoUtils();
-
 class RouteData {
   final String distance;
   final String duration;
