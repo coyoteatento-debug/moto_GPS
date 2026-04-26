@@ -410,12 +410,12 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
   Future<void> _getInitialPosition() async {
     final position = await _gpsService.getInitialPosition();
     if (position == null || !mounted) return;
-    setState(() {
+  
       _n.update((s) => s.copyWith(
         currentPosition: position,
         currentSpeed:    position.speed * 3.6,
       ));
-    });
+
     _lastAnimatedLat    = position.latitude;
     _lastAnimatedLng    = position.longitude;
     _n.setInitialLocationSet(true);
