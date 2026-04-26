@@ -156,7 +156,7 @@ class MapNotifier extends Notifier<MapState> {
 
   // ── Shortcuts comunes ─────────────────────────────────
   void setSpeed(double speed)             => state = state.copyWith(currentSpeed: speed);
-  void setPosition(position)              => state = state.copyWith(currentPosition: position);
+  void setPosition(Position position)     => state = state.copyWith(currentPosition: position);
   void setNavigating(bool v)              => state = state.copyWith(navigating: v);
   void setRouteDrawn(bool v)              => state = state.copyWith(routeDrawn: v);
   void setShowSearch(bool v)              => state = state.copyWith(showSearch: v);
