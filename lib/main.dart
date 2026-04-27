@@ -40,7 +40,8 @@ class MotoGPSApp extends ConsumerStatefulWidget {
   ConsumerState<MotoGPSApp> createState() => _MotoGPSAppState();
 }
 
-class _MotoGPSAppState extends ConsumerState<MotoGPSApp> with TickerProviderStateMixin {
+class _MotoGPSAppState extends ConsumerState<MotoGPSApp> 
+    with TickerProviderStateMixin, WidgetsBindingObserver {
 
   MapNotifier get _n => ref.read(mapProvider.notifier);
   MapState    get _s => ref.read(mapProvider);
@@ -55,7 +56,7 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp> with TickerProviderStat
 
   final TtsService _tts = TtsService();
   final MapService _mapService = const MapService();
-  final GpsService _gpsService = const GpsService();
+  final GpsService _gpsService = GpsService();
   late final TripService _tripService = TripService(_prefsSource);
   late final NavigationService _navService =
       NavigationService(MapboxApi(_mapboxToken), const GeoUtils());
@@ -72,6 +73,7 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp> with TickerProviderStat
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadImages();
     _requestPermissions();
     _loadTrips();
@@ -81,6 +83,7 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp> with TickerProviderStat
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _locationSubscription?.cancel();
     _markerAnimController?.dispose();
     _searchController.dispose();
@@ -181,12 +184,21 @@ Future<void> _speak(String text) async {
 
   // ── Permisos ──────────────────────────────────────────
   Future<void> _requestPermissions() async {
-    final granted = await _gpsService.requestPermissions();
+    final granted = await _requestLocationPermissions();
     if (granted) {
       await _getInitialPosition();
       _startLocationTracking();
     }
   }
+
+  Future<bool> _requestLocationPermissions() async {
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    return permission == LocationPermission.always ||
+           permission == LocationPermission.whileInUse;
+  }}
 
   // ── Mapa ──────────────────────────────────────────────
   Future<void> _onMapCreated(mapbox.MapboxMap map) async {
@@ -435,8 +447,9 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
   }
   
   // ── GPS Tracking ──────────────────────────────────────
-  void _startLocationTracking() {
-     _locationSubscription = _gpsService.startTracking((Position position) {
+  Future<void> _startLocationTracking() async {
+    await _gpsService.startTracking();
+    _locationSubscription = _gpsService.positionStream.listen((Position position) {
       if (!mounted) return;
       final speed = (position.speed < 0 ? 0 : position.speed) * 3.6;
       _n.update((s) => s.copyWith(
@@ -804,7 +817,23 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
       },
     );
   }
-    
+
+@override
+void didChangeAppLifecycleState(AppLifecycleState state) {
+  super.didChangeAppLifecycleState(state);
+  switch (state) {
+    case AppLifecycleState.paused:
+    case AppLifecycleState.inactive:
+      _gpsService.onAppBackground();
+      break;
+    case AppLifecycleState.resumed:
+      _gpsService.onAppForeground();
+      break;
+    default:
+      break;
+  }
+}
+
   // ── BUILD ─────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
