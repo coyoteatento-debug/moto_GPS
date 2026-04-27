@@ -18,6 +18,7 @@ import 'core/services/tts_service.dart';
 import 'core/services/map_service.dart';
 import 'core/services/gps_service.dart';
 import 'core/services/background_service.dart';
+import 'core/services/smooth_location_service.dart';
 import 'core/services/trip_service.dart';
 import 'core/services/navigation_service.dart';
 import 'dart:convert';
@@ -59,6 +60,8 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp>
   final MapService _mapService = const MapService();
   final GpsService _gpsService = GpsService();
   final BackgroundService _bgService = BackgroundService();
+  final SmoothLocationService _smoother = SmoothLocationService();
+  StreamSubscription<SmoothPosition>? _smoothSub;
   late final TripService _tripService = TripService(_prefsSource);
   late final NavigationService _navService =
       NavigationService(MapboxApi(_mapboxToken), const GeoUtils());
@@ -76,6 +79,8 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _smoother.start(this);
+    _startSmoothMarker();
     _loadImages();
     _requestPermissions();
     _loadTrips();
@@ -84,9 +89,12 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp>
   }
 
   @override
+  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _locationSubscription?.cancel();
+    _smoothSub?.cancel();
+    _smoother.stop();
     _markerAnimController?.dispose();
     _searchController.dispose();
     super.dispose();
@@ -430,11 +438,13 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
         currentSpeed:    position.speed * 3.6,
       ));
 
-    _lastAnimatedLat    = position.latitude;
-    _lastAnimatedLng    = position.longitude;
     _n.setInitialLocationSet(true);
-    _updateMotoMarker(
-        position.latitude, position.longitude, position.heading);
+    _smoother.updatePosition(
+      lat:     position.latitude,
+      lng:     position.longitude,
+      heading: position.heading,
+      speedMs: position.speed < 0 ? 0 : position.speed,
+    );
     if (mapboxMap != null) {
       mapboxMap?.flyTo(
         mapbox.CameraOptions(
@@ -447,6 +457,14 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
       );
     }
   }
+
+// ── Marcador suavizado a 60fps ────────────────────────
+  void _startSmoothMarker() {
+    _smoothSub = _smoother.positionStream.listen((SmoothPosition pos) {
+      if (!mounted) return;
+      _updateMotoMarker(pos.latitude, pos.longitude, pos.heading);
+    });
+  }
   
   // ── GPS Tracking ──────────────────────────────────────
   Future<void> _startLocationTracking() async {
@@ -455,6 +473,12 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
       if (!mounted) return;
       final speed = (position.speed < 0 ? 0 : position.speed) * 3.6;
       _n.update((s) => s.copyWith(
+        _smoother.updatePosition(
+        lat:     position.latitude,
+        lng:     position.longitude,
+        heading: position.heading,
+        speedMs: position.speed < 0 ? 0 : position.speed,
+      );
         currentSpeed:    speed,
         currentPosition: position,
         userIsExploring: speed > 2 && !s.navigating && !s.routeDrawn
@@ -485,7 +509,6 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
               _s.routeCoordinates[idx][1], _s.routeCoordinates[idx][0],
               _s.routeCoordinates[idx+1][1], _s.routeCoordinates[idx+1][0]);
         }
-        _animateMarkerTo(snappedLat, snappedLng, bearing);
         _tripService.accumulate(
             position.latitude, position.longitude);
         // Detectar desvío de ruta
@@ -501,8 +524,6 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
           mapbox.MapAnimationOptions(duration: 900, startDelay: 0),
         );
       } else {
-        _updateMotoMarker(position.latitude, position.longitude, position.heading);
-        _animateMarkerTo(position.latitude, position.longitude, position.heading);
         if (!_s.routeDrawn && !_s.showTapConfirm && !_s.userIsExploring) {
           _n.setIsProgrammaticMove(true);
           mapboxMap?.flyTo(
