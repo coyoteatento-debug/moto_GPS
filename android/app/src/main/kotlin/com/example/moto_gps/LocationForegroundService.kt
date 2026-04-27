@@ -1,17 +1,15 @@
 package com.example.moto_gps
 
 import android.app.*
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.os.*
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
 
 class LocationForegroundService : Service() {
 
@@ -24,23 +22,35 @@ class LocationForegroundService : Service() {
         const val EXTRA_INSTRUCTION = "instruction"
         private const val TAG       = "MotoGPS_Service"
 
-        // Comunicación con Flutter via MethodChannel
         var onLocationUpdate: ((Double, Double, Float, Float) -> Unit)? = null
     }
 
-    private lateinit var fusedClient: FusedLocationProviderClient
-    private lateinit var locationCallback: LocationCallback
+    private lateinit var locationManager: LocationManager
     private lateinit var notificationManager: NotificationManager
     private var currentInstruction = "Navegando..."
+
+    private val locationListener = object : LocationListener {
+        override fun onLocationChanged(location: Location) {
+            onLocationUpdate?.invoke(
+                location.latitude,
+                location.longitude,
+                location.speed,
+                location.bearing
+            )
+        }
+        @Deprecated("Deprecated in Java")
+        override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+        override fun onProviderEnabled(provider: String) {}
+        override fun onProviderDisabled(provider: String) {}
+    }
 
     // ── Ciclo de vida ────────────────────────────────────────────────
 
     override fun onCreate() {
         super.onCreate()
         notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        locationManager    = getSystemService(Context.LOCATION_SERVICE) as LocationManager
         createNotificationChannel()
-        fusedClient = LocationServices.getFusedLocationProviderClient(this)
-        setupLocationCallback()
         Log.d(TAG, "Servicio creado")
     }
 
@@ -59,14 +69,14 @@ class LocationForegroundService : Service() {
                 currentInstruction = intent.getStringExtra(EXTRA_INSTRUCTION)
                     ?: "Navegando..."
                 updateNotification(currentInstruction)
-                Log.d(TAG, "Instrucción actualizada: $currentInstruction")
+                Log.d(TAG, "Instrucción: $currentInstruction")
             }
         }
         return START_STICKY
     }
 
     override fun onDestroy() {
-        fusedClient.removeLocationUpdates(locationCallback)
+        locationManager.removeUpdates(locationListener)
         onLocationUpdate = null
         Log.d(TAG, "Servicio destruido")
         super.onDestroy()
@@ -96,7 +106,7 @@ class LocationForegroundService : Service() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "GPS Navegación",
-                NotificationManager.IMPORTANCE_LOW  // Sin sonido, sin vibración
+                NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "Rastreo GPS activo para navegación en moto"
                 setShowBadge(false)
@@ -106,61 +116,46 @@ class LocationForegroundService : Service() {
     }
 
     private fun buildNotification(instruction: String): Notification {
-        // Toca la notificación → abre la app
         val pendingIntent = PendingIntent.getActivity(
             this,
             0,
             packageManager.getLaunchIntentForPackage(packageName),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("🏍️ Moto GPS activo")
             .setContentText(instruction)
             .setSmallIcon(android.R.drawable.ic_menu_compass)
             .setContentIntent(pendingIntent)
-            .setOngoing(true)          // No se puede deslizar para cerrar
-            .setSilent(true)           // Sin sonido al actualizar
+            .setOngoing(true)
+            .setSilent(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
 
     private fun updateNotification(instruction: String) {
-        val notification = buildNotification(instruction)
-        notificationManager.notify(NOTIFICATION_ID, notification)
+        notificationManager.notify(NOTIFICATION_ID, buildNotification(instruction))
     }
 
-    // ── GPS ──────────────────────────────────────────────────────────
+    // ── GPS nativo ───────────────────────────────────────────────────
 
-    private fun setupLocationCallback() {
-        locationCallback = object : LocationCallback() {
-            override fun onLocationResult(result: LocationResult) {
-                result.lastLocation?.let { location ->
-                    onLocationUpdate?.invoke(
-                        location.latitude,
-                        location.longitude,
-                        location.speed,
-                        location.bearing
-                    )
-                }
+    @Suppress("MissingPermission")
+    private fun startLocationUpdates() {
+        val providers = listOf(
+            LocationManager.GPS_PROVIDER,
+            LocationManager.NETWORK_PROVIDER
+        )
+        providers.forEach { provider ->
+            if (locationManager.isProviderEnabled(provider)) {
+                locationManager.requestLocationUpdates(
+                    provider,
+                    1000L,   // cada 1 segundo
+                    3f,      // mínimo 3 metros
+                    locationListener,
+                    Looper.getMainLooper()
+                )
+                Log.d(TAG, "GPS iniciado con provider: $provider")
             }
         }
-    }
-
-    @SuppressWarnings("MissingPermission")
-    private fun startLocationUpdates() {
-        val request = LocationRequest.Builder(
-            Priority.PRIORITY_HIGH_ACCURACY,
-            1000L   // cada 1 segundo
-        ).apply {
-            setMinUpdateDistanceMeters(3f)   // mínimo 3 metros entre updates
-            setWaitForAccurateLocation(false)
-        }.build()
-
-        fusedClient.requestLocationUpdates(
-            request,
-            locationCallback,
-            Looper.getMainLooper()
-        )
     }
 }
