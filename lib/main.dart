@@ -17,6 +17,7 @@ import 'core/utils/geo_utils.dart';
 import 'core/services/tts_service.dart';
 import 'core/services/map_service.dart';
 import 'core/services/gps_service.dart';
+import 'core/services/background_service.dart';
 import 'core/services/trip_service.dart';
 import 'core/services/navigation_service.dart';
 import 'dart:convert';
@@ -57,6 +58,7 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp>
   final TtsService _tts = TtsService();
   final MapService _mapService = const MapService();
   final GpsService _gpsService = GpsService();
+  final BackgroundService _bgService = BackgroundService();
   late final TripService _tripService = TripService(_prefsSource);
   late final NavigationService _navService =
       NavigationService(MapboxApi(_mapboxToken), const GeoUtils());
@@ -648,11 +650,18 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
       destinationAnnotation = null;
     }
      await _tts.stop();
+     await _bgService.stop();
     _n.clearRoute();
   }
   
-  void _startNavigation() {
+  Future<void> _startNavigation() async {
     _n.setNavigating(true);
+    await _bgService.start();
+    _bgService.updateInstruction(
+      _s.currentInstruction.isNotEmpty
+          ? _s.currentInstruction
+          : 'Iniciando navegacion...',
+    );
     if (_s.currentPosition != null) {
       _tripService.startTracking(
         _s.currentPosition!.latitude,
