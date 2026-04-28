@@ -63,6 +63,7 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp>
   final BackgroundService _bgService = BackgroundService();
   final SmoothLocationService _smoother = SmoothLocationService();
   StreamSubscription<SmoothPosition>? _smoothSub;
+  Timer? _nightModeTimer;
   late final TripService _tripService = TripService(_prefsSource);
   late final NavigationService _navService =
       NavigationService(MapboxApi(_mapboxToken), const GeoUtils());
@@ -83,6 +84,7 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp>
     _smoother.start(this);
     _startSmoothMarker();
     _loadImages();
+    _startNightModeTimer();
     _requestPermissions();
     _loadTrips();
     _initTts();
@@ -95,6 +97,7 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp>
     _locationSubscription?.cancel();
     _smoothSub?.cancel();
     _smoother.stop();
+    _nightModeTimer?.cancel();
     WakelockPlus.disable();
     _markerAnimController?.dispose();
     _searchController.dispose();
@@ -235,7 +238,42 @@ Future<void> _speak(String text) async {
     _s.currentPosition!.heading,
   );
  }
-}    
+}   
+
+// ── Modo nocturno ─────────────────────────────────────
+  bool _isNightTime() {
+    final hour = DateTime.now().hour;
+    return hour >= 19 || hour < 6;  // 7pm a 6am = noche
+  }
+
+void _startNightModeTimer() {
+    // Verificar inmediatamente al iniciar
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _applyNightOrDayStyle();
+    });
+    // Verificar cada 5 minutos
+    _nightModeTimer = Timer.periodic(
+      const Duration(minutes: 5),
+      (_) => _applyNightOrDayStyle(),
+    );
+  }
+  
+  Future<void> _applyNightOrDayStyle() async {
+    if (mapboxMap == null) return;
+    if (_s.nightModeManual) return;  // usuario fijó manualmente, no tocar
+
+    final isNight = _isNightTime();
+    if (_s.isNightMode == isNight) return;  // ya está en el modo correcto
+
+    _n.setNightMode(isNight);
+    await mapboxMap?.loadStyleURI(
+      isNight
+          ? 'mapbox://styles/mapbox/navigation-night-v1'
+          : 'mapbox://styles/mapbox/streets-v12',
+    );
+    if (!isNight) await _applyCustomRoadStyle();
+  }
+  
   // ── Estilo de carreteras tipo Riser ───────────────────
   Future<void> _applyCustomRoadStyle() async {
     if (mapboxMap == null) return;
@@ -824,6 +862,7 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
       onSatelliteToggle: () async {
         final newValue = !_s.isSatellite;
         _n.setSatellite(newValue);
+        _n.resetNightModeManual();
         await mapboxMap?.loadStyleURI(
           newValue
               ? 'mapbox://styles/mapbox/satellite-streets-v12'
@@ -870,6 +909,7 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
         break;
       case AppLifecycleState.resumed:
         _gpsService.onAppForeground();
+        _applyNightOrDayStyle();
         break;
       default:
         break;
