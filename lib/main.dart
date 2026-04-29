@@ -55,7 +55,7 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp>
   StreamSubscription<Position>? _locationSubscription;
 
   final TtsService _tts = TtsService();
-  final MapService _mapService = const MapService();
+  final MapService _mapService = MapService();
   final GpsService _gpsService = GpsService();
   final BackgroundService _bgService = BackgroundService();
   final SmoothLocationService _smoother = SmoothLocationService();
