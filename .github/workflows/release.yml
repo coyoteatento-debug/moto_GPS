@@ -67,6 +67,13 @@ jobs:
           flutter clean
           flutter pub get
 
+      - name: Clean Gradle
+        run: |
+          cd android
+          ./gradlew clean
+          cd ..
+          flutter clean
+      
       - name: Build APK Release
         run: flutter build apk --release --dart-define=MAPBOX_TOKEN=${{ secrets.MAPBOX_TOKEN }}
         env:
