@@ -765,6 +765,7 @@ void _checkRouteDeviation(double lat, double lng) {
       currentInstruction:      s.currentInstruction,
       distanceToNextManeuver:  s.distanceToNextManeuver,
       currentSpeed:            s.currentSpeed,
+      speedLimit:              s.speedLimit,
       tappedLat:               s.tappedLat,
       tappedLng:               s.tappedLng,
       selectedPlace:           s.selectedPlace,
