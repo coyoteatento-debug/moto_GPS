@@ -38,6 +38,7 @@ class MapState {
   final Uint8List? pinImage;
   final bool isNightMode;
   final bool nightModeManual;
+  final int? speedLimit;
 
   const MapState({
     this.currentSpeed           = 0.0,
@@ -73,6 +74,7 @@ class MapState {
     this.pinImage,
     this.isNightMode      = false,
     this.nightModeManual  = false,
+    this.speedLimit,
   });
 
   MapState copyWith({
@@ -109,6 +111,8 @@ class MapState {
     Uint8List?                 pinImage,
     bool?                      isNightMode,
     bool?                      nightModeManual,
+    int?                       speedLimit,
+    bool                       clearSpeedLimit = false,
     // flags para limpiar nullables
     bool clearCurrentPosition  = false,
     bool clearSelectedPlace    = false,
@@ -149,6 +153,7 @@ class MapState {
       pinImage:               pinImage               ?? this.pinImage,
       isNightMode:            isNightMode            ?? this.isNightMode,
       nightModeManual:        nightModeManual        ?? this.nightModeManual,
+      speedLimit:             clearSpeedLimit ? null : speedLimit ?? this.speedLimit,
     );
   }
 }
@@ -186,6 +191,10 @@ class MapNotifier extends Notifier<MapState> {
     nightModeManual: manual ? true : state.nightModeManual,
   );
   void resetNightModeManual() => state = state.copyWith(nightModeManual: false);
+  void setSpeedLimit(int? limit) => state = state.copyWith(
+    speedLimit:     limit,
+    clearSpeedLimit: limit == null,
+  );
 
   void setTappedLocation(double lat, double lng) => state = state.copyWith(
     showTapConfirm: true, tappedLat: lat, tappedLng: lng,
