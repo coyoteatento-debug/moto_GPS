@@ -450,9 +450,17 @@ void _checkRouteDeviation(double lat, double lng) {
   }
 
 // ── Marcador suavizado a 60fps ────────────────────────
+  DateTime _lastMarkerUpdate = DateTime.fromMillisecondsSinceEpoch(0);
+
   void _startSmoothMarker() {
     _smoothSub = _smoother.positionStream.listen((SmoothPosition pos) {
       if (!mounted) return;
+
+      // Throttle a 15fps — actualizar máximo cada 66ms
+      final now = DateTime.now();
+      if (now.difference(_lastMarkerUpdate).inMilliseconds < 66) return;
+      _lastMarkerUpdate = now;
+
       _updateMotoMarker(pos.latitude, pos.longitude, pos.heading);
     });
   }
