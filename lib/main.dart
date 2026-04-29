@@ -18,6 +18,7 @@ import 'core/services/tts_service.dart';
 import 'core/services/map_service.dart';
 import 'core/services/gps_service.dart';
 import 'core/services/background_service.dart';
+import 'core/services/speed_limit_service.dart';
 import 'core/services/smooth_location_service.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'core/services/trip_service.dart';
@@ -58,6 +59,7 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp>
   final MapService _mapService = MapService();
   final GpsService _gpsService = GpsService();
   final BackgroundService _bgService = BackgroundService();
+  final SpeedLimitService _speedLimitService = SpeedLimitService();
   final SmoothLocationService _smoother = SmoothLocationService();
   StreamSubscription<SmoothPosition>? _smoothSub;
   Timer? _nightModeTimer;
@@ -306,6 +308,25 @@ void _startNightModeTimer() {
     await _mapService.updateRemainingRoute(mapboxMap!, remaining);
   }
 
+// ── Límite de velocidad ───────────────────────────────
+  DateTime? _lastSpeedLimitCheck;
+
+  Future<void> _updateSpeedLimit(double lat, double lng) async {
+    // Solo consultar cada 30 segundos para no saturar la API
+    if (_lastSpeedLimitCheck != null &&
+        DateTime.now().difference(_lastSpeedLimitCheck!).inSeconds < 30) return;
+    _lastSpeedLimitCheck = DateTime.now();
+
+    final limit = await _speedLimitService.getSpeedLimit(lat, lng);
+    if (mounted) _n.setSpeedLimit(limit);
+
+    // Alerta por voz si excede el límite
+    final status = SpeedStatus.evaluate(_s.currentSpeed, limit);
+    if (status.level == SpeedAlertLevel.danger) {
+      _speak('Exceso de velocidad');
+    }
+  }
+  
 void _checkRouteDeviation(double lat, double lng) {
     if (!_s.navigating || _s.routeCoordinates.isEmpty || _s.isRecalculating) return;
 
@@ -330,7 +351,7 @@ void _checkRouteDeviation(double lat, double lng) {
       _deviationCount = 0;
     }
   }
-
+  
   Future<void> _recalculateRoute(double lat, double lng) async {
     if (_s.selectedPlace == null) return;
     _n.setIsRecalculating(true);
@@ -485,6 +506,8 @@ void _checkRouteDeviation(double lat, double lng) {
           speedMs: position.speed < 0 ? 0 : position.speed,
         );
       }
+      // Consultar límite de velocidad en background
+      _updateSpeedLimit(position.latitude, position.longitude);
       if (!_s.initialLocationSet && mapboxMap != null) {
   _n.setInitialLocationSet(true);
   _n.setIsProgrammaticMove(true);
@@ -675,6 +698,8 @@ void _checkRouteDeviation(double lat, double lng) {
      await _tts.stop();
      await _bgService.stop();
      await WakelockPlus.disable();
+     _speedLimitService.clearCache();
+     _n.setSpeedLimit(null);
      _n.clearRoute();
   }
   
