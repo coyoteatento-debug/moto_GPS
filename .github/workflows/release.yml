@@ -69,10 +69,9 @@ jobs:
 
       - name: Clean Gradle
         run: |
-          cd android
-          ./gradlew clean
-          cd ..
           flutter clean
+          cd android && ./gradlew clean --no-daemon || true
+          cd ..
       
       - name: Build APK Release
         run: flutter build apk --release --dart-define=MAPBOX_TOKEN=${{ secrets.MAPBOX_TOKEN }}
