@@ -53,9 +53,6 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp>
   mapbox.PointAnnotation? motoAnnotation;
   mapbox.PointAnnotation? destinationAnnotation;
   StreamSubscription<Position>? _locationSubscription;
-  AnimationController? _markerAnimController;
-  double? _lastAnimatedLat;
-  double? _lastAnimatedLng;
 
   final TtsService _tts = TtsService();
   final MapService _mapService = const MapService();
@@ -99,7 +96,6 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp>
     _smoother.stop();
     _nightModeTimer?.cancel();
     WakelockPlus.disable();
-    _markerAnimController?.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -117,10 +113,11 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp>
       motoAnnotation = null;
     }
     if (_s.currentPosition != null) {
-     _updateMotoMarker(
-        _s.currentPosition!.latitude,
-        _s.currentPosition!.longitude,
-        _s.currentPosition!.heading,
+      _smoother.updatePosition(
+        lat:     _s.currentPosition!.latitude,
+        lng:     _s.currentPosition!.longitude,
+        heading: _s.currentPosition!.heading,
+        speedMs: 0,
       );
     }
   }
@@ -423,51 +420,6 @@ void _checkRouteDeviation(double lat, double lng) {
     );
   }
 
-void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
-    if (_lastAnimatedLat == null || _lastAnimatedLng == null) {
-      _lastAnimatedLat = targetLat;
-      _lastAnimatedLng = targetLng;
-      _updateMotoMarker(targetLat, targetLng, bearing);
-      return;
-    }
-
-    final dist = _geo.distanceBetween(
-        _lastAnimatedLat!, _lastAnimatedLng!, targetLat, targetLng);
-    if (dist < 0.5) return;
-
-    final fromLat = _lastAnimatedLat!;
-    final fromLng = _lastAnimatedLng!;
-    _lastAnimatedLat = targetLat;
-    _lastAnimatedLng = targetLng;
-
-    if (!mounted) return;
-    _markerAnimController?.stop();
-    _markerAnimController?.dispose();
-    _markerAnimController = null;
-
-    _markerAnimController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-
-    final animLat = Tween<double>(begin: fromLat, end: targetLat)
-        .animate(CurvedAnimation(
-            parent: _markerAnimController!, curve: Curves.easeOut));
-    final animLng = Tween<double>(begin: fromLng, end: targetLng)
-        .animate(CurvedAnimation(
-            parent: _markerAnimController!, curve: Curves.easeOut));
-
-    _markerAnimController!.addListener(() {
-      if (!mounted) return;
-      _updateMotoMarker(animLat.value, animLng.value, bearing);
-    });
-
-    _markerAnimController!.forward();
-
-    // Update directo inmediato sin esperar animación
-    _updateMotoMarker(targetLat, targetLng, bearing);
-  }
-
   Future<void> _getInitialPosition() async {
     final position = await _gpsService.getInitialPosition();
     if (position == null || !mounted) return;
@@ -660,12 +612,11 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
         motoAnnotation = null;
       }
       if (_s.currentPosition != null) {
-        _lastAnimatedLat = _s.currentPosition!.latitude;
-        _lastAnimatedLng = _s.currentPosition!.longitude;
-       _updateMotoMarker(
-          _s.currentPosition!.latitude,
-          _s.currentPosition!.longitude,
-          _s.currentPosition!.heading,
+        _smoother.updatePosition(
+          lat:     _s.currentPosition!.latitude,
+          lng:     _s.currentPosition!.longitude,
+          heading: _s.currentPosition!.heading,
+          speedMs: 0,
         );
       }
       _fitRouteBounds(destLat, destLng);
@@ -834,11 +785,6 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
             ),
             mapbox.MapAnimationOptions(duration: 800, startDelay: 0),
           );
-          _updateMotoMarker(
-            s.currentPosition!.latitude,
-            s.currentPosition!.longitude,
-            s.currentPosition!.heading,
-          );
         }
       },
       onAvatarPick:            _pickUserAvatar,
@@ -941,11 +887,6 @@ void _animateMarkerTo(double targetLat, double targetLng, double bearing) {
                         pitch: 0.0,
                       ),
                       mapbox.MapAnimationOptions(duration: 800, startDelay: 0),
-                    );
-                    _updateMotoMarker(
-                      s.currentPosition!.latitude,
-                      s.currentPosition!.longitude,
-                      s.currentPosition!.heading,
                     );
                   });
                 }
