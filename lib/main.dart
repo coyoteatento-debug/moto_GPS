@@ -606,11 +606,7 @@ void _checkRouteDeviation(double lat, double lng) {
           }).toList(),
         );
       await _drawRouteOnMap(routes[0].geometry);
-      if (motoAnnotation != null && annotationManager != null) {
-        await _mapService.deleteAnnotation(
-            annotationManager!, motoAnnotation!);
-        motoAnnotation = null;
-      }
+      // No eliminar el marcador — el smoother lo reposiciona
       if (_s.currentPosition != null) {
         _smoother.updatePosition(
           lat:     _s.currentPosition!.latitude,
