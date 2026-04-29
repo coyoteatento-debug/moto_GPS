@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
 import 'search_modal.dart';
+import '../../core/services/speed_limit_service.dart';
 
 class MapTab extends StatelessWidget {
   // ── Estado del mapa ───────────────────────────────────
@@ -21,6 +22,7 @@ class MapTab extends StatelessWidget {
   final String currentInstruction;
   final double distanceToNextManeuver;
   final double currentSpeed;
+  final int? speedLimit;
   final double? tappedLat;
   final double? tappedLng;
   final Map<String, dynamic>? selectedPlace;
@@ -71,6 +73,7 @@ class MapTab extends StatelessWidget {
     required this.currentInstruction,
     required this.distanceToNextManeuver,
     required this.currentSpeed,
+    required this.speedLimit,
     required this.tappedLat,
     required this.tappedLng,
     required this.selectedPlace,
@@ -116,6 +119,75 @@ class MapTab extends StatelessWidget {
       Text(label, style: TextStyle(
           color: color, fontWeight: FontWeight.w600, fontSize: 13)),
     ]);
+  }
+
+  Widget _buildSpeedometer() {
+    final status = SpeedStatus.evaluate(currentSpeed, speedLimit);
+
+    // Colores según nivel de alerta
+    final bgColor = switch (status.level) {
+      SpeedAlertLevel.danger  => Colors.red[700]!,
+      SpeedAlertLevel.warning => Colors.orange[700]!,
+      SpeedAlertLevel.normal  => Colors.black87,
+    };
+
+    final textColor = switch (status.level) {
+      SpeedAlertLevel.danger  => Colors.white,
+      SpeedAlertLevel.warning => Colors.white,
+      SpeedAlertLevel.normal  => Colors.white,
+    };
+
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: status.level != SpeedAlertLevel.normal
+            ? [BoxShadow(
+                color: bgColor.withOpacity(0.6),
+                blurRadius: 12,
+                spreadRadius: 2,
+              )]
+            : null,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '${currentSpeed.toStringAsFixed(0)}',
+            style: TextStyle(
+              color:      textColor,
+              fontSize:   40,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          Text(
+            'km/h',
+            style: TextStyle(color: textColor.withOpacity(0.8)),
+          ),
+          // Mostrar límite de velocidad si está disponible
+          if (status.speedLimit != null) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'Límite: ${status.speedLimit} km/h',
+                style: TextStyle(
+                  color:    textColor.withOpacity(0.9),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   @override
@@ -462,21 +534,7 @@ class MapTab extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Container(
-                padding: const EdgeInsets.all(15),
-                decoration: BoxDecoration(
-                    color: Colors.black87,
-                    borderRadius: BorderRadius.circular(15)),
-                child: Column(children: [
-                  Text('${currentSpeed.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 40,
-                          fontWeight: FontWeight.bold)),
-                  const Text('km/h',
-                      style: TextStyle(color: Colors.white70)),
-                ]),
-              ),
+              _buildSpeedometer(),
               ElevatedButton.icon(
                 onPressed: onCancelRoute,
                 icon: const Icon(Icons.close, color: Colors.white),
@@ -568,21 +626,7 @@ class MapTab extends StatelessWidget {
       if (!navigating && !routeDrawn && !showTapConfirm)
         Positioned(
           bottom: 30, left: 20,
-          child: Container(
-            padding: const EdgeInsets.all(15),
-            decoration: BoxDecoration(
-                color: Colors.black87,
-                borderRadius: BorderRadius.circular(15)),
-            child: Column(children: [
-              Text('${currentSpeed.toStringAsFixed(0)}',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 40,
-                      fontWeight: FontWeight.bold)),
-              const Text('km/h',
-                  style: TextStyle(color: Colors.white70)),
-            ]),
-          ),
+          child: _buildSpeedometer(),
         ),
     ]);
   }
