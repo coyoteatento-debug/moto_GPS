@@ -20,6 +20,7 @@ dependencies:
   flutter_riverpod: ^2.6.1
   flutter_foreground_task: ^8.0.0
   wakelock_plus: ^1.2.8
+  speech_to_text: ^7.0.0
 
 dev_dependencies:
   flutter_test:
