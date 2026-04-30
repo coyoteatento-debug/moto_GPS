@@ -795,15 +795,17 @@ void _checkRouteDeviation(double lat, double lng) {
   // ── Buscador UI ───────────────────────────────────────
   Widget _buildSearchModal() {
     return SearchModal(
-      controller: _searchController,
-      isLoading: _s.searchLoading,
-      results: _s.searchResults,
-      onChanged: _searchPlaces,
+      controller:    _searchController,
+      isLoading:     _s.searchLoading,
+      results:       _s.searchResults,
+      onChanged:     _searchPlaces,
       onClose: () => setState(() {
         _n.clearSearch();
         _searchController.clear();
       }),
-      onSelect: _selectSearchResult,
+      onSelect:      _selectSearchResult,
+      onVoiceSearch: _startVoiceSearch,
+      isListening:   _isListening,
     );
   }
   
