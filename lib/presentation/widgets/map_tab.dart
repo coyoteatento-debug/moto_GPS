@@ -271,6 +271,8 @@ class MapTab extends StatelessWidget {
             onChanged:   onSearchChanged,
             onClose:     onSearchClose,
             onSelect:    onSearchSelect,
+            onVoiceSearch: onVoiceSearch,
+            isListening:   isListening,
           ),
         ),
 
