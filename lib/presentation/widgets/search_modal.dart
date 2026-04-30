@@ -7,6 +7,8 @@ class SearchModal extends StatelessWidget {
   final VoidCallback onClose;
   final ValueChanged<Map<String, dynamic>> onSelect;
   final ValueChanged<String> onChanged;
+  final VoidCallback onVoiceSearch;
+  final bool isListening;
 
   const SearchModal({
     super.key,
@@ -16,6 +18,8 @@ class SearchModal extends StatelessWidget {
     required this.onClose,
     required this.onSelect,
     required this.onChanged,
+    required this.onVoiceSearch,
+    required this.isListening,
   });
 
   @override
@@ -39,6 +43,7 @@ class SearchModal extends StatelessWidget {
                 const Icon(Icons.search, color: Colors.blue),
                 const SizedBox(width: 10),
                 Expanded(
+                  Expanded(
                   child: TextField(
                     controller: controller,
                     autofocus: true,
@@ -48,6 +53,26 @@ class SearchModal extends StatelessWidget {
                       hintStyle: TextStyle(color: Colors.grey),
                     ),
                     onChanged: onChanged,
+                  ),
+                ),
+                // ── Botón micrófono ──────────────────────
+                GestureDetector(
+                  onTap: onVoiceSearch,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    width: 36, height: 36,
+                    margin: const EdgeInsets.only(right: 4),
+                    decoration: BoxDecoration(
+                      color: isListening
+                          ? Colors.red
+                          : Colors.red.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      isListening ? Icons.mic : Icons.mic_none,
+                      color: isListening ? Colors.white : Colors.red,
+                      size: 20,
+                    ),
                   ),
                 ),
                 IconButton(
