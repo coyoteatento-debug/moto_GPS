@@ -49,6 +49,8 @@ class MapTab extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onSearchSelect;
   final VoidCallback onRecenter;
   final VoidCallback onAvatarPick;
+  final VoidCallback onVoiceSearch;
+  final bool isListening;
   final VoidCallback onGasolinerasToggle;
   final VoidCallback onSatelliteToggle;
   final VoidCallback onTapConfirm;
@@ -92,6 +94,8 @@ class MapTab extends StatelessWidget {
     required this.onSearchSelect,
     required this.onRecenter,
     required this.onAvatarPick,
+    required this.onVoiceSearch,
+    required this.isListening,
     required this.onGasolinerasToggle,
     required this.onSatelliteToggle,
     required this.onTapConfirm,
@@ -226,6 +230,36 @@ class MapTab extends StatelessWidget {
           ),
         ),
 
+
+      // ── Botón micrófono flotante ───────────────────────
+      if (!navigating)
+        Positioned(
+          top: 50, right: 70,
+          child: GestureDetector(
+            onTap: onVoiceSearch,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              width: 46, height: 46,
+              decoration: BoxDecoration(
+                color: isListening ? Colors.red : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [BoxShadow(
+                  color: isListening
+                      ? Colors.red.withOpacity(0.5)
+                      : Colors.black38,
+                  blurRadius: isListening ? 12 : 8,
+                  offset: const Offset(0, 2),
+                )],
+              ),
+              child: Icon(
+                isListening ? Icons.mic : Icons.mic_none,
+                color: isListening ? Colors.white : Colors.red,
+                size: 24,
+              ),
+            ),
+          ),
+        ),
+      
       // ── Modal búsqueda ─────────────────────────────────
       if (showSearch && !navigating)
         Positioned(
