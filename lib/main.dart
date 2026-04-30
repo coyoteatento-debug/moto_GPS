@@ -19,6 +19,7 @@ import 'core/services/map_service.dart';
 import 'core/services/gps_service.dart';
 import 'core/services/background_service.dart';
 import 'core/services/speed_limit_service.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 import 'core/services/smooth_location_service.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'core/services/trip_service.dart';
@@ -63,6 +64,9 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp>
   final SmoothLocationService _smoother = SmoothLocationService();
   StreamSubscription<SmoothPosition>? _smoothSub;
   Timer? _nightModeTimer;
+  final SpeechToText _speech = SpeechToText();
+  bool _speechAvailable  = false;
+  bool _isListening      = false;
   late final TripService _tripService = TripService(_prefsSource);
   late final NavigationService _navService =
       NavigationService(MapboxApi(_mapboxToken), const GeoUtils());
@@ -88,6 +92,7 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp>
     _loadTrips();
     _initTts();
     _loadUserAvatar();
+    _initSpeech();
   }
 
   @override
@@ -152,6 +157,65 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp>
 
 Future<void> _speak(String text) async {
     await _tts.speak(text);
+  }
+
+  // ── Reconocimiento de voz ─────────────────────────────
+  Future<void> _initSpeech() async {
+    _speechAvailable = await _speech.initialize(
+      onError: (error) {
+        if (mounted) setState(() => _isListening = false);
+      },
+      onStatus: (status) {
+        if (status == 'done' || status == 'notListening') {
+          if (mounted) setState(() => _isListening = false);
+        }
+      },
+    );
+  }
+
+  Future<void> _startVoiceSearch() async {
+    if (!_speechAvailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Reconocimiento de voz no disponible'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    if (_isListening) {
+      await _speech.stop();
+      setState(() => _isListening = false);
+      return;
+    }
+
+    // Abrir el modal de búsqueda si no está abierto
+    if (!_s.showSearch) {
+      _n.update((st) => st.copyWith(showSearch: true));
+    }
+
+    setState(() => _isListening = true);
+
+    await _speech.listen(
+      onResult: (result) {
+        if (result.finalResult) {
+          final text = result.recognizedWords;
+          if (text.isNotEmpty) {
+            _searchController.text = text;
+            _searchPlaces(text);
+          }
+          setState(() => _isListening = false);
+        }
+      },
+      localeId:          'es-MX',
+      listenFor:         const Duration(seconds: 10),
+      pauseFor:          const Duration(seconds: 3),
+      partialResults:    true,
+      cancelOnError:     true,
+      listenMode:        ListenMode.confirmation,
+    );
   }
 
   Future<void> _searchPlaces(String query) async {
@@ -818,6 +882,8 @@ void _checkRouteDeviation(double lat, double lng) {
         }
       },
       onAvatarPick:            _pickUserAvatar,
+      onVoiceSearch:           _startVoiceSearch,
+      isListening:             _isListening,
       onGasolinerasToggle: () async {
         if (_s.currentPosition == null || _s.gasolinerasLoading) return;
         if (_s.gasolinerasVisible) {
