@@ -43,7 +43,6 @@ class SearchModal extends StatelessWidget {
                 const Icon(Icons.search, color: Colors.blue),
                 const SizedBox(width: 10),
                 Expanded(
-                  Expanded(
                   child: TextField(
                     controller: controller,
                     autofocus: true,
