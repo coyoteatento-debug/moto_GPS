@@ -65,7 +65,7 @@ jobs:
       
       - name: Decode Keystore
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/motogps-release.jks
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d '\r\n' | grep -v "CERTIFICATE" | base64 --decode > android/app/motogps-release.jks
 
       - name: Build AAB Release
         run: flutter build appbundle --release --dart-define=MAPBOX_TOKEN=${{ secrets.MAPBOX_TOKEN }}
