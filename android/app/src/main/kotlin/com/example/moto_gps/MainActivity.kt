@@ -1,4 +1,4 @@
-package com.example.moto_gps
+package com.coyoteatento.motogps
 
 import android.content.Intent
 import io.flutter.embedding.android.FlutterActivity
