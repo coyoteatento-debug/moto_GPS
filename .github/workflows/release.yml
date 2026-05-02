@@ -63,7 +63,7 @@ jobs:
           cd android && ./gradlew clean --no-daemon || true
           cd ..
       
-      - name: Build APK Release
+      - name: Build AAB Release
         run: flutter build apk --release --dart-define=MAPBOX_TOKEN=${{ secrets.MAPBOX_TOKEN }}
         env:
           MAPBOX_DOWNLOADS_TOKEN: ${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}
@@ -75,4 +75,4 @@ jobs:
         uses: actions/upload-artifact@v4  # ✅ ya estaba en v4
         with:
           name: release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/bundle/release/app-release.aab
