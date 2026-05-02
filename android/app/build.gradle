@@ -4,29 +4,39 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader ->
+        localProperties.load(reader)
+    }
+}
+
+def mapboxToken = localProperties['MAPBOX_TOKEN'] ?: System.getenv('MAPBOX_TOKEN') ?: ''
+
 android {
     namespace "com.example.moto_gps"
     compileSdk 35
-
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
         coreLibraryDesugaringEnabled false
     }
-
     kotlinOptions {
         jvmTarget = '17'
     }
-
     defaultConfig {
         applicationId "com.example.moto_gps"
-        minSdkVersion flutter.minSdkVersion
-        targetSdkVersion 34
+        minSdkVersion 24
+        targetSdkVersion 35
         versionCode 1
         versionName "1.0"
         multiDexEnabled true
+        manifestPlaceholders = [
+            MAPBOX_TOKEN: mapboxToken,
+            applicationName: "io.flutter.app.FlutterApplication"
+        ]
     }
-
     buildTypes {
         release {
             shrinkResources false
