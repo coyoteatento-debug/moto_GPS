@@ -63,13 +63,21 @@ jobs:
           cd android && ./gradlew clean --no-daemon || true
           cd ..
       
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/motogps-release.jks
+
       - name: Build AAB Release
-        run: flutter build apk --release --dart-define=MAPBOX_TOKEN=${{ secrets.MAPBOX_TOKEN }}
+        run: flutter build appbundle --release --dart-define=MAPBOX_TOKEN=${{ secrets.MAPBOX_TOKEN }}
         env:
           MAPBOX_DOWNLOADS_TOKEN: ${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}
           MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
           GRADLE_OPTS: "-Xmx4g -XX:MaxMetaspaceSize=512m"
           JAVA_TOOL_OPTIONS: "-Xmx4g"
+          KEYSTORE_PATH: motogps-release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4  # ✅ ya estaba en v4
