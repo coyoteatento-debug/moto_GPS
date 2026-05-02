@@ -1,4 +1,4 @@
-package com.example.moto_gps
+package com.coyoteatento.motogps
 
 import android.app.*
 import android.content.Context
