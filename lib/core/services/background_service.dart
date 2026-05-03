@@ -22,7 +22,7 @@ class BackgroundService {
       await _methodChannel.invokeMethod('startService');
     } on PlatformException catch (e) {
       // ignore: avoid_print
-      print('[BackgroundService] Error al iniciar: ${e.message}');
+      debugPrint('[BackgroundService] Error al iniciar: ${e.message}');
     }
   }
 
@@ -36,7 +36,7 @@ class BackgroundService {
       _controller = null;
     } on PlatformException catch (e) {
       // ignore: avoid_print
-      print('[BackgroundService] Error al detener: ${e.message}');
+      debugPrint('[BackgroundService] Error al detener: ${e.message}');
     }
   }
 
@@ -49,7 +49,7 @@ class BackgroundService {
       );
     } on PlatformException catch (e) {
       // ignore: avoid_print
-      print('[BackgroundService] Error al actualizar instrucción: ${e.message}');
+      debugPrint('[BackgroundService] Error al actualizar instrucción: ${e.message}');
     }
   }
 
@@ -71,7 +71,7 @@ class BackgroundService {
             ));
           }
         }, onError: (dynamic error) {
-          print('[BackgroundService] Error en stream: $error');
+          debugPrint('[BackgroundService] Error en stream: $error');
         });
 
     return _controller!.stream;
