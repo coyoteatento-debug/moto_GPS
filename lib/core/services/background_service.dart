@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Puente entre Flutter y LocationForegroundService (Android nativo)
