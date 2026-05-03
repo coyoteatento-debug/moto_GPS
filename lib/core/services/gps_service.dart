@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'background_service.dart';
 
@@ -101,7 +100,7 @@ class GpsService {
       ),
     ).listen(
       (position) => _controller?.add(position),
-      onError: (e) => debugPrint('[GpsService] Error foreground: $e'),
+      onError: (e) => Print('[GpsService] Error foreground: $e'),
     );
   }
 
@@ -123,7 +122,7 @@ class GpsService {
         );
         _controller?.add(position);
       },
-      onError: (e) => debugPrint('[GpsService] Error background: $e'),
+      onError: (e) => Print('[GpsService] Error background: $e'),
     );
   }
 
