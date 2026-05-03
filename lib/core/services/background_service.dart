@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Puente entre Flutter y LocationForegroundService (Android nativo)
@@ -23,7 +22,7 @@ class BackgroundService {
       await _methodChannel.invokeMethod('startService');
     } on PlatformException catch (e) {
       // ignore: avoid_print
-      debugPrint('[BackgroundService] Error al iniciar: ${e.message}');
+      Print('[BackgroundService] Error al iniciar: ${e.message}');
     }
   }
 
@@ -37,7 +36,7 @@ class BackgroundService {
       _controller = null;
     } on PlatformException catch (e) {
       // ignore: avoid_print
-      debugPrint('[BackgroundService] Error al detener: ${e.message}');
+      Print('[BackgroundService] Error al detener: ${e.message}');
     }
   }
 
@@ -50,7 +49,7 @@ class BackgroundService {
       );
     } on PlatformException catch (e) {
       // ignore: avoid_print
-      debugPrint('[BackgroundService] Error al actualizar instrucción: ${e.message}');
+      Print('[BackgroundService] Error al actualizar instrucción: ${e.message}');
     }
   }
 
@@ -72,7 +71,7 @@ class BackgroundService {
             ));
           }
         }, onError: (dynamic error) {
-          debugPrint('[BackgroundService] Error en stream: $error');
+          Print('[BackgroundService] Error en stream: $error');
         });
 
     return _controller!.stream;
