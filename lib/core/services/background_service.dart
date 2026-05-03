@@ -1,11 +1,9 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
 
-/// Puente entre Flutter y LocationForegroundService (Android nativo)
-/// Usa MethodChannel para enviar comandos y EventChannel para recibir GPS
 class BackgroundService {
-  static const _methodChannel = MethodChannel('com.example.moto_gps/background');
-  static const _eventChannel  = EventChannel('com.example.moto_gps/location');
+  static const _methodChannel = MethodChannel('com.coyoteatento.motogps/background');
+  static const _eventChannel  = EventChannel('com.coyoteatento.motogps/location');
 
   static final BackgroundService _instance = BackgroundService._internal();
   factory BackgroundService() => _instance;
@@ -14,9 +12,6 @@ class BackgroundService {
   StreamSubscription? _locationSub;
   StreamController<LocationData>? _controller;
 
-  // ── Control del servicio ─────────────────────────────────────────
-
-  /// Inicia el ForegroundService con la notificación GPS
   Future<void> start() async {
     try {
       await _methodChannel.invokeMethod('startService');
@@ -26,7 +21,6 @@ class BackgroundService {
     }
   }
 
-  /// Detiene el ForegroundService
   Future<void> stop() async {
     try {
       await _methodChannel.invokeMethod('stopService');
@@ -40,7 +34,6 @@ class BackgroundService {
     }
   }
 
-  /// Actualiza el texto de la notificación persistente
   Future<void> updateInstruction(String instruction) async {
     try {
       await _methodChannel.invokeMethod(
@@ -49,16 +42,12 @@ class BackgroundService {
       );
     } on PlatformException catch (e) {
       // ignore: avoid_print
-      print('[BackgroundService] Error al actualizar instrucción: ${e.message}');
+      print('[BackgroundService] Error al actualizar instruccion: ${e.message}');
     }
   }
 
-  // ── Stream de ubicación ──────────────────────────────────────────
-
-  /// Stream que emite LocationData cuando el servicio está activo en background
   Stream<LocationData> get locationStream {
     _controller ??= StreamController<LocationData>.broadcast();
-
     _locationSub ??= _eventChannel
         .receiveBroadcastStream()
         .listen((dynamic data) {
@@ -73,18 +62,15 @@ class BackgroundService {
         }, onError: (dynamic error) {
           print('[BackgroundService] Error en stream: $error');
         });
-
     return _controller!.stream;
   }
 }
 
-// ── Modelo de datos GPS ──────────────────────────────────────────────
-
 class LocationData {
   final double latitude;
   final double longitude;
-  final double speed;    // m/s
-  final double heading;  // grados 0-360
+  final double speed;
+  final double heading;
 
   const LocationData({
     required this.latitude,
@@ -93,11 +79,10 @@ class LocationData {
     required this.heading,
   });
 
-  /// Velocidad en km/h
   double get speedKmh => speed * 3.6;
 
   @override
   String toString() =>
       'LocationData(lat: $latitude, lng: $longitude, '
-      'speed: ${speedKmh.toStringAsFixed(1)} km/h, heading: $heading°)';
+      'speed: ${speedKmh.toStringAsFixed(1)} km/h, heading: $heading)';
 }
