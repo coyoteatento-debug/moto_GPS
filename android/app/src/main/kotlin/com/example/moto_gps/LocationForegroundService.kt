@@ -125,7 +125,7 @@ class LocationForegroundService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("🏍️ Moto GPS activo")
             .setContentText(instruction)
-            .setSmallIcon(android.R.drawable.ic_menu_compass)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setSilent(true)
