@@ -1,0 +1,5 @@
+-keep class com.mapbox.** { *; }
+-keep class io.flutter.** { *; }
+-keep class com.coyoteatento.motogps.** { *; }
+-dontwarn com.mapbox.**
+-dontwarn io.flutter.**
