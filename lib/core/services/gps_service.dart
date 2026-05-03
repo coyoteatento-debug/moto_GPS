@@ -100,7 +100,7 @@ class GpsService {
       ),
     ).listen(
       (position) => _controller?.add(position),
-      onError: (e) => Print('[GpsService] Error foreground: $e'),
+      onError: (e) => print('[GpsService] Error foreground: $e'),
     );
   }
 
@@ -122,7 +122,7 @@ class GpsService {
         );
         _controller?.add(position);
       },
-      onError: (e) => Print('[GpsService] Error background: $e'),
+      onError: (e) => print('[GpsService] Error background: $e'),
     );
   }
 
