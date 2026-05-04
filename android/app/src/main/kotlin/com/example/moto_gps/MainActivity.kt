@@ -8,8 +8,8 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
 
-    private val METHOD_CHANNEL = "com.example.moto_gps/background"
-    private val EVENT_CHANNEL  = "com.example.moto_gps/location"
+    private val METHOD_CHANNEL = "com.coyoteatento.motogps/background"
+    private val EVENT_CHANNEL  = "com.coyoteatento.motogps/location"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
