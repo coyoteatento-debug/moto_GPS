@@ -547,15 +547,18 @@ void _checkRouteDeviation(double lat, double lng) {
 
 // ── Marcador suavizado a 60fps ────────────────────────
   DateTime _lastMarkerUpdate = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime _lastUserInteraction = DateTime.fromMillisecondsSinceEpoch(0);
 
   void _startSmoothMarker() {
     _smoothSub = _smoother.positionStream.listen((SmoothPosition pos) {
       if (!mounted) return;
 
-      // Throttle a 15fps — actualizar máximo cada 66ms
       final now = DateTime.now();
-      if (now.difference(_lastMarkerUpdate).inMilliseconds < 66) return;
-      _lastMarkerUpdate = now;
+            // Pausar actualizaciones si el usuario interactuó hace menos de 400ms
+            if (now.difference(_lastUserInteraction).inMilliseconds < 400) return;
+            // Throttle a 15fps
+            if (now.difference(_lastMarkerUpdate).inMilliseconds < 66) return;
+            _lastMarkerUpdate = now;
 
       _updateMotoMarker(pos.latitude, pos.longitude, pos.heading);
     });
@@ -856,6 +859,7 @@ void _checkRouteDeviation(double lat, double lng) {
       onMapCreated:            _onMapCreated,
       onMapTap:                _onMapTap,
       onCameraChange:          (state) async {
+              _lastUserInteraction = DateTime.now();
         if (s.isProgrammaticMove) {
           Future.delayed(const Duration(milliseconds: 1200), () {
             if (mounted) _n.setIsProgrammaticMove(false);
