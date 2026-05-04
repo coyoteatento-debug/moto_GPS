@@ -823,6 +823,7 @@ void _checkRouteDeviation(double lat, double lng) {
       showSearch:              s.showSearch,
       userIsExploring:         s.userIsExploring,
       isSatellite:             s.isSatellite,
+      isNightMode:             s.isNightMode,
       gasolinerasVisible:      s.gasolinerasVisible,
       gasolinerasLoading:      s.gasolinerasLoading,
       routeDrawn:              s.routeDrawn,
@@ -905,6 +906,23 @@ void _checkRouteDeviation(double lat, double lng) {
           );
         }
       },
+      onNightModeToggle: () async {
+  final newNight = !_s.isNightMode;
+  _n.setNightMode(newNight, manual: true);
+  await mapboxMap?.loadStyleURI(
+    newNight
+        ? 'mapbox://styles/mapbox/navigation-night-v1'
+        : 'mapbox://styles/mapbox/streets-v12',
+  );
+  if (!newNight) await _applyCustomRoadStyle();
+  await Future.delayed(const Duration(milliseconds: 1500));
+  if (_s.routeDrawn && _s.routeCoordinates.isNotEmpty && mounted) {
+    await _drawRouteOnMap({
+      'type': 'LineString',
+      'coordinates': _s.routeCoordinates,
+    });
+  }
+},
       onSatelliteToggle: () async {
         final newValue = !_s.isSatellite;
         _n.setSatellite(newValue);
