@@ -269,20 +269,6 @@ Future<void> _speak(String text) async {
     }
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) async {
-    super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.resumed) {
-      final permission = await Geolocator.checkPermission();
-      final hasPermission = permission == LocationPermission.always ||
-                            permission == LocationPermission.whileInUse;
-      if (hasPermission && _s.currentPosition == null) {
-        await _getInitialPosition();
-        _startLocationTracking();
-      }
-    }
-  }
-
   Future<bool> _requestLocationPermissions() async {
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
@@ -988,6 +974,13 @@ void _checkRouteDeviation(double lat, double lng) {
       case AppLifecycleState.resumed:
         _gpsService.onAppForeground();
         _applyNightOrDayStyle();
+        final permission = await Geolocator.checkPermission();
+        final hasPermission = permission == LocationPermission.always ||
+                              permission == LocationPermission.whileInUse;
+        if (hasPermission && _s.currentPosition == null) {
+          await _getInitialPosition();
+          _startLocationTracking();
+        }
         break;
       default:
         break;
