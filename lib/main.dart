@@ -266,6 +266,15 @@ Future<void> _speak(String text) async {
     if (granted) {
       await _getInitialPosition();
       _startLocationTracking();
+    } else {
+      // Esperar y reintentar por si el usuario tarda en decidir
+      await Future.delayed(const Duration(seconds: 2));
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.always ||
+          permission == LocationPermission.whileInUse) {
+        await _getInitialPosition();
+        _startLocationTracking();
+      }
     }
   }
 
