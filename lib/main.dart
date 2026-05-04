@@ -283,6 +283,7 @@ Future<void> _speak(String text) async {
     mapboxMap = map;
     annotationManager = await map.annotations.createPointAnnotationManager();
     await Future.delayed(const Duration(milliseconds: 600));
+    await _applyNightOrDayStyle();
     await _applyCustomRoadStyle();
   // Centrar en ubicación actual si ya se obtuvo
   if (_s.currentPosition != null) {
