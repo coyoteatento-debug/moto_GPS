@@ -964,7 +964,7 @@ void _checkRouteDeviation(double lat, double lng) {
 
 // ── Ciclo de vida ─────────────────────────────────────
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
     super.didChangeAppLifecycleState(state);
     switch (state) {
       case AppLifecycleState.paused:
