@@ -33,6 +33,7 @@ const String _mapboxToken = String.fromEnvironment('MAPBOX_TOKEN', defaultValue:
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  assert(_mapboxToken.isNotEmpty, 'MAPBOX_TOKEN no configurado. Usa --dart-define=MAPBOX_TOKEN=tu_token');
   mapbox.MapboxOptions.setAccessToken(_mapboxToken);
   runApp(const ProviderScope(
     child: MaterialApp(home: MotoGPSApp()),
