@@ -4,12 +4,158 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
 import 'search_modal.dart';
 import '../../core/services/speed_limit_service.dart';
 
+// ── Botón de capas expandible ─────────────────────────
+class _LayersButton extends StatefulWidget {
+  final bool isSatellite;
+  final bool isNightMode;
+  final VoidCallback onSatelliteToggle;
+  final VoidCallback onNightModeToggle;
+
+  const _LayersButton({
+    required this.isSatellite,
+    required this.isNightMode,
+    required this.onSatelliteToggle,
+    required this.onNightModeToggle,
+  });
+
+  @override
+  State<_LayersButton> createState() => _LayersButtonState();
+}
+
+class _LayersButtonState extends State<_LayersButton>
+    with SingleTickerProviderStateMixin {
+  bool _expanded = false;
+  late AnimationController _ctrl;
+  late Animation<double> _fadeAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 200));
+    _fadeAnim = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _toggle() {
+    setState(() => _expanded = !_expanded);
+    _expanded ? _ctrl.forward() : _ctrl.reverse();
+  }
+
+  Widget _subBtn({
+    required IconData icon,
+    required bool active,
+    required Color activeColor,
+    required VoidCallback onTap,
+    required String tooltip,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: () {
+          onTap();
+          _toggle();
+        },
+        child: Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: active ? activeColor : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: const [
+              BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 2))
+            ],
+          ),
+          child: Icon(icon,
+              color: active ? Colors.white : activeColor, size: 24),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Sub-botón modo nocturno
+        FadeTransition(
+          opacity: _fadeAnim,
+          child: SizeTransition(
+            sizeFactor: _fadeAnim,
+            axis: Axis.vertical,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _subBtn(
+                icon: Icons.nightlight_round,
+                active: widget.isNightMode,
+                activeColor: Colors.indigo,
+                onTap: widget.onNightModeToggle,
+                tooltip: widget.isNightMode ? 'Modo día' : 'Modo nocturno',
+              ),
+            ),
+          ),
+        ),
+        // Sub-botón satélite
+        FadeTransition(
+          opacity: _fadeAnim,
+          child: SizeTransition(
+            sizeFactor: _fadeAnim,
+            axis: Axis.vertical,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _subBtn(
+                icon: Icons.satellite_alt,
+                active: widget.isSatellite,
+                activeColor: Colors.blue.shade700,
+                onTap: widget.onSatelliteToggle,
+                tooltip: widget.isSatellite ? 'Mapa normal' : 'Vista satélite',
+              ),
+            ),
+          ),
+        ),
+        // Botón principal de capas
+        GestureDetector(
+          onTap: _toggle,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: (_expanded || widget.isSatellite || widget.isNightMode)
+                  ? Colors.blueGrey.shade700
+                  : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: const [
+                BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 2))
+              ],
+            ),
+            child: Icon(
+              _expanded ? Icons.close : Icons.layers,
+              color: (_expanded || widget.isSatellite || widget.isNightMode)
+                  ? Colors.white
+                  : Colors.blueGrey.shade700,
+              size: 24,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class MapTab extends StatelessWidget {
   // ── Estado del mapa ───────────────────────────────────
   final bool navigating;
   final bool showSearch;
   final bool userIsExploring;
   final bool isSatellite;
+  final bool isNightMode;
   final bool gasolinerasVisible;
   final bool gasolinerasLoading;
   final bool routeDrawn;
@@ -53,6 +199,7 @@ class MapTab extends StatelessWidget {
   final bool isListening;
   final VoidCallback onGasolinerasToggle;
   final VoidCallback onSatelliteToggle;
+  final VoidCallback onNightModeToggle;
   final VoidCallback onTapConfirm;
   final VoidCallback onTapCancel;
   final VoidCallback onCancelRoute;
@@ -65,6 +212,7 @@ class MapTab extends StatelessWidget {
     required this.showSearch,
     required this.userIsExploring,
     required this.isSatellite,
+    required this.isNightMode,
     required this.gasolinerasVisible,
     required this.gasolinerasLoading,
     required this.routeDrawn,
@@ -98,6 +246,7 @@ class MapTab extends StatelessWidget {
     required this.isListening,
     required this.onGasolinerasToggle,
     required this.onSatelliteToggle,
+    required this.onNightModeToggle,
     required this.onTapConfirm,
     required this.onTapCancel,
     required this.onCancelRoute,
@@ -128,7 +277,6 @@ class MapTab extends StatelessWidget {
   Widget _buildSpeedometer() {
     final status = SpeedStatus.evaluate(currentSpeed, speedLimit);
 
-    // Colores según nivel de alerta
     final bgColor = switch (status.level) {
       SpeedAlertLevel.danger  => Colors.red[700]!,
       SpeedAlertLevel.warning => Colors.orange[700]!,
@@ -169,12 +317,10 @@ class MapTab extends StatelessWidget {
             'km/h',
             style: TextStyle(color: textColor.withOpacity(0.8)),
           ),
-          // Mostrar límite de velocidad si está disponible
           if (status.speedLimit != null) ...[
             const SizedBox(height: 6),
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 8, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.2),
                 borderRadius: BorderRadius.circular(8),
@@ -230,7 +376,6 @@ class MapTab extends StatelessWidget {
           ),
         ),
 
-
       // ── Botón micrófono flotante ───────────────────────
       if (!navigating)
         Positioned(
@@ -259,7 +404,7 @@ class MapTab extends StatelessWidget {
             ),
           ),
         ),
-      
+
       // ── Modal búsqueda ─────────────────────────────────
       if (showSearch && !navigating)
         Positioned(
@@ -359,25 +504,15 @@ class MapTab extends StatelessWidget {
           ),
         ),
 
-      // ── Botón satélite ─────────────────────────────────
+      // ── Botón capas (satélite + modo nocturno) ─────────
       if (!navigating)
         Positioned(
           bottom: 170, right: 16,
-          child: GestureDetector(
-            onTap: onSatelliteToggle,
-            child: Container(
-              width: 46, height: 46,
-              decoration: BoxDecoration(
-                color: isSatellite ? Colors.blue[700] : Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: const [BoxShadow(
-                    color: Colors.black38, blurRadius: 8,
-                    offset: Offset(0, 2))],
-              ),
-              child: Icon(Icons.satellite_alt,
-                  color: isSatellite ? Colors.white : Colors.blue,
-                  size: 24),
-            ),
+          child: _LayersButton(
+            isSatellite:       isSatellite,
+            isNightMode:       isNightMode,
+            onSatelliteToggle: onSatelliteToggle,
+            onNightModeToggle: onNightModeToggle,
           ),
         ),
 
@@ -656,8 +791,7 @@ class MapTab extends StatelessWidget {
             ),
           ),
         ),
-      
-      
+
       // ── Velocímetro modo libre ─────────────────────────
       if (!navigating && !routeDrawn && !showTapConfirm)
         Positioned(
