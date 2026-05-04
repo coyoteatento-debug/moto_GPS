@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
@@ -25,7 +26,15 @@ class MapboxApi {
         '&types=$types'
         '&limit=7'
         '$proximity';
-    final response = await http.get(Uri.parse(url));
+    final http.Response response;
+    try {
+      response = await http.get(Uri.parse(url))
+          .timeout(const Duration(seconds: 10));
+    } on TimeoutException {
+      return [];
+    } catch (_) {
+      return [];
+    }
     if (response.statusCode != 200) return [];
     final features = json.decode(response.body)['features'] as List;
     return features.map((f) {
@@ -44,7 +53,15 @@ class MapboxApi {
     final url =
         'https://api.mapbox.com/geocoding/v5/mapbox.places/$lng,$lat.json'
         '?access_token=$token&language=es&limit=1';
-    final response = await http.get(Uri.parse(url));
+    final http.Response response;
+    try {
+      response = await http.get(Uri.parse(url))
+          .timeout(const Duration(seconds: 10));
+    } on TimeoutException {
+      return 'Destino seleccionado';
+    } catch (_) {
+      return 'Destino seleccionado';
+    }
     if (response.statusCode != 200) return 'Destino seleccionado';
     final features = json.decode(response.body)['features'] as List;
     if (features.isEmpty) return 'Destino seleccionado';
@@ -63,7 +80,15 @@ class MapboxApi {
         '$originLng,$originLat;$destLng,$destLat'
         '?geometries=geojson&steps=true&access_token=$token'
         '&language=es&overview=full&continue_straight=true&alternatives=true';
-    final response = await http.get(Uri.parse(url));
+    final http.Response response;
+    try {
+      response = await http.get(Uri.parse(url))
+          .timeout(const Duration(seconds: 15));
+    } on TimeoutException {
+      return null;
+    } catch (_) {
+      return null;
+    }
     if (response.statusCode != 200) return null;
     final data = json.decode(response.body);
     final routes = data['routes'] as List;
