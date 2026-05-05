@@ -1,11 +1,12 @@
-import 'dart:math';
+import '../../core/utils/geo_utils.dart';
 import '../../data/models/trip_record.dart';
 import '../../data/sources/prefs_source.dart';
 
 class TripService {
   final PrefsSource _prefs;
+  final GeoUtils _geo;
 
-  TripService(this._prefs);
+  TripService(this._prefs, this._geo);
 
   DateTime? _startTime;
   double _accumulatedDistance = 0.0;
@@ -25,7 +26,7 @@ class TripService {
   // ── Acumular distancia ────────────────────────────────
   void accumulate(double lat, double lng) {
     if (_lastLat != null && _lastLng != null) {
-      _accumulatedDistance += _distanceBetween(
+      _accumulatedDistance += _geo.distanceBetween(
           _lastLat!, _lastLng!, lat, lng);
     }
     _lastLat = lat;
@@ -59,19 +60,5 @@ class TripService {
     _accumulatedDistance = 0.0;
     _lastLat             = null;
     _lastLng             = null;
-  }
-
-  // ── Distancia interna (Haversine) ─────────────────────
-  double _distanceBetween(
-      double lat1, double lng1, double lat2, double lng2) {
-    const R = 6371000.0;
-    final dLat = (lat2 - lat1) * pi / 180;
-    final dLng = (lng2 - lng1) * pi / 180;
-    final a = sin(dLat / 2) * sin(dLat / 2) +
-        cos(lat1 * pi / 180) *
-            cos(lat2 * pi / 180) *
-            sin(dLng / 2) *
-            sin(dLng / 2);
-    return R * 2 * atan2(sqrt(a), sqrt(1 - a));
   }
 }
