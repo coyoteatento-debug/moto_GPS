@@ -68,7 +68,7 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp>
   final SpeechToText _speech = SpeechToText();
   bool _speechAvailable  = false;
   bool _isListening      = false;
-  late final TripService _tripService = TripService(_prefsSource);
+  late final TripService _tripService = TripService(_prefsSource, const GeoUtils());
   late final NavigationService _navService =
       NavigationService(MapboxApi(_mapboxToken), const GeoUtils());
 
