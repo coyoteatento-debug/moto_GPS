@@ -96,7 +96,7 @@ class GpsService {
     _foregroundSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy:       LocationAccuracy.high,
-        distanceFilter: 0,
+        distanceFilter: 3,
       ),
     ).listen(
       (position) => _controller?.add(position),
