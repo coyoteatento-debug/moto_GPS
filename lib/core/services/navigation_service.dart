@@ -1,6 +1,5 @@
 import '../utils/geo_utils.dart';
 import '../../data/sources/mapbox_api.dart';
-import 'background_service.dart';
 
 class RouteData {
   final String distance;
@@ -21,7 +20,6 @@ class RouteData {
 class NavigationService {
   final MapboxApi  _api;
   final GeoUtils   _geo;
-  final BackgroundService _bg = BackgroundService();
 
   NavigationService(this._api, this._geo);
   
@@ -32,7 +30,6 @@ class NavigationService {
     required double destLat,
     required double destLng,
   }) async {
-    _bg.updateInstruction('Calculando ruta...');
     final data = await _api.getRoute(
       originLat: originLat,
       originLng: originLng,
@@ -113,12 +110,6 @@ class NavigationService {
       nextIndex       = currentStepIndex + 1;
       nextInstruction = steps[nextIndex]['instruction'] as String;
       nextDistance    = steps[nextIndex]['distance'] as double;
-    }
-
-    // Actualizar notificación con la instrucción actual
-    final instruction = step['instruction'] as String;
-    if (instruction.isNotEmpty) {
-      _bg.updateInstruction(instruction);
     }
     
     return TurnUpdate(
