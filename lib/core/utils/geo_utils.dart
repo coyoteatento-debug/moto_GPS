@@ -27,12 +27,15 @@ class GeoUtils {
     return (atan2(y, x) * 180 / pi + 360) % 360;
   }
 
-  // ── Índice del punto más cercano en la ruta ───────────
   int findClosestPointIndex(
-      double lat, double lng, List<List<double>> routeCoords) {
+      double lat, double lng, List<List<double>> routeCoords,
+      {int lastIdx = 0}) {
+    if (routeCoords.isEmpty) return 0;
+    final start = (lastIdx - 10).clamp(0, routeCoords.length - 1);
+    final end   = (lastIdx + 25).clamp(0, routeCoords.length);
     double minDist = double.infinity;
-    int idx = 0;
-    for (int i = 0; i < routeCoords.length; i++) {
+    int idx = lastIdx;
+    for (int i = start; i < end; i++) {
       final d = distanceBetween(
           lat, lng, routeCoords[i][1], routeCoords[i][0]);
       if (d < minDist) {
