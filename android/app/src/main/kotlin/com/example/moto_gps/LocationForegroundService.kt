@@ -4,12 +4,10 @@ import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.location.Location
-import android.location.LocationListener
-import android.location.LocationManager
 import android.os.*
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.google.android.gms.location.*
 
 class LocationForegroundService : Service() {
 
@@ -25,12 +23,13 @@ class LocationForegroundService : Service() {
         var onLocationUpdate: ((Double, Double, Float, Float) -> Unit)? = null
     }
 
-    private lateinit var locationManager: LocationManager
+    private lateinit var fusedClient: FusedLocationProviderClient
     private lateinit var notificationManager: NotificationManager
     private var currentInstruction = "Navegando..."
 
-    private val locationListener = object : LocationListener {
-        override fun onLocationChanged(location: Location) {
+    private val locationCallback = object : LocationCallback() {
+        override fun onLocationResult(result: LocationResult) {
+            val location = result.lastLocation ?: return
             onLocationUpdate?.invoke(
                 location.latitude,
                 location.longitude,
@@ -38,18 +37,12 @@ class LocationForegroundService : Service() {
                 location.bearing
             )
         }
-        @Deprecated("Deprecated in Java")
-        override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
-        override fun onProviderEnabled(provider: String) {}
-        override fun onProviderDisabled(provider: String) {}
     }
-
-    // ── Ciclo de vida ────────────────────────────────────────────────
 
     override fun onCreate() {
         super.onCreate()
         notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        locationManager    = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        fusedClient = LocationServices.getFusedLocationProviderClient(this)
         createNotificationChannel()
         Log.d(TAG, "Servicio creado")
     }
@@ -76,15 +69,13 @@ class LocationForegroundService : Service() {
     }
 
     override fun onDestroy() {
-        locationManager.removeUpdates(locationListener)
+        fusedClient.removeLocationUpdates(locationCallback)
         onLocationUpdate = null
         Log.d(TAG, "Servicio destruido")
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
-
-    // ── Foreground Service ───────────────────────────────────────────
 
     private fun startForegroundService() {
         val notification = buildNotification(currentInstruction)
@@ -99,7 +90,24 @@ class LocationForegroundService : Service() {
         }
     }
 
-    // ── Notificación ─────────────────────────────────────────────────
+    private fun startLocationUpdates() {
+        val request = LocationRequest.Builder(
+            Priority.PRIORITY_HIGH_ACCURACY, 1000L
+        ).apply {
+            setMinUpdateIntervalMillis(500L)
+            setMinUpdateDistanceMeters(3f)
+        }.build()
+
+        try {
+            fusedClient.requestLocationUpdates(
+                request,
+                locationCallback,
+                Looper.getMainLooper()
+            )
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Sin permiso de ubicación: ${e.message}")
+        }
+    }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -117,8 +125,7 @@ class LocationForegroundService : Service() {
 
     private fun buildNotification(instruction: String): Notification {
         val pendingIntent = PendingIntent.getActivity(
-            this,
-            0,
+            this, 0,
             packageManager.getLaunchIntentForPackage(packageName),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -128,34 +135,11 @@ class LocationForegroundService : Service() {
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
-            .setSilent(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
 
     private fun updateNotification(instruction: String) {
-        notificationManager.notify(NOTIFICATION_ID, buildNotification(instruction))
-    }
-
-    // ── GPS nativo ───────────────────────────────────────────────────
-
-    @Suppress("MissingPermission")
-    private fun startLocationUpdates() {
-        val providers = listOf(
-            LocationManager.GPS_PROVIDER,
-            LocationManager.NETWORK_PROVIDER
-        )
-        providers.forEach { provider ->
-            if (locationManager.isProviderEnabled(provider)) {
-                locationManager.requestLocationUpdates(
-                    provider,
-                    1000L,   // cada 1 segundo
-                    3f,      // mínimo 3 metros
-                    locationListener,
-                    Looper.getMainLooper()
-                )
-                Log.d(TAG, "GPS iniciado con provider: $provider")
-            }
-        }
+        val notification = buildNotification(instruction)
+        notificationManager.notify(NOTIFICATION_ID, notification)
     }
 }
