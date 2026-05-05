@@ -550,6 +550,7 @@ void _checkRouteDeviation(double lat, double lng) {
   DateTime _lastUserInteraction = DateTime.fromMillisecondsSinceEpoch(0);
 
   void _startSmoothMarker() {
+    if (_smoothSub != null) return;
     _smoothSub = _smoother.positionStream.listen((SmoothPosition pos) {
       if (!mounted) return;
 
@@ -566,6 +567,7 @@ void _checkRouteDeviation(double lat, double lng) {
   
   // ── GPS Tracking ──────────────────────────────────────
   Future<void> _startLocationTracking() async {
+    if (_locationSubscription != null) return;
     await _gpsService.startTracking();
     _locationSubscription = _gpsService.positionStream.listen((Position position) {
       if (!mounted) return;
