@@ -1,4 +1,4 @@
-name: Moto GPS Build Release v2
+name: Moto GPS Build Release v3
 
 on:
   push:
