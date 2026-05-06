@@ -29,8 +29,8 @@ android {
         applicationId "com.coyoteatento.motogps"
         minSdkVersion 24
         targetSdkVersion 35
-        versionCode (System.getenv("VERSION_CODE") ?: "1").toInteger()
-        versionName System.getenv("VERSION_NAME") ?: "1.0.0"
+        versionCode Integer.parseInt(System.getenv("VERSION_CODE") ?: "1")
+        versionName (System.getenv("VERSION_NAME") ?: "1.0.0")
         multiDexEnabled true
         manifestPlaceholders = [
             MAPBOX_TOKEN: mapboxToken,
