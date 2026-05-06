@@ -18,6 +18,13 @@ class RouteData {
 }
 
 class NavigationService {
+  // ── Umbrales de anuncio TTS ───────────────────────────
+  static const double kAnnounceEarlyDist  = 150.0; // anuncio temprano (m)
+  static const double kAnnounceEarlyMin   = 120.0; // mínimo para anuncio temprano
+  static const double kAnnounceFinalDist  =  50.0; // anuncio final (m)
+  static const double kAnnounceFinalMin   =  30.0; // mínimo para anuncio final
+  static const double kAdvanceStepDist    =  15.0; // avanzar al siguiente paso
+  
   final MapboxApi  _api;
   final GeoUtils   _geo;
 
