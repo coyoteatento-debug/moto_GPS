@@ -1224,16 +1224,17 @@ void _checkWaypointArrival(double lat, double lng) {
       case AppLifecycleState.resumed:
         _applyNightOrDayStyle();
         final permission = await Geolocator.checkPermission();
+        if (!mounted) break;                          // ← AGREGADO
         final hasPermission = permission == LocationPermission.always ||
                               permission == LocationPermission.whileInUse;
         if (!hasPermission) break;
         if (_locationSubscription != null) {
-          // Tracking ya activo — solo restaurar foreground
           _gpsService.onAppForeground();
         } else {
-          // Primera vez o tracking no iniciado — iniciar GPS
           await _mapReadyCompleter.future;
+          if (!mounted) break;                        // ← AGREGADO
           await _getInitialPosition();
+          if (!mounted) break;                        // ← AGREGADO
           _startLocationTracking();
         }
         break;
