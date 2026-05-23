@@ -386,7 +386,7 @@ class MapTab extends StatelessWidget {
       // ── Botón búsqueda ─────────────────────────────────
       if (!navigating)
         Positioned(
-          top: 50, right: 16,
+          top: MediaQuery.of(context).padding.top + 8, right: 16,
           child: GestureDetector(
             onTap: onSearchToggle,
             child: Container(
@@ -406,7 +406,7 @@ class MapTab extends StatelessWidget {
       // ── Botón micrófono flotante ───────────────────────
       if (!navigating)
         Positioned(
-          top: 50, right: 70,
+          top: MediaQuery.of(context).padding.top + 8, right: 70,
           child: GestureDetector(
             onTap: onVoiceSearch,
             child: AnimatedContainer(
@@ -473,7 +473,7 @@ class MapTab extends StatelessWidget {
       // ── Botón avatar ───────────────────────────────────
       if (!navigating && !showSearch)
         Positioned(
-          top: 106, right: 16,
+          top: MediaQuery.of(context).padding.top + 64, right: 16,
           child: GestureDetector(
             onTap: onAvatarPick,
             child: Container(
