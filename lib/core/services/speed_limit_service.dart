@@ -26,64 +26,46 @@ class SpeedLimitService {
     }
 
     _isFetching = true;
+    final client = http.Client();
     try {
       final query =
           '[out:json][timeout:10];'
           'way[maxspeed](around:25,$lat,$lng);'
           'out tags 1;';
-
       final uri = Uri.parse('https://overpass-api.de/api/interpreter');
-
-      final client = http.Client();                 // ← AGREGADO
-      try {
-        final response = await client.post(         // ← client.post en vez de http.post
-          uri,
-          headers: {
-            'User-Agent':   'MotoGPS/1.0',
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: 'data=${Uri.encodeComponent(query)}',
-        ).timeout(
-          const Duration(seconds: 10),
-          onTimeout: () {                           // ← AGREGADO
-            client.close();                         // ← cancela la conexión
-            throw TimeoutException('SpeedLimit timeout');
-          },
-        );
-        if (response.statusCode != 200) return _lastSpeedLimit;
-        final elements = json.decode(response.body)['elements'] as List;
-        // ... resto sin cambios hasta el return limit
-        return limit;
-      } catch (_) {
-        return _lastSpeedLimit;
-      } finally {
-        client.close();                             // ← cierre garantizado
-        _isFetching = false;
-      }
-
+      final response = await client.post(
+        uri,
+        headers: {
+          'User-Agent':   'MotoGPS/1.0',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'data=${Uri.encodeComponent(query)}',
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          client.close();
+          throw TimeoutException('SpeedLimit timeout');
+        },
+      );
       if (response.statusCode != 200) return _lastSpeedLimit;
-
       final elements = json.decode(response.body)['elements'] as List;
       if (elements.isEmpty) {
         _lastSpeedLimit = null;
         return null;
       }
-
-      // Tomar el primer resultado — es la vía más cercana
       final tags     = elements[0]['tags'] as Map<String, dynamic>?;
       final maxspeed = tags?['maxspeed'] as String?;
-
-      final limit = _parseSpeedLimit(maxspeed);
-
-      // Guardar resultado para evitar consultas repetidas
+      final limit    = _parseSpeedLimit(maxspeed);
       _lastSpeedLimit = limit;
       _lastQueryLat   = lat;
       _lastQueryLng   = lng;
       _lastQueryTime  = DateTime.now();
-
       return limit;
     } catch (_) {
-      return _lastSpeedLimit; // Retornar último conocido si falla
+      return _lastSpeedLimit;
+    } finally {
+      client.close();
+      _isFetching = false;
     }
   }
 
