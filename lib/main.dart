@@ -4,7 +4,6 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
 import 'dart:typed_data';
 import 'dart:math';
 import 'data/models/trip_record.dart';
-import 'presentation/widgets/route_painter.dart';
 import 'dart:async';
 import 'data/sources/mapbox_api.dart';
 import 'data/sources/overpass_api.dart';
