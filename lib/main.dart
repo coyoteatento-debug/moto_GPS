@@ -619,7 +619,7 @@ Future<Uint8List> _createWaypointImage(int number) async {
     final bytes2   = await image2.toByteData(format: ui.ImageByteFormat.png);
     image2.dispose();
     if (bytes2 == null) return _s.pinImage ?? Uint8List(0);
-    return bytes2!.buffer.asUint8List();
+    return bytes2.buffer.asUint8List();
   }
 
   Future<void> _addWaypointAnnotation(
