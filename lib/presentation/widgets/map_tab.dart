@@ -279,15 +279,6 @@ class MapTab extends StatelessWidget {
     return Icons.navigation;
   }
 
-  Widget _tripStat(IconData icon, String label, Color color) {
-    return Row(children: [
-      Icon(icon, color: color, size: 16),
-      const SizedBox(width: 4),
-      Text(label, style: TextStyle(
-          color: color, fontWeight: FontWeight.w600, fontSize: 13)),
-    ]);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Stack(children: [
