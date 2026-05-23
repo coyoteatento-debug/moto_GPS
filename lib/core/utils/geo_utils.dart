@@ -68,18 +68,19 @@ class GeoUtils {
     if (routeCoords.length < 2) return [lng, lat];
     double minDist = double.infinity;
     List<double> snapped = [lng, lat];
+    final cosLat = cos(lat * pi / 180);           // ← AGREGADO
     for (int i = 0; i < routeCoords.length - 1; i++) {
       final a = routeCoords[i];
       final b = routeCoords[i + 1];
-      final abX = b[0] - a[0];
+      final abX = (b[0] - a[0]) * cosLat;         // ← cosLat aplicado
       final abY = b[1] - a[1];
-      final apX = lng - a[0];
+      final apX = (lng - a[0]) * cosLat;           // ← cosLat aplicado
       final apY = lat - a[1];
       final ab2 = abX * abX + abY * abY;
       if (ab2 == 0) continue;
       final t = ((apX * abX + apY * abY) / ab2).clamp(0.0, 1.0);
-      final pLng = a[0] + t * abX;
-      final pLat = a[1] + t * abY;
+      final pLng = a[0] + t * (b[0] - a[0]);      // ← sin cosLat para el resultado
+      final pLat = a[1] + t * (b[1] - a[1]);
       final d = distanceBetween(lat, lng, pLat, pLng);
       if (d < minDist) {
         minDist = d;
@@ -89,16 +90,16 @@ class GeoUtils {
     return snapped;
   }
 
-  // ── Distancia mínima del punto a la ruta (metros) ─────
   double distanceToRoute(
       double lat, double lng, List<List<double>> routeCoords) {
     double minDist = double.infinity;
+    final cosLat = cos(lat * pi / 180);           // ← AGREGADO
     for (int i = 0; i < routeCoords.length - 1; i++) {
       final a = routeCoords[i];
       final b = routeCoords[i + 1];
-      final abX = b[0] - a[0];
+      final abX = (b[0] - a[0]) * cosLat;         // ← cosLat aplicado
       final abY = b[1] - a[1];
-      final apX = lng - a[0];
+      final apX = (lng - a[0]) * cosLat;           // ← cosLat aplicado
       final apY = lat - a[1];
       final ab2 = abX * abX + abY * abY;
       if (ab2 == 0) continue;
