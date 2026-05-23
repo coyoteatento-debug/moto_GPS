@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_tts/flutter_tts.dart';
 
 class TtsService {
@@ -16,21 +17,33 @@ class TtsService {
     });
   }
 
+  Timer? _safetyTimer;                              // ← AGREGADO
+
   Future<void> speak(String text) async {
     if (text.isEmpty) return;
     if (_isSpeaking) return;
     if (text == _lastSpoken) return;
     _isSpeaking = true;
     _lastSpoken = text;
+    _safetyTimer?.cancel();                         // ← AGREGADO
+    _safetyTimer = Timer(                           // ← AGREGADO
+      const Duration(seconds: 15),
+      () {
+        _isSpeaking = false;
+        _lastSpoken = '';
+      },
+    );
     try {
       await _tts.speak(text);
     } catch (_) {
       _isSpeaking = false;
       _lastSpoken = '';
+      _safetyTimer?.cancel();                       // ← AGREGADO
     }
   }
 
   Future<void> stop() async {
+    _safetyTimer?.cancel();
     _isSpeaking = false;       // ← agrega esta línea
     _lastSpoken = '';
     await _tts.stop();
