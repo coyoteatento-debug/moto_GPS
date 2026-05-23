@@ -31,8 +31,7 @@ class BackgroundService {
       await _controller?.close();
       _controller = null;
     } on PlatformException catch (e) {
-      // ignore: avoid_print
-      print('[BackgroundService] Error al detener: ${e.message}');
+      debugPrint('[BackgroundService] Error al detener: ${e.message}');
     }
   }
 
@@ -43,8 +42,7 @@ class BackgroundService {
         {'instruction': instruction},
       );
     } on PlatformException catch (e) {
-      // ignore: avoid_print
-      print('[BackgroundService] Error al actualizar instruccion: ${e.message}');
+      debugPrint('[BackgroundService] Error al actualizar instruccion: ${e.message}');
     }
   }
 
