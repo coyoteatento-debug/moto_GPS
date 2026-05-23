@@ -10,7 +10,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4        # ✅ v3 → v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4        # ✅ v3 → v4
 
       - name: Setup Java
         uses: actions/setup-java@v4      # ✅ v3 → v4
@@ -19,7 +19,7 @@ jobs:
           java-version: '17'
 
       - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@fd5dcd775dc3d8a8b4f76cb4e0ab6ebf935a621c # v2
         with:
           flutter-version: '3.29.2'
           channel: 'stable'
