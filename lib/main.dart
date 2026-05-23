@@ -926,6 +926,9 @@ void _checkWaypointArrival(double lat, double lng) {
     }
     // Redibujar waypoints
     if (_s.waypoints.isNotEmpty) {
+      for (final a in _waypointAnnotations) {  // ← AGREGADO
+        try { await annotationManager!.delete(a); } catch (_) {}
+      }
       _waypointAnnotations.clear();
       for (final wp in _s.waypoints) {
         await _addWaypointAnnotation(
