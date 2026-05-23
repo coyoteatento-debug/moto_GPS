@@ -11,9 +11,9 @@ class PrefsSource {
 
   // ── Avatar ────────────────────────────────────────────
   Future<bool> saveAvatar(Uint8List bytes) async {
-    final prefs  = await _instance;
+    final prefs   = await _instance;
     final encoded = base64Encode(bytes);
-    if (encoded.length > 800000) return false;  // ← guard ~800KB base64
+    if (encoded.length > 800000) return false;
     return await prefs.setString('user_avatar', encoded);
   }
 
