@@ -132,7 +132,16 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp>
     final bytes = await _imageUtils.pickImageFromGallery();
     if (bytes == null) return;
     final circular = await _imageUtils.makeCircularImage(bytes, 70);
-    await _prefsSource.saveAvatar(circular);
+    final saved = await _prefsSource.saveAvatar(circular);
+    if (!saved && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Imagen muy grande, intenta con una más pequeña'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
     _n.setUserAvatar(circular);
     if (motoAnnotation != null && annotationManager != null) {
       await _mapService.deleteAnnotation(
