@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -33,14 +34,32 @@ class SpeedLimitService {
 
       final uri = Uri.parse('https://overpass-api.de/api/interpreter');
 
-      final response = await http.post(
-        uri,
-        headers: {
-          'User-Agent':   'MotoGPS/1.0',
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: 'data=${Uri.encodeComponent(query)}',
-      ).timeout(const Duration(seconds: 10));
+      final client = http.Client();                 // ← AGREGADO
+      try {
+        final response = await client.post(         // ← client.post en vez de http.post
+          uri,
+          headers: {
+            'User-Agent':   'MotoGPS/1.0',
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: 'data=${Uri.encodeComponent(query)}',
+        ).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {                           // ← AGREGADO
+            client.close();                         // ← cancela la conexión
+            throw TimeoutException('SpeedLimit timeout');
+          },
+        );
+        if (response.statusCode != 200) return _lastSpeedLimit;
+        final elements = json.decode(response.body)['elements'] as List;
+        // ... resto sin cambios hasta el return limit
+        return limit;
+      } catch (_) {
+        return _lastSpeedLimit;
+      } finally {
+        client.close();                             // ← cierre garantizado
+        _isFetching = false;
+      }
 
       if (response.statusCode != 200) return _lastSpeedLimit;
 
