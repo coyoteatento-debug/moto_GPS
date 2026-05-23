@@ -17,19 +17,28 @@ class OverpassApi {
 
     final uri = Uri.parse('https://overpass-api.de/api/interpreter');
 
-    final response = await http.post(
-      uri,
-      headers: {
-        'User-Agent': 'MotoGPS/1.0',
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: 'data=${Uri.encodeComponent(query)}',
-    ).timeout(const Duration(seconds: 45));
-    if (response.statusCode != 200) {
-      throw Exception('Overpass HTTP ${response.statusCode}');
+    final http.Response response;
+    try {
+      response = await http.post(
+        uri,
+        headers: {
+          'User-Agent': 'MotoGPS/1.0',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'data=${Uri.encodeComponent(query)}',
+      ).timeout(const Duration(seconds: 45));
+    } on TimeoutException {
+      return null;
+    } catch (_) {
+      return null;
     }
-
-    final elements = json.decode(response.body)['elements'] as List;
+    if (response.statusCode != 200) return null;
+    final List elements;
+    try {
+      elements = json.decode(response.body)['elements'] as List;
+    } catch (_) {
+      return null;
+    }
     if (elements.isEmpty) return null;
 
     final features = elements.map((e) {
