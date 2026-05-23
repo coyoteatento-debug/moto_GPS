@@ -21,7 +21,6 @@ class MapboxApi {
         'https://api.mapbox.com/geocoding/v5/mapbox.places/'
         '${Uri.encodeComponent(query)}.json'
         '?language=es'
-        '&country=MX,US'
         '&types=$types'
         '&limit=7'
         '$proximity';
