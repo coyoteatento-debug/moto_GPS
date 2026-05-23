@@ -114,11 +114,13 @@ class SmoothLocationService {
       final extraSec   = (extraMs / 1000.0).clamp(0.0, 0.5);
       final distMeters = _speedMs * extraSec;
       const R          = 6371000.0;
-      final dLat       = (distMeters * cos(_bearingR)) / R;
-      final dLng       = (distMeters * sin(_bearingR)) /
-                         (R * cos(_toLat! * pi / 180));
-      lat += dLat * 180 / pi;
-      lng += dLng * 180 / pi;
+      final cosLat     = cos((_toLat ?? lat) * pi / 180); // ← null-safe
+      if (cosLat.abs() > 0.001) {                         // ← guard división por cero
+        final dLat = (distMeters * cos(_bearingR)) / R;
+        final dLng = (distMeters * sin(_bearingR)) / (R * cosLat);
+        lat += dLat * 180 / pi;
+        lng += dLng * 180 / pi;
+      }
     }
 
     _controller!.add(SmoothPosition(
