@@ -10,9 +10,11 @@ class PrefsSource {
       _prefs ??= await SharedPreferences.getInstance();
 
   // ── Avatar ────────────────────────────────────────────
-  Future<void> saveAvatar(Uint8List bytes) async {
-    final prefs = await _instance;
-    await prefs.setString('user_avatar', base64Encode(bytes));
+  Future<bool> saveAvatar(Uint8List bytes) async {
+    final prefs  = await _instance;
+    final encoded = base64Encode(bytes);
+    if (encoded.length > 800000) return false;  // ← guard ~800KB base64
+    return await prefs.setString('user_avatar', encoded);
   }
 
   Future<Uint8List?> loadAvatar() async {
