@@ -18,8 +18,7 @@ class BackgroundService {
       await _methodChannel.invokeMethod('startService');
       _startListening();
     } on PlatformException catch (e) {
-      // ignore: avoid_print
-      print('[BackgroundService] Error al iniciar: ${e.message}');
+      debugPrint('[BackgroundService] Error al iniciar: ${e.message}');
     }
   }
 
