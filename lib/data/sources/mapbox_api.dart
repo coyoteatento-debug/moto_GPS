@@ -20,15 +20,15 @@ class MapboxApi {
     final url =
         'https://api.mapbox.com/geocoding/v5/mapbox.places/'
         '${Uri.encodeComponent(query)}.json'
-        '?access_token=$token'
-        '&language=es'
+        '?language=es'
         '&country=MX,US'
         '&types=$types'
         '&limit=7'
         '$proximity';
     final http.Response response;
     try {
-      response = await http.get(Uri.parse(url))
+      response = await http.get(Uri.parse(url),
+          headers: {'Authorization': 'Bearer $token'})
           .timeout(const Duration(seconds: 10));
     } on TimeoutException {
       return [];
@@ -52,10 +52,11 @@ class MapboxApi {
   Future<String> reverseGeocode(double lat, double lng) async {
     final url =
         'https://api.mapbox.com/geocoding/v5/mapbox.places/$lng,$lat.json'
-        '?access_token=$token&language=es&limit=1';
+        '?language=es&limit=1';
     final http.Response response;
     try {
-      response = await http.get(Uri.parse(url))
+      response = await http.get(Uri.parse(url),
+          headers: {'Authorization': 'Bearer $token'})
           .timeout(const Duration(seconds: 10));
     } on TimeoutException {
       return 'Destino seleccionado';
@@ -85,11 +86,12 @@ class MapboxApi {
     final coords = buffer.toString();
     final url =
         'https://api.mapbox.com/directions/v5/mapbox/driving/$coords'
-        '?geometries=geojson&steps=true&access_token=$token'
+        '?geometries=geojson&steps=true'
         '&language=es&overview=full&continue_straight=true&alternatives=true';
     final http.Response response;
     try {
-      response = await http.get(Uri.parse(url))
+      response = await http.get(Uri.parse(url),
+          headers: {'Authorization': 'Bearer $token'})
           .timeout(const Duration(seconds: 15));
     } on TimeoutException {
       return null;
