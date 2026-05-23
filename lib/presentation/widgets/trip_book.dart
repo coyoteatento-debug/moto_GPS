@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../data/models/trip_record.dart';
-import 'route_painter.dart';
 
 class TripBook extends StatelessWidget {
   final List<TripRecord> trips;
@@ -13,91 +12,87 @@ class TripBook extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(
-        height: MediaQuery.of(context).size.height * 0.55,
         decoration: const BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
+            // Handle
             Container(
-              margin: const EdgeInsets.only(top: 12),
               width: 40, height: 4,
               decoration: BoxDecoration(
                 color: Colors.grey[300],
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  const Icon(Icons.location_on, color: Colors.red, size: 18),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      trip.destination,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
+            const SizedBox(height: 20),
+            // Destino
+            Row(children: [
+              const Icon(Icons.location_on, color: Colors.red, size: 22),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  trip.destination,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 17),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  _tripStat(Icons.straighten, '${trip.distanceKm} km', Colors.blue),
-                  const SizedBox(width: 20),
-                  _tripStat(Icons.timer_outlined, '${trip.durationMin} min', Colors.orange),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-                child: trip.routeCoords.length >= 2
-                    ? Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF5F0E8),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.grey[300]!),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: CustomPaint(
-                            painter: RoutePainter(trip.routeCoords),
-                            size: Size.infinite,
-                          ),
-                        ),
-                      )
-                    : const Center(
-                        child: Text('Sin datos de ruta',
-                            style: TextStyle(color: Colors.grey)),
-                      ),
-              ),
-            ),
+            ]),
+            const SizedBox(height: 24),
+            // Tarjetas de estadísticas
+            Row(children: [
+              _statCard(Icons.straighten,
+                  '${trip.distanceKm} km', 'Distancia', Colors.blue),
+              const SizedBox(width: 12),
+              _statCard(Icons.timer_outlined,
+                  '${trip.durationMin} min', 'Duración', Colors.orange),
+              const SizedBox(width: 12),
+              _statCard(Icons.calendar_today_outlined,
+                  _formatDate(trip.date), 'Fecha', Colors.teal),
+            ]),
+            const SizedBox(height: 16),
           ],
         ),
       ),
     );
   }
 
-  Widget _tripStat(IconData icon, String label, Color color) {
-    return Row(
-      children: [
-        Icon(icon, color: color, size: 16),
-        const SizedBox(width: 4),
-        Text(label,
-            style: TextStyle(
-                color: color, fontWeight: FontWeight.w600, fontSize: 13)),
-      ],
+  Widget _statCard(IconData icon, String value, String label, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withOpacity(0.2)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(height: 8),
+            Text(value, style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.bold,
+                fontSize: 15)),
+            const SizedBox(height: 4),
+            Text(label, style: const TextStyle(
+                color: Colors.grey,
+                fontSize: 11)),
+          ],
+        ),
+      ),
     );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/'
+           '${date.month.toString().padLeft(2, '0')}/'
+           '${date.year}';
   }
 
   @override
@@ -131,17 +126,14 @@ class TripBook extends StatelessWidget {
           : ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: trips.length,
+              cacheExtent: 500,                    // ← AGREGADO
+              addRepaintBoundaries: true,           // ← AGREGADO
               itemBuilder: (_, i) {
                 final trip = trips[i];
-                final dateStr =
-                    '${trip.date.day.toString().padLeft(2, '0')}/'
-                    '${trip.date.month.toString().padLeft(2, '0')}/'
-                    '${trip.date.year}  '
-                    '${trip.date.hour.toString().padLeft(2, '0')}:'
-                    '${trip.date.minute.toString().padLeft(2, '0')}';
-                return GestureDetector(
-                  onTap: () => _showTripRoute(context, trip),
-                  child: Container(
+                return RepaintBoundary(
+                  child: GestureDetector(
+                    onTap: () => _showTripRoute(context, trip),
+                    child: Container(
                     margin: const EdgeInsets.only(bottom: 14),
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -173,11 +165,17 @@ class TripBook extends StatelessWidget {
                           const SizedBox(height: 10),
                           Row(
                             children: [
-                              _tripStat(Icons.straighten, '${trip.distanceKm} km', Colors.blue),
-                              const SizedBox(width: 20),
-                              _tripStat(Icons.timer_outlined, '${trip.durationMin} min', Colors.orange),
+                              Icon(Icons.straighten, color: Colors.blue, size: 16),
+                              const SizedBox(width: 4),
+                              Text('${trip.distanceKm} km',
+                                  style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.w600, fontSize: 13)),
+                              const SizedBox(width: 16),
+                              Icon(Icons.timer_outlined, color: Colors.orange, size: 16),
+                              const SizedBox(width: 4),
+                              Text('${trip.durationMin} min',
+                                  style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.w600, fontSize: 13)),
                               const Spacer(),
-                              Text(dateStr,
+                              Text(_formatDate(trip.date),
                                   style: const TextStyle(color: Colors.grey, fontSize: 11)),
                             ],
                           ),
@@ -185,9 +183,10 @@ class TripBook extends StatelessWidget {
                       ),
                     ),
                   ),
-                );
-              },
-            ),
+                ),
+              );
+            },
+          ),
     );
   }
 }
