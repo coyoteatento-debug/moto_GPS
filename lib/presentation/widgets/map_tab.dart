@@ -288,72 +288,6 @@ class MapTab extends StatelessWidget {
     ]);
   }
 
-  Widget _buildSpeedometer() {
-    final status = SpeedStatus.evaluate(currentSpeed, speedLimit);
-
-    final bgColor = switch (status.level) {
-      SpeedAlertLevel.danger  => Colors.red[700]!,
-      SpeedAlertLevel.warning => Colors.orange[700]!,
-      SpeedAlertLevel.normal  => Colors.black87,
-    };
-
-    final textColor = switch (status.level) {
-      SpeedAlertLevel.danger  => Colors.white,
-      SpeedAlertLevel.warning => Colors.white,
-      SpeedAlertLevel.normal  => Colors.white,
-    };
-
-    return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: status.level != SpeedAlertLevel.normal
-            ? [BoxShadow(
-                color: bgColor.withOpacity(0.6),
-                blurRadius: 12,
-                spreadRadius: 2,
-              )]
-            : null,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '${currentSpeed.toStringAsFixed(0)}',
-            style: TextStyle(
-              color:      textColor,
-              fontSize:   40,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          Text(
-            'km/h',
-            style: TextStyle(color: textColor.withOpacity(0.8)),
-          ),
-          if (status.speedLimit != null) ...[
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                'Límite: ${status.speedLimit} km/h',
-                style: TextStyle(
-                  color:    textColor.withOpacity(0.9),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Stack(children: [
@@ -867,7 +801,10 @@ class MapTab extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              _buildSpeedometer(),
+              _Speedometer(
+                currentSpeed: currentSpeed,
+                speedLimit:   speedLimit,
+              ),
               ElevatedButton.icon(
                 onPressed: onCancelRoute,
                 icon: const Icon(Icons.close, color: Colors.white),
@@ -958,8 +895,83 @@ class MapTab extends StatelessWidget {
       if (!navigating && !routeDrawn && !showTapConfirm)
         Positioned(
           bottom: 30, left: 20,
-          child: _buildSpeedometer(),
+          child: _Speedometer(
+            currentSpeed: currentSpeed,
+            speedLimit:   speedLimit,
+          ),
         ),
     ]);
+  }
+}
+
+class _Speedometer extends StatelessWidget {
+  final double currentSpeed;
+  final int?   speedLimit;
+
+  const _Speedometer({
+    required this.currentSpeed,
+    required this.speedLimit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final status = SpeedStatus.evaluate(currentSpeed, speedLimit);
+
+    final bgColor = switch (status.level) {
+      SpeedAlertLevel.danger  => Colors.red[700]!,
+      SpeedAlertLevel.warning => Colors.orange[700]!,
+      SpeedAlertLevel.normal  => Colors.black87,
+    };
+
+    final textColor = Colors.white;
+
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: status.level != SpeedAlertLevel.normal
+            ? [BoxShadow(
+                color: bgColor.withOpacity(0.6),
+                blurRadius: 12,
+                spreadRadius: 2,
+              )]
+            : null,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '${currentSpeed.toStringAsFixed(0)}',
+            style: TextStyle(
+              color:      textColor,
+              fontSize:   40,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          Text('km/h',
+              style: TextStyle(color: textColor.withOpacity(0.8))),
+          if (status.speedLimit != null) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'Límite: ${status.speedLimit} km/h',
+                style: TextStyle(
+                  color:      textColor.withOpacity(0.9),
+                  fontSize:   11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
