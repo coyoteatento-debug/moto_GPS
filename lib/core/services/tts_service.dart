@@ -61,6 +61,4 @@ class TtsService {
     _lastSpoken = '';
     await _tts.stop();
   }
-
-  void resetLastSpoken() => _lastSpoken = '';
 }
