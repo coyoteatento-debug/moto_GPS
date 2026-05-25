@@ -4,7 +4,8 @@ import 'package:http/http.dart' as http;
 
 class MapboxApi {
   final String token;
-  const MapboxApi(this.token);
+  final http.Client _client;
+  MapboxApi(this.token) : _client = http.Client();
 
   // ── Geocoding (buscador) ──────────────────────────────
   Future<List<Map<String, dynamic>>> searchPlaces(
@@ -26,7 +27,7 @@ class MapboxApi {
         '$proximity';
     final http.Response response;
     try {
-      response = await http.get(Uri.parse(url),
+      response = await _client.get(Uri.parse(url),
           headers: {'Authorization': 'Bearer $token'})
           .timeout(const Duration(seconds: 10));
     } on TimeoutException {
@@ -54,7 +55,7 @@ class MapboxApi {
         '?language=es&limit=1';
     final http.Response response;
     try {
-      response = await http.get(Uri.parse(url),
+      response = await _client.get(Uri.parse(url),
           headers: {'Authorization': 'Bearer $token'})
           .timeout(const Duration(seconds: 10));
     } on TimeoutException {
@@ -89,7 +90,7 @@ class MapboxApi {
         '&language=es&overview=full&continue_straight=true&alternatives=true';
     final http.Response response;
     try {
-      response = await http.get(Uri.parse(url),
+      response = await _client.get(Uri.parse(url),
           headers: {'Authorization': 'Bearer $token'})
           .timeout(const Duration(seconds: 15));
     } on TimeoutException {
