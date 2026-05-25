@@ -700,17 +700,16 @@ Future<Uint8List> _createWaypointImage(int number) async {
   DateTime _lastUserInteraction = DateTime.fromMillisecondsSinceEpoch(0);
 
   void _startSmoothMarker() {
-    if (_smoothSub != null) return;
+    if (_smoothSub != null) {
+      _smoothSub!.cancel();                        // ← cancela sub anterior
+      _smoothSub = null;                           // ← fuerza re-suscripción
+    }
     _smoothSub = _smoother.positionStream.listen((SmoothPosition pos) {
       if (!mounted) return;
-
       final now = DateTime.now();
-            // Pausar actualizaciones si el usuario interactuó hace menos de 150ms
-            if (now.difference(_lastUserInteraction).inMilliseconds < 150) return;
-            // Throttle a 30fps
-            if (now.difference(_lastMarkerUpdate).inMilliseconds < 33) return;
-            _lastMarkerUpdate = now;
-
+      if (now.difference(_lastUserInteraction).inMilliseconds < 150) return;
+      if (now.difference(_lastMarkerUpdate).inMilliseconds < 33) return;
+      _lastMarkerUpdate = now;
       _updateMotoMarker(pos.latitude, pos.longitude, pos.heading);
     });
   }
@@ -1230,6 +1229,7 @@ void _checkWaypointArrival(double lat, double lng) {
         final hasPermission = permission == LocationPermission.always ||
                               permission == LocationPermission.whileInUse;
         if (!hasPermission) break;
+        _startSmoothMarker();
         if (_locationSubscription != null) {
           _gpsService.onAppForeground();
         } else {
