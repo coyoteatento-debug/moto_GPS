@@ -7,7 +7,6 @@ import 'data/models/trip_record.dart';
 import 'dart:async';
 import 'data/sources/mapbox_api.dart';
 import 'data/sources/overpass_api.dart';
-import 'presentation/widgets/search_modal.dart';
 import 'presentation/widgets/trip_book.dart';
 import 'presentation/widgets/map_tab.dart';
 import 'data/sources/prefs_source.dart';
@@ -1027,23 +1026,6 @@ void _checkWaypointArrival(double lat, double lng) {
         mapbox.MapAnimationOptions(duration: 1500, startDelay: 0),
       );
     }
-  }
-
-  // ── Buscador UI ───────────────────────────────────────
-  Widget _buildSearchModal() {
-    return SearchModal(
-      controller:    _searchController,
-      isLoading:     _s.searchLoading,
-      results:       _s.searchResults,
-      onChanged:     _searchPlaces,
-      onClose: () {
-        _n.clearSearch();
-        _searchController.clear();
-      },
-      onSelect:      _selectSearchResult,
-      onVoiceSearch: _startVoiceSearch,
-      isListening:   _isListening,
-    );
   }
   
   // ── Libro de viajes UI ────────────────────────────────
