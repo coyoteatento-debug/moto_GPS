@@ -27,11 +27,17 @@ class PrefsSource {
   // ── Viajes ────────────────────────────────────────────
   Future<void> saveTrips(List<TripRecord> trips) async {
     final prefs   = await _instance;
-    final limited = trips.take(50).toList(); // máximo 50 viajes guardados
-    await prefs.setString(
-      'trip_records',
-      json.encode(limited.map((t) => t.toJson()).toList()),
-    );
+    final limited = trips.take(50).toList();
+    String encoded = json.encode(limited.map((t) => t.toJson()).toList());
+
+    // Si supera 600KB, reducir coordenadas a 50 puntos por viaje
+    if (encoded.length > 600000) {                            // ← AGREGADO
+      encoded = json.encode(
+        limited.map((t) => t.toJsonCompact()).toList(),       // ← AGREGADO
+      );
+    }
+
+    await prefs.setString('trip_records', encoded);
   }
 
   Future<List<TripRecord>> loadTrips() async {
