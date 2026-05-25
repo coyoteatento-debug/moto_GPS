@@ -1004,6 +1004,7 @@ void _checkWaypointArrival(double lat, double lng) {
   }
   
   Future<void> _startNavigation() async {
+    if (_s.navigating) return;
     _n.setNavigating(true);
     await _bgService.start();
     await WakelockPlus.enable();
