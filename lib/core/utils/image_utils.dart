@@ -11,6 +11,7 @@ class ImageUtils {
     final codec    = await ui.instantiateImageCodec(data, targetWidth: targetWidth);
     final frame    = await codec.getNextFrame();
     final byteData = await frame.image.toByteData(format: ui.ImageByteFormat.png);
+    frame.image.dispose();  
     if (byteData == null) throw Exception('Error al redimensionar imagen');
     return byteData.buffer.asUint8List();
   }
@@ -44,8 +45,10 @@ class ImageUtils {
     );
 
     final picture  = recorder.endRecording();
+    frame.image.dispose();
     final img      = await picture.toImage(size, size);
     final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+    img.dispose();
     if (byteData == null) throw Exception('Error al procesar imagen circular');
     return byteData.buffer.asUint8List();
   }
