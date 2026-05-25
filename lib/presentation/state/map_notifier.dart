@@ -122,7 +122,6 @@ class MapState {
     bool?                      isNightMode,
     bool?                      nightModeManual,
     int?                       speedLimit,
-    bool                       clearSpeedLimit = false,
     List<Map<String, dynamic>>? waypoints,
     bool?                       isSelectingWaypoints,
     bool?                       showWaypointArrival,
@@ -133,6 +132,7 @@ class MapState {
     bool clearSelectedPlace    = false,
     bool clearTappedLat        = false,
     bool clearTappedLng        = false,
+    bool clearSpeedLimit       = false,
   }) {
     return MapState(
       currentSpeed:           currentSpeed           ?? this.currentSpeed,
