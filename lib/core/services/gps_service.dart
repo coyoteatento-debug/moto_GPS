@@ -34,13 +34,6 @@ class GpsService {
     _startForegroundTracking();
   }
 
-  Future<void> startNavigationTracking() async {
-    if (_isTracking) return;
-    _isTracking = true;
-    await _bg.start();
-    _startForegroundTracking();
-  }
-
   /// Detiene el GPS completamente
   Future<void> stopTracking() async {
     if (!_isTracking) return;
