@@ -93,35 +93,35 @@ class SearchModal extends StatelessWidget {
               child: Text('Sin resultados', style: TextStyle(color: Colors.grey)),
             )
           else if (results.isNotEmpty && controller.text.length >= 3)
-            ConstrainedBox(                        // ← AGREGADO
+            ConstrainedBox(
               constraints: BoxConstraints(
                 maxHeight: MediaQuery.of(context).size.height * 0.4,
               ),
               child: ListView.separated(
                 shrinkWrap: true,
-                physics: const ClampingScrollPhysics(), // ← permite scroll si excede
+                physics: const ClampingScrollPhysics(),
                 itemCount: results.length,
                 separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (_, i) {
-                final place = results[i];
-                return ListTile(
-                  leading: const Icon(Icons.location_on_outlined, color: Colors.blue),
-                  title: Text(
-                    place['name'] as String,
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                  ),
-                  subtitle: Text(
-                    place['full_name'] as String,
-                    style: const TextStyle(fontSize: 11, color: Colors.grey),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  onTap: () => onSelect(place),
-                );
-              },
+                  final place = results[i];
+                  return ListTile(
+                    leading: const Icon(Icons.location_on_outlined, color: Colors.blue),
+                    title: Text(
+                      place['name'] as String,
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    ),
+                    subtitle: Text(
+                      place['full_name'] as String,
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () => onSelect(place),
+                  );
+                },
+              ),
             ),
-          );   
-        const SizedBox(height: 8),
+          const SizedBox(height: 8),
         ],
       ),
     );
