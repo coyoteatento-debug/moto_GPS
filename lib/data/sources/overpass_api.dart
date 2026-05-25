@@ -17,20 +17,29 @@ class OverpassApi {
 
     final uri = Uri.parse('https://overpass-api.de/api/interpreter');
 
+    final client = http.Client();                  // ← AGREGADO
     final http.Response response;
     try {
-      response = await http.post(
+      response = await client.post(               // ← client.post
         uri,
         headers: {
           'User-Agent': 'MotoGPS/1.0',
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: 'data=${Uri.encodeComponent(query)}',
-      ).timeout(const Duration(seconds: 45));
+      ).timeout(
+        const Duration(seconds: 45),
+        onTimeout: () {                            // ← AGREGADO
+          client.close();
+          throw TimeoutException('Overpass timeout');
+        },
+      );
     } on TimeoutException {
       return null;
     } catch (_) {
       return null;
+    } finally {
+      client.close();                              // ← AGREGADO
     }
     if (response.statusCode != 200) return null;
     final List elements;
