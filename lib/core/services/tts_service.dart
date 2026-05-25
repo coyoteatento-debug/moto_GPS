@@ -21,10 +21,14 @@ class TtsService {
       _ttsAvailable = true;                        // ← AGREGADO
     } catch (_) {
       try {
-        await _tts.setLanguage('es');              // ← fallback a español genérico
+        await _tts.setLanguage('es');
+        _tts.setCompletionHandler(() {             // ← AGREGADO
+          _isSpeaking = false;
+          _lastSpoken = '';
+        });
         _ttsAvailable = true;
       } catch (_) {
-        _ttsAvailable = false;                     // ← TTS no disponible
+        _ttsAvailable = false;
       }
     }
   }
