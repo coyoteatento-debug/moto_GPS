@@ -48,13 +48,28 @@ class GeoUtils {
 
     // Si el punto más cercano está a más de 200m, hubo un salto de GPS —
     // hacer búsqueda global para reanclar el índice correctamente
+    // Si el punto más cercano está a más de 200m, hubo un salto de GPS —
+    // ampliar ventana de búsqueda antes de hacer búsqueda global
     if (minDist > 200) {
-      for (int i = 0; i < routeCoords.length; i++) {
+      final wStart = (lastIdx - 50).clamp(0, routeCoords.length - 1); // ← ventana ampliada
+      final wEnd   = (lastIdx + 100).clamp(0, routeCoords.length);    // ← ventana ampliada
+      for (int i = wStart; i < wEnd; i++) {
         final d = distanceBetween(
             lat, lng, routeCoords[i][1], routeCoords[i][0]);
         if (d < minDist) {
           minDist = d;
           idx = i;
+        }
+      }
+      // Solo búsqueda global si la ventana ampliada tampoco encontró nada cercano
+      if (minDist > 200) {                                             // ← AGREGADO
+        for (int i = 0; i < routeCoords.length; i++) {
+          final d = distanceBetween(
+              lat, lng, routeCoords[i][1], routeCoords[i][0]);
+          if (d < minDist) {
+            minDist = d;
+            idx = i;
+          }
         }
       }
     }
