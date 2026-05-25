@@ -93,12 +93,16 @@ class SearchModal extends StatelessWidget {
               child: Text('Sin resultados', style: TextStyle(color: Colors.grey)),
             )
           else if (results.isNotEmpty && controller.text.length >= 3)
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: results.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (_, i) {
+            ConstrainedBox(                        // ← AGREGADO
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.4,
+              ),
+              child: ListView.separated(
+                shrinkWrap: true,
+                physics: const ClampingScrollPhysics(), // ← permite scroll si excede
+                itemCount: results.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (_, i) {
                 final place = results[i];
                 return ListTile(
                   leading: const Icon(Icons.location_on_outlined, color: Colors.blue),
@@ -116,7 +120,8 @@ class SearchModal extends StatelessWidget {
                 );
               },
             ),
-          const SizedBox(height: 8),
+          );   
+        const SizedBox(height: 8),
         ],
       ),
     );
