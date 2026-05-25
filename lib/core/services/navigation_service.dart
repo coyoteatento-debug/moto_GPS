@@ -155,12 +155,17 @@ class NavigationService {
   bool hasArrived(
     double lat,
     double lng,
-    List<List<double>> routeCoords,
-  ) {
+    List<List<double>> routeCoords, {
+    double maxDistanceMeters = 35,               // ← umbral de llegada
+  }) {
     if (routeCoords.isEmpty) return false;
     final idx = _geo.findClosestPointIndex(lat, lng, routeCoords,
         lastIdx: (routeCoords.length - 10).clamp(0, routeCoords.length - 1));
-    return idx >= routeCoords.length - 2;
+    if (idx < routeCoords.length - 2) return false; // ← aún lejos en índice
+    final last    = routeCoords.last;
+    final distEnd = _geo.distanceBetween(
+        lat, lng, last[1], last[0]);
+    return distEnd <= maxDistanceMeters;            // ← valida distancia real
   }
 }
 
