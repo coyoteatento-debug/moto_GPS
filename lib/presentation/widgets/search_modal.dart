@@ -92,7 +92,7 @@ class SearchModal extends StatelessWidget {
               padding: EdgeInsets.all(20),
               child: Text('Sin resultados', style: TextStyle(color: Colors.grey)),
             )
-          else
+          else if (results.isNotEmpty && controller.text.length >= 3)
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
