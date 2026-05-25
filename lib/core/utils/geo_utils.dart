@@ -47,8 +47,6 @@ class GeoUtils {
     }
 
     // Si el punto más cercano está a más de 200m, hubo un salto de GPS —
-    // hacer búsqueda global para reanclar el índice correctamente
-    // Si el punto más cercano está a más de 200m, hubo un salto de GPS —
     // ampliar ventana de búsqueda antes de hacer búsqueda global
     if (minDist > 200) {
       final wStart = (lastIdx - 50).clamp(0, routeCoords.length - 1); // ← ventana ampliada
