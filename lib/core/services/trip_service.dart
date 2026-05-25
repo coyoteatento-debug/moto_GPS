@@ -24,10 +24,15 @@ class TripService {
   }
 
   // ── Acumular distancia ────────────────────────────────
+  static const double _maxDeltaMeters = 150.0;    // ← umbral anti-spike
+
   void accumulate(double lat, double lng) {
     if (_lastLat != null && _lastLng != null) {
-      _accumulatedDistance += _geo.distanceBetween(
+      final delta = _geo.distanceBetween(
           _lastLat!, _lastLng!, lat, lng);
+      if (delta <= _maxDeltaMeters) {              // ← ignora spikes
+        _accumulatedDistance += delta;
+      }
     }
     _lastLat = lat;
     _lastLng = lng;
