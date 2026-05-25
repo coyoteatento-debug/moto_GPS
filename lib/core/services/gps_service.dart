@@ -135,6 +135,7 @@ class GpsService {
 
   Future<void> dispose() async {
     await stopTracking();
+    await _bg.stop();
     await _controller?.close();
     _controller = null;
   }
