@@ -24,6 +24,17 @@ class TripRecord {
   };
 }
 
+Map<String, dynamic> toJsonCompact() {
+    final coords = _sampleCoords(routeCoords, maxPoints: 50); // ← mitad de puntos
+    return {
+      'destination': destination,
+      'distanceKm':  distanceKm,
+      'durationMin': durationMin,
+      'date':        date.toIso8601String(),
+      'routeCoords': coords,
+    };
+  }
+  
 List<List<double>> _sampleCoords(
     List<List<double>> coords, {required int maxPoints}) {
   if (coords.length <= maxPoints) return coords;
