@@ -122,6 +122,8 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp>
     WakelockPlus.disable();
     _searchController.dispose();
     _gpsService.dispose();   // ← AGREGADO
+    _mapboxApi.dispose();
+    _navService.disposeApi();
     super.dispose();
   }
 
