@@ -167,6 +167,8 @@ class NavigationService {
         lat, lng, last[1], last[0]);
     return distEnd <= maxDistanceMeters;            // ← valida distancia real
   }
+
+  void disposeApi() => _api.dispose();
 }
 
 class TurnUpdate {
