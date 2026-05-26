@@ -7,6 +7,8 @@ class MapboxApi {
   final http.Client _client;
   MapboxApi(this.token) : _client = http.Client();
 
+  void dispose() => _client.close();
+
   // ── Geocoding (buscador) ──────────────────────────────
   Future<List<Map<String, dynamic>>> searchPlaces(
     String query, {
