@@ -10,12 +10,13 @@ class GpsService {
 
   final BackgroundService _bg = BackgroundService();
 
-  StreamSubscription<Position>?      _foregroundSub;
-  StreamSubscription<LocationData>?  _backgroundSub;
-  StreamController<Position>?        _controller;
+  StreamSubscription<Position>? _foregroundSub;
+  StreamSubscription<dynamic>? _backgroundSub;
+  StreamController<Position>? _controller;
 
   bool _isInBackground = false;
-  bool _isTracking     = false;
+  bool _isTracking = false;
+  Position? _lastPosition;
 
   // ── Stream principal ─────────────────────────────────────────────
 
@@ -27,7 +28,7 @@ class GpsService {
 
   // ── Control del tracking ─────────────────────────────────────────
 
-  /// Inicia el GPS — llama esto cuando el usuario presiona ¡Ir!
+  /// Inicia el GPS
   Future<void> startTracking() async {
     if (_isTracking) return;
     _isTracking = true;
@@ -45,29 +46,23 @@ class GpsService {
     await _bg.stop();
   }
 
-  /// Llama esto cuando la app va a background (AppLifecycleState.paused)
+  /// Llama esto cuando la app va a background
   Future<void> onAppBackground() async {
     if (!_isTracking || _isInBackground) return;
     _isInBackground = true;
 
-    // Cancela el stream de foreground (geolocator)
     await _foregroundSub?.cancel();
     _foregroundSub = null;
-
-    // Activa el stream del servicio nativo
     _startBackgroundTracking();
   }
 
-  /// Llama esto cuando la app vuelve a foreground (AppLifecycleState.resumed)
+  /// Llama esto cuando la app vuelve a foreground
   Future<void> onAppForeground() async {
     if (!_isTracking || !_isInBackground) return;
     _isInBackground = false;
 
-    // Cancela el stream nativo
     await _backgroundSub?.cancel();
     _backgroundSub = null;
-
-    // Reactiva geolocator en foreground
     _startForegroundTracking();
   }
 
@@ -82,17 +77,20 @@ class GpsService {
 
     for (int attempt = 1; attempt <= 3; attempt++) {
       try {
-        return await Geolocator.getCurrentPosition(
+        final pos = await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(
             accuracy: LocationAccuracy.high,
           ),
         ).timeout(const Duration(seconds: 10));
-      } catch (_) {
-        if (attempt == 3) return null;
+        _lastPosition = pos;
+        return pos;
+      } catch (e) {
+        print('[GpsService] getInitialPosition attempt $attempt failed: $e');
+        if (attempt == 3) return _lastPosition;
         await Future.delayed(Duration(seconds: attempt * 2));
       }
     }
-    return null;
+    return _lastPosition;
   }
 
   // ── Streams internos ─────────────────────────────────────────────
@@ -100,11 +98,16 @@ class GpsService {
   void _startForegroundTracking() {
     _foregroundSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
-        accuracy:       LocationAccuracy.high,
+        accuracy: LocationAccuracy.high,
         distanceFilter: 3,
       ),
     ).listen(
-      (position) => _controller?.add(position),
+      (position) {
+        _lastPosition = position;
+        if (_controller != null && !_controller!.isClosed) {
+          _controller!.add(position);
+        }
+      },
       onError: (e) => debugPrint('[GpsService] Error foreground: $e'),
     );
   }
@@ -112,20 +115,22 @@ class GpsService {
   void _startBackgroundTracking() {
     _backgroundSub = _bg.locationStream.listen(
       (data) {
-        // Convierte LocationData → Position para mantener la misma interfaz
         final position = Position(
-          latitude:             data.latitude,
-          longitude:            data.longitude,
-          speed:                data.speed,
-          heading:              data.heading,
-          accuracy:             5.0,
-          altitude:             0.0,
-          altitudeAccuracy:     0.0,
-          headingAccuracy:      0.0,
-          speedAccuracy:        0.0,
-          timestamp:            DateTime.now(),
+          latitude: data.latitude,
+          longitude: data.longitude,
+          speed: data.speed,
+          heading: data.heading,
+          accuracy: 5.0,
+          altitude: 0.0,
+          altitudeAccuracy: 0.0,
+          headingAccuracy: 0.0,
+          speedAccuracy: 0.0,
+          timestamp: DateTime.now(),
         );
-        _controller?.add(position);
+        _lastPosition = position;
+        if (_controller != null && !_controller!.isClosed) {
+          _controller!.add(position);
+        }
       },
       onError: (e) => debugPrint('[GpsService] Error background: $e'),
     );
@@ -136,7 +141,9 @@ class GpsService {
   Future<void> dispose() async {
     await stopTracking();
     await _bg.stop();
-    await _controller?.close();
+    if (_controller != null && !_controller!.isClosed) {
+      await _controller!.close();
+    }
     _controller = null;
   }
 }
