@@ -87,6 +87,7 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp>
 
   int _deviationCount = 0;
   DateTime? _lastRecalcTime;
+  DateTime? _lastSpeedLimitCall;
   final List<mapbox.PointAnnotation> _waypointAnnotations = [];
   Timer? _waypointArrivalTimer;
 
@@ -738,7 +739,12 @@ void _checkRouteDeviation(double lat, double lng) {
         );
       }
       // Consultar límite de velocidad en background
-      _updateSpeedLimit(position.latitude, position.longitude);
+      final _now = DateTime.now();
+      if (_lastSpeedLimitCall == null ||
+          _now.difference(_lastSpeedLimitCall!).inSeconds >= 5) {
+        _lastSpeedLimitCall = _now;
+        _updateSpeedLimit(position.latitude, position.longitude);
+      }
       if (!_s.initialLocationSet && mapboxMap != null) {
   _n.setInitialLocationSet(true);
   _n.setIsProgrammaticMove(true);
