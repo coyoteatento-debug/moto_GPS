@@ -23,52 +23,66 @@ class MapboxApi {
     final url =
         'https://api.mapbox.com/geocoding/v5/mapbox.places/'
         '${Uri.encodeComponent(query)}.json'
-        '?language=es'
+        '?access_token=$token'
+        '&language=es'
         '&types=$types'
         '&limit=7'
         '$proximity';
-    final http.Response response;
+
     try {
-      response = await _client.get(Uri.parse(url),
-          headers: {'Authorization': 'Bearer $token'})
+      final response = await _client
+          .get(Uri.parse(url))
           .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode != 200) {
+        print('[MapboxApi] searchPlaces status: ${response.statusCode}, body: ${response.body}');
+        return [];
+      }
+
+      final data = json.decode(response.body);
+      final features = data['features'] as List? ?? [];
+
+      return features.map((f) {
+        final center = f['center'] as List;
+        return {
+          'name': f['text'] as String? ?? 'Sin nombre',
+          'full_name': f['place_name'] as String? ?? 'Sin nombre',
+          'lat': (center[1] as num).toDouble(),
+          'lng': (center[0] as num).toDouble(),
+        };
+      }).toList();
     } on TimeoutException {
+      print('[MapboxApi] searchPlaces timeout');
       return [];
-    } catch (_) {
+    } catch (e) {
+      print('[MapboxApi] searchPlaces error: $e');
       return [];
     }
-    if (response.statusCode != 200) return [];
-    final features = json.decode(response.body)['features'] as List;
-    return features.map((f) {
-      final center = f['center'] as List;
-      return <String, dynamic>{
-        'name':      f['text'] as String,
-        'full_name': f['place_name'] as String,
-        'lat':       (center[1] as num).toDouble(),
-        'lng':       (center[0] as num).toDouble(),
-      };
-    }).toList();
   }
 
   // ── Reverse geocoding (tap en mapa) ──────────────────
   Future<String> reverseGeocode(double lat, double lng) async {
     final url =
         'https://api.mapbox.com/geocoding/v5/mapbox.places/$lng,$lat.json'
-        '?language=es&limit=1';
-    final http.Response response;
+        '?access_token=$token'
+        '&language=es&limit=1';
+
     try {
-      response = await _client.get(Uri.parse(url),
-          headers: {'Authorization': 'Bearer $token'})
+      final response = await _client
+          .get(Uri.parse(url))
           .timeout(const Duration(seconds: 10));
-    } on TimeoutException {
-      return 'Destino seleccionado';
-    } catch (_) {
+
+      if (response.statusCode != 200) return 'Destino seleccionado';
+
+      final data = json.decode(response.body);
+      final features = data['features'] as List? ?? [];
+      if (features.isEmpty) return 'Destino seleccionado';
+
+      return features[0]['place_name'] as String? ?? 'Destino seleccionado';
+    } catch (e) {
+      print('[MapboxApi] reverseGeocode error: $e');
       return 'Destino seleccionado';
     }
-    if (response.statusCode != 200) return 'Destino seleccionado';
-    final features = json.decode(response.body)['features'] as List;
-    if (features.isEmpty) return 'Destino seleccionado';
-    return features[0]['place_name'] as String;
   }
 
   // ── Directions (ruta) ─────────────────────────────────
@@ -86,24 +100,30 @@ class MapboxApi {
     }
     buffer.write(';$destLng,$destLat');
     final coords = buffer.toString();
+
     final url =
         'https://api.mapbox.com/directions/v5/mapbox/driving/$coords'
-        '?geometries=geojson&steps=true'
+        '?access_token=$token'
+        '&geometries=geojson&steps=true'
         '&language=es&overview=full&continue_straight=true&alternatives=true';
-    final http.Response response;
+
     try {
-      response = await _client.get(Uri.parse(url),
-          headers: {'Authorization': 'Bearer $token'})
+      final response = await _client
+          .get(Uri.parse(url))
           .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode != 200) {
+        print('[MapboxApi] getRoute status: ${response.statusCode}, body: ${response.body}');
+        return null;
+      }
+
+      return json.decode(response.body) as Map<String, dynamic>;
     } on TimeoutException {
+      print('[MapboxApi] getRoute timeout');
       return null;
-    } catch (_) {
+    } catch (e) {
+      print('[MapboxApi] getRoute error: $e');
       return null;
     }
-    if (response.statusCode != 200) return null;
-    final data = json.decode(response.body);
-    final routes = data['routes'] as List;
-    if (routes.isEmpty) return null;
-    return data;
   }
 }
