@@ -574,7 +574,8 @@ void _checkRouteDeviation(double lat, double lng) {
     );
   }
 
-Future<Uint8List> _createWaypointImage(int number) async {
+  Future<Uint8List> _createWaypointImage(int number) async {
+    try {
     const size = 80.0;
     final recorder = ui.PictureRecorder();
     final canvas = ui.Canvas(recorder);
