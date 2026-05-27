@@ -742,10 +742,10 @@ void _checkRouteDeviation(double lat, double lng) {
         );
       }
       // Consultar límite de velocidad en background
-      final _now = DateTime.now();
+      final now = DateTime.now();
       if (_lastSpeedLimitCall == null ||
-          _now.difference(_lastSpeedLimitCall!).inSeconds >= 5) {
-        _lastSpeedLimitCall = _now;
+          now.difference(_lastSpeedLimitCall!).inSeconds >= 5) {
+        _lastSpeedLimitCall = now;
         _updateSpeedLimit(position.latitude, position.longitude);
       }
       if (!_s.initialLocationSet && mapboxMap != null) {
