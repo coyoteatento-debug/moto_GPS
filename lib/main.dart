@@ -630,7 +630,10 @@ void _checkRouteDeviation(double lat, double lng) {
     image2.dispose();
     if (bytes2 == null) return _s.pinImage ?? Uint8List(0);
     return bytes2.buffer.asUint8List();
+  } catch (_) {
+    return _s.pinImage ?? Uint8List(0);
   }
+}
 
   Future<void> _addWaypointAnnotation(
       double lat, double lng, int index) async {
