@@ -38,6 +38,7 @@ class SpeedLimitService {
         headers: {
           'User-Agent':   'MotoGPS/1.0',
           'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept':       'application/json',
         },
         body: 'data=${Uri.encodeComponent(query)}',
       ).timeout(
