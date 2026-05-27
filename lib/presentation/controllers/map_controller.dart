@@ -23,13 +23,13 @@ import '../../data/sources/mapbox_api.dart';
 import '../../data/sources/overpass_api.dart';
 import '../../data/sources/prefs_source.dart';
 import '../../di/providers.dart';
-import '../state/map_notifier.dart'; // Reutilizamos MapState por ahora
+import '../state/map_notifier.dart';
 
 export '../state/map_notifier.dart' show MapState;
 
 // ── Provider ────────────────────────────────────────────
 final mapControllerProvider = AutoDisposeNotifierProvider<MapController, MapState>(
-  MapController.new,
+  () => MapController(),
 );
 
 class MapController extends AutoDisposeNotifier<MapState> {
@@ -38,11 +38,11 @@ class MapController extends AutoDisposeNotifier<MapState> {
   mapbox.PointAnnotationManager? _annotationManager;
   mapbox.PointAnnotation? _motoAnnotation;
   mapbox.PointAnnotation? _destinationAnnotation;
-  final List<<mapbox.PointAnnotation> _waypointAnnotations = [];
+  final List<mapbox.PointAnnotation> _waypointAnnotations = [];
 
   // ── Streams & Timers ──────────────────────────────────
-  StreamSubscription? _locationSubscription;
-  StreamSubscription? _smoothSub;
+  StreamSubscription<Position>? _locationSubscription;
+  StreamSubscription<SmoothPosition>? _smoothSub;
   Timer? _nightModeTimer;
   Timer? _waypointArrivalTimer;
   final Completer<void> _mapReadyCompleter = Completer();
@@ -368,7 +368,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
     }
   }
 
-  Future<<Uint8List> _createWaypointImage(int number) async {
+  Future<Uint8List> _createWaypointImage(int number) async {
     try {
       const size = 80.0;
       final recorder = ui.PictureRecorder();
@@ -443,7 +443,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
   }
 
   // ── Imágenes / Avatar ───────────────────────────────────
-  Future<<Uint8List?> pickUserAvatar() async {
+  Future<Uint8List?> pickUserAvatar() async {
     final bytes = await _imageUtils.pickImageFromGallery();
     if (bytes == null) return null;
     final circular = await _imageUtils.makeCircularImage(bytes, 70);
@@ -479,9 +479,9 @@ class MapController extends AutoDisposeNotifier<MapState> {
   }
 
   // ── TTS ───────────────────────────────────────────────
-  Future<void> _initTts() async => _tts.init();
+  Future<void> _initTts() async => await _tts.init();
 
-  Future<void> _speak(String text) async => _tts.speak(text);
+  Future<void> _speak(String text) async => await _tts.speak(text);
 
   // ── Speech ────────────────────────────────────────────
   Future<bool> ensureSpeechAvailable() async => _speechAvailable;
@@ -680,7 +680,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
       }
       _fitRouteBounds(destLat, destLng);
     } catch (e) {
-      // Error silenciado — la UI puede mostrar snackbar si expone el error
+      // Error silenciado
     }
   }
 
@@ -816,6 +816,9 @@ class MapController extends AutoDisposeNotifier<MapState> {
       clearSelectedPlace: true,
       clearTappedLat: true,
       clearTappedLng: true,
+      waypoints: const [],
+      isSelectingWaypoints: false,
+      currentWaypointIndex: 0,
       showWaypointArrival: false,
       waypointArrivalMessage: '',
       speedLimit: null,
@@ -888,7 +891,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
       final num = wp['index'] as int;
       state = state.copyWith(
         showWaypointArrival: true,
-        waypointArrivalMessage: '📍 ¡Has llegado a la parada $num!',
+        waypointArrivalMessage: 'Has llegado a la parada $num!',
       );
       state = state.copyWith(currentWaypointIndex: state.currentWaypointIndex + 1);
       _waypointArrivalTimer?.cancel();
@@ -1124,7 +1127,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
 
   void onCameraChanged() {
     if (!state.isProgrammaticMove) {
-      // El UI debe manejar el timestamp de interacción; aquí solo marcamos exploring
       if (!state.userIsExploring) setUserIsExploring(true);
     }
   }
