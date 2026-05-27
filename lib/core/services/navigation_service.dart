@@ -135,11 +135,9 @@ class NavigationService {
     // Avanzar al siguiente paso
     int nextIndex = currentStepIndex;
     String? nextInstruction;
-    double? nextDistance;
     if (dist < 15 && currentStepIndex < steps.length - 1) {
       nextIndex       = currentStepIndex + 1;
       nextInstruction = steps[nextIndex]['instruction'] as String;
-      nextDistance    = steps[nextIndex]['distance'] as double;
     }
     
     return TurnUpdate(
@@ -148,6 +146,7 @@ class NavigationService {
       nextStepIndex:      nextIndex,
       nextInstruction:    nextInstruction ?? step['instruction'] as String,
     );
+  }
 
   // ── Verificar llegada ─────────────────────────────────
   bool hasArrived(
