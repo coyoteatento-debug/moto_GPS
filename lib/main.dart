@@ -6,7 +6,7 @@ const String _mapboxToken = String.fromEnvironment('MAPBOX_TOKEN', defaultValue:
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   if (_mapboxToken.isEmpty) {
     runApp(const MaterialApp(
       home: Scaffold(
@@ -15,7 +15,7 @@ void main() async {
     ));
     return;
   }
-  
+
   mapbox.MapboxOptions.setAccessToken(_mapboxToken);
   runApp(const MotoGPSApp());
 }
