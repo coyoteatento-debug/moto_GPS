@@ -485,8 +485,9 @@ void _checkRouteDeviation(double lat, double lng) {
     _n.setIsRecalculating(true);
     _speak('Recalculando ruta');
     _navService.resetAnnouncements();
-    _speedLimitService.clearCache();                // ← AGREGADO
-    _n.setSpeedLimit(null);                         // ← AGREGADO
+    _speedLimitService.clearCache();
+    _lastSpeedLimitCall = null;
+    _n.setSpeedLimit(null);                         
 
     final destLat = (_s.selectedPlace!['lat'] as num).toDouble();
     final destLng = (_s.selectedPlace!['lng'] as num).toDouble();
