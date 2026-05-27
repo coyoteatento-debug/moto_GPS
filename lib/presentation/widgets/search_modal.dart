@@ -46,6 +46,7 @@ class SearchModal extends StatelessWidget {
                   child: TextField(
                     controller: controller,
                     autofocus: true,
+                    style: const TextStyle(color: Colors.black87),
                     decoration: const InputDecoration(
                       hintText: 'Ciudad, colonia, calle...',
                       border: InputBorder.none,
