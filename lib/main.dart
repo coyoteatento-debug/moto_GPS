@@ -463,6 +463,7 @@ void _startNightModeTimer() {
   
 void _checkRouteDeviation(double lat, double lng) {
   if (!_s.navigating || _s.routeCoordinates.isEmpty || _s.isRecalculating) return;
+  if (_s.distanceToNextManeuver < 120) return;
 
   if (_lastRecalcTime != null &&
       DateTime.now().difference(_lastRecalcTime!).inSeconds < 20) return;
