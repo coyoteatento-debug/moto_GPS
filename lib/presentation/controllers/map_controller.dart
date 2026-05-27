@@ -500,9 +500,16 @@ class MapController extends AutoDisposeNotifier<MapState> {
 
   Future<bool> ensureSpeechAvailable() async => _speechAvailable;
 
-  Future<void> _initSpeech() async {
-    _speechAvailable = await _speech.initialize();
-  }
+    Future<void> _initSpeech() async {
+      // Solicitar permiso de micrófono primero
+      final status = await Permission.microphone.request();
+      if (status.isGranted) {
+        _speechAvailable = await _speech.initialize();
+      } else {
+        _speechAvailable = false;
+        print('[MapController] Permiso de micrófono denegado');
+      }
+    }
 
   Future<String?> getBestSpeechLocale() async {
     final locales = await _speech.locales();
