@@ -813,56 +813,63 @@ class MapController extends AutoDisposeNotifier<MapState> {
     }
   }
 
-  Future<void> cancelRoute() async {
-    await _clearWaypointAnnotations();
-    state = state.copyWith(
-      waypoints: const [],
-      isSelectingWaypoints: false,
-      currentWaypointIndex: 0,
-    );
-    if (state.navigating) {
-      final record = await _tripService.finishAndSave(
-        destination: state.selectedPlace?['name'] ?? 'Destino',
-        routeCoords: state.routeCoordinates,
-        existingTrips: state.trips,
+    Future<void> cancelRoute() async {
+      await _clearWaypointAnnotations();
+      state = state.copyWith(
+        waypoints: const [],
+        isSelectingWaypoints: false,
+        currentWaypointIndex: 0,
       );
-      if (record != null) {
-        final newTrips = List<TripRecord>.from(state.trips);
-        newTrips.insert(0, record);
-        state = state.copyWith(trips: newTrips);
+      if (state.navigating) {
+        final record = await _tripService.finishAndSave(
+          destination: state.selectedPlace?['name'] ?? 'Destino',
+          routeCoords: state.routeCoordinates,
+          existingTrips: state.trips,
+        );
+        if (record != null) {
+          final newTrips = List<TripRecord>.from(state.trips);
+          newTrips.insert(0, record);
+          state = state.copyWith(trips: newTrips);
+        }
       }
+    
+      // FIX: Limpiar capas de ruta ANTES de resetear el estado
+      if (_mapboxMap != null) {
+        await _mapService.clearRouteLayers(_mapboxMap!);
+      }
+    
+      await _deleteDestinationMarker();
+      await _tts.stop();
+      await _bgService.stop();
+      await WakelockPlus.disable();
+      _speedLimitService.clearCache();
+    
+      // FIX: Resetear completamente el estado de ruta
+      state = state.copyWith(
+        routeDrawn: false,
+        navigating: false,
+        showTapConfirm: false,
+        routeDistance: '',
+        routeDuration: '',
+        routeCoordinates: const [],
+        alternateRoutes: const [],
+        routeSteps: const [],
+        currentInstruction: '',
+        currentStepIndex: 0,
+        distanceToNextManeuver: 0.0,
+        selectedRouteIndex: 0,
+        clearSelectedPlace: true,
+        clearTappedLat: true,
+        clearTappedLng: true,
+        waypoints: const [],
+        isSelectingWaypoints: false,
+        currentWaypointIndex: 0,
+        showWaypointArrival: false,
+        waypointArrivalMessage: '',
+        speedLimit: null,
+        clearSpeedLimit: true,
+      );
     }
-    if (_mapboxMap != null) await _mapService.clearRouteLayers(_mapboxMap!);
-    await _deleteDestinationMarker();
-    await _tts.stop();
-    await _bgService.stop();
-    await WakelockPlus.disable();
-    _speedLimitService.clearCache();
-    state = state.copyWith(
-      routeDrawn: false,
-      navigating: false,
-      showTapConfirm: false,
-      routeDistance: '',
-      routeDuration: '',
-      routeCoordinates: const [],
-      alternateRoutes: const [],
-      routeSteps: const [],
-      currentInstruction: '',
-      currentStepIndex: 0,
-      distanceToNextManeuver: 0.0,
-      selectedRouteIndex: 0,
-      clearSelectedPlace: true,
-      clearTappedLat: true,
-      clearTappedLng: true,
-      waypoints: const [],
-      isSelectingWaypoints: false,
-      currentWaypointIndex: 0,
-      showWaypointArrival: false,
-      waypointArrivalMessage: '',
-      speedLimit: null,
-      clearSpeedLimit: true,
-    );
-  }
 
   void _updateTurnByTurn(double lat, double lng) {
     final update = _navService.updateTurn(
