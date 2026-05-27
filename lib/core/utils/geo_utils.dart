@@ -117,7 +117,7 @@ class GeoUtils {
       final ab2 = abX * abX + abY * abY;
       if (ab2 == 0) continue;
       final t = ((apX * abX + apY * abY) / ab2).clamp(0.0, 1.0);
-      final d = distanceBetween(lat, lng, a[1] + t * abY, a[0] + t * abX);
+      final d = distanceBetween(lat, lng, a[1] + t * (b[1] - a[1]), a[0] + t * (b[0] - a[0]));
       if (d < minDist) minDist = d;
     }
     return minDist;
