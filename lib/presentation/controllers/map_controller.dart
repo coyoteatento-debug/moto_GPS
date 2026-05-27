@@ -23,38 +23,33 @@ import '../../data/sources/mapbox_api.dart';
 import '../../data/sources/overpass_api.dart';
 import '../../data/sources/prefs_source.dart';
 import '../../di/providers.dart';
-import '../state/map_notifier.dart';
+import '../state/map_state.dart';
 
-export '../state/map_notifier.dart' show MapState;
+export '../state/map_state.dart';
 
-// ── Provider ────────────────────────────────────────────
 final mapControllerProvider = AutoDisposeNotifierProvider<MapController, MapState>(
   () => MapController(),
 );
 
 class MapController extends AutoDisposeNotifier<MapState> {
-  // ── Referencias nativas (inyectadas desde UI) ─────────
   mapbox.MapboxMap? _mapboxMap;
   mapbox.PointAnnotationManager? _annotationManager;
   mapbox.PointAnnotation? _motoAnnotation;
   mapbox.PointAnnotation? _destinationAnnotation;
   final List<mapbox.PointAnnotation> _waypointAnnotations = [];
 
-  // ── Streams & Timers ──────────────────────────────────
   StreamSubscription<Position>? _locationSubscription;
   StreamSubscription<SmoothPosition>? _smoothSub;
   Timer? _nightModeTimer;
   Timer? _waypointArrivalTimer;
   final Completer<void> _mapReadyCompleter = Completer();
 
-  // ── Estado interno de tracking ────────────────────────
   int _deviationCount = 0;
   DateTime? _lastRecalcTime;
   DateTime? _lastSpeedLimitCall;
   int _searchToken = 0;
   bool _isListening = false;
 
-  // ── Servicios (lazy desde Riverpod) ───────────────────
   late final String _token;
   late final PrefsSource _prefs;
   late final GeoUtils _geo;
@@ -72,7 +67,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
   final SpeechToText _speech = SpeechToText();
   bool _speechAvailable = false;
 
-  // ── Init / Dispose ────────────────────────────────────
   @override
   MapState build() {
     _token = ref.read(mapboxTokenProvider);
@@ -118,7 +112,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
     await WakelockPlus.disable();
   }
 
-  // ── Mapa creado (llamado desde UI) ─────────────────────
   Future<void> onMapCreated(mapbox.MapboxMap map) async {
     _mapboxMap = map;
     _annotationManager = await map.annotations.createPointAnnotationManager();
@@ -142,7 +135,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
     }
   }
 
-  // ── Permisos ──────────────────────────────────────────
   bool _permissionFlowRunning = false;
 
   Future<bool> requestPermissions() async {
@@ -176,7 +168,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
         permission == LocationPermission.whileInUse;
   }
 
-  // ── Posición inicial ────────────────────────────────────
   Future<void> _getInitialPosition() async {
     final position = await _gpsService.getInitialPosition();
     if (position == null) return;
@@ -202,7 +193,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
     );
   }
 
-  // ── GPS Tracking ──────────────────────────────────────
   Future<void> _startLocationTracking() async {
     if (_locationSubscription != null) return;
     await _gpsService.startTracking();
@@ -298,7 +288,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
     );
   }
 
-  // ── Ciclo de vida App ─────────────────────────────────
   Future<void> onAppBackground() async {
     if (_locationSubscription != null) {
       _gpsService.onAppBackground();
@@ -322,7 +311,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
     }
   }
 
-  // ── Marcador suavizado ─────────────────────────────────
   DateTime _lastMarkerUpdate = DateTime.fromMillisecondsSinceEpoch(0);
 
   void _startSmoothMarker() {
@@ -335,7 +323,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
     });
   }
 
-  // ── Marcadores ────────────────────────────────────────
   Future<void> _updateMotoMarker(double lat, double lng, double bearing) async {
     final markerImage = state.userAvatarImage ?? state.pinImage;
     if (_annotationManager == null || markerImage == null) return;
@@ -442,7 +429,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _waypointAnnotations.clear();
   }
 
-  // ── Imágenes / Avatar ───────────────────────────────────
   Future<Uint8List?> pickUserAvatar() async {
     final bytes = await _imageUtils.pickImageFromGallery();
     if (bytes == null) return null;
@@ -478,12 +464,14 @@ class MapController extends AutoDisposeNotifier<MapState> {
     state = state.copyWith(pinImage: pinResized);
   }
 
-  // ── TTS ───────────────────────────────────────────────
-  Future<void> _initTts() async => await _tts.init();
+  Future<void> _initTts() async {
+    await _tts.init();
+  }
 
-  Future<void> _speak(String text) async => await _tts.speak(text);
+  Future<void> _speak(String text) async {
+    await _tts.speak(text);
+  }
 
-  // ── Speech ────────────────────────────────────────────
   Future<bool> ensureSpeechAvailable() async => _speechAvailable;
 
   Future<void> _initSpeech() async {
@@ -544,7 +532,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
     }
   }
 
-  // ── Búsqueda ──────────────────────────────────────────
   Future<void> searchPlaces(String query) async {
     if (query.trim().length < 3) {
       state = state.copyWith(searchResults: const []);
@@ -581,19 +568,18 @@ class MapController extends AutoDisposeNotifier<MapState> {
     await _getRoute(lat, lng);
   }
 
-  // ── Tap en mapa ───────────────────────────────────────
   Future<void> onMapTap(double lat, double lng) async {
     if (state.navigating) return;
     if (state.isSelectingWaypoints) {
       final index = state.waypoints.length + 1;
-      state = state.copyWith(
-        waypoints: [...state.waypoints, {
-          'lat': lat,
-          'lng': lng,
-          'index': index,
-          'reached': false,
-        }],
-      );
+      final newWaypoints = List<Map<String, dynamic>>.from(state.waypoints);
+      newWaypoints.add({
+        'lat': lat,
+        'lng': lng,
+        'index': index,
+        'reached': false,
+      });
+      state = state.copyWith(waypoints: newWaypoints);
       await _addWaypointAnnotation(lat, lng, index);
       return;
     }
@@ -630,7 +616,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
     );
   }
 
-  // ── Ruta ──────────────────────────────────────────────
   Future<void> _getRoute(double destLat, double destLng, {int fromWaypointIndex = 0}) async {
     if (state.currentPosition == null) return;
     try {
@@ -709,7 +694,9 @@ class MapController extends AutoDisposeNotifier<MapState> {
       existingTrips: state.trips,
     );
     if (record != null) {
-      state = state.copyWith(trips: [record, ...state.trips]);
+      final newTrips = List<TripRecord>.from(state.trips);
+      newTrips.insert(0, record);
+      state = state.copyWith(trips: newTrips);
     }
     _tripService.reset();
     await cancelRoute();
@@ -717,12 +704,13 @@ class MapController extends AutoDisposeNotifier<MapState> {
 
   Future<void> selectRoute(int index) async {
     final r = state.alternateRoutes[index];
-    final steps = List<Map<String, dynamic>>.from(r['steps']);
+    final steps = (r['steps'] as List).cast<Map<String, dynamic>>();
+    final coords = (r['coords'] as List).map((c) => (c as List).cast<double>()).toList();
     state = state.copyWith(
       selectedRouteIndex: index,
-      routeDistance: r['distance'],
-      routeDuration: r['duration'],
-      routeCoordinates: List<List<double>>.from(r['coords']),
+      routeDistance: r['distance'] as String,
+      routeDuration: r['duration'] as String,
+      routeCoordinates: coords,
       routeSteps: steps,
       currentStepIndex: 0,
       currentInstruction: steps.isNotEmpty ? steps[0]['instruction'] as String : '',
@@ -748,7 +736,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
     );
   }
 
-  // ── Navegación ────────────────────────────────────────
   Future<void> startNavigation() async {
     if (state.navigating) return;
     state = state.copyWith(navigating: true);
@@ -791,7 +778,9 @@ class MapController extends AutoDisposeNotifier<MapState> {
         existingTrips: state.trips,
       );
       if (record != null) {
-        state = state.copyWith(trips: [record, ...state.trips]);
+        final newTrips = List<TripRecord>.from(state.trips);
+        newTrips.insert(0, record);
+        state = state.copyWith(trips: newTrips);
       }
     }
     if (_mapboxMap != null) await _mapService.clearRouteLayers(_mapboxMap!);
@@ -826,7 +815,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
     );
   }
 
-  // ── Turn-by-turn ──────────────────────────────────────
   void _updateTurnByTurn(double lat, double lng) {
     final update = _navService.updateTurn(
       lat, lng, state.routeSteps, state.currentStepIndex,
@@ -840,7 +828,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
     if (update.announceText != null) _speak(update.announceText!);
   }
 
-  // ── Desvío ────────────────────────────────────────────
   void _checkRouteDeviation(double lat, double lng) {
     if (!state.navigating || state.routeCoordinates.isEmpty || state.isRecalculating) return;
     if (state.distanceToNextManeuver < 120) return;
@@ -875,7 +862,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
     state = state.copyWith(isRecalculating: false);
   }
 
-  // ── Waypoints ─────────────────────────────────────────
   void _checkWaypointArrival(double lat, double lng) {
     if (state.waypoints.isEmpty) return;
     if (state.showWaypointArrival) return;
@@ -933,7 +919,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
     }
   }
 
-  // ── Límite velocidad ──────────────────────────────────
   Future<void> _updateSpeedLimit(double lat, double lng) async {
     final speedAtRequest = state.currentSpeed;
     final limit = await _speedLimitService.getSpeedLimit(lat, lng);
@@ -944,7 +929,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
     }
   }
 
-  // ── Gasolineras ───────────────────────────────────────
   Future<void> fetchGasolineras() async {
     if (_mapboxMap == null || state.currentPosition == null) return;
     state = state.copyWith(gasolinerasLoading: true);
@@ -980,7 +964,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
     }
   }
 
-  // ── Modo nocturno ─────────────────────────────────────
   bool _isNightTime() {
     final hour = DateTime.now().hour;
     return hour >= 19 || hour < 6;
@@ -1030,7 +1013,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
 
   void resetNightModeManual() => state = state.copyWith(nightModeManual: false);
 
-  // ── Satélite ──────────────────────────────────────────
   Future<void> toggleSatellite() async {
     final newValue = !state.isSatellite;
     state = state.copyWith(isSatellite: newValue);
@@ -1054,7 +1036,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
     await _recreateAnnotationsAfterStyleChange();
   }
 
-  // ── Estilos ───────────────────────────────────────────
   Future<void> _applyCustomRoadStyle() async {
     if (_mapboxMap == null) return;
     await _mapService.applyCustomRoadStyle(_mapboxMap!);
@@ -1094,13 +1075,11 @@ class MapController extends AutoDisposeNotifier<MapState> {
     }
   }
 
-  // ── Viajes ────────────────────────────────────────────
   Future<void> _loadTrips() async {
     final trips = await _prefs.loadTrips();
     state = state.copyWith(trips: trips);
   }
 
-  // ── Helpers de cámara ─────────────────────────────────
   void _flyTo({
     required double lat,
     required double lng,
@@ -1120,7 +1099,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
     );
   }
 
-  // ── Acceso UI ─────────────────────────────────────────
   void setTabIndex(int i) => state = state.copyWith(currentTabIndex: i);
   void setUserIsExploring(bool v) => state = state.copyWith(userIsExploring: v);
   void setIsProgrammaticMove(bool v) => state = state.copyWith(isProgrammaticMove: v);
