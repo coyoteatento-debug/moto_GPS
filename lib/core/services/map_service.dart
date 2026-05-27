@@ -155,6 +155,7 @@ class MapService {
         textOffset:       [0.0, 1.8],
         textAllowOverlap: false,
         textOptional:     true,
+        textColor:        0xFFFF6D00,
       ));
     } catch (_) {}
   }
