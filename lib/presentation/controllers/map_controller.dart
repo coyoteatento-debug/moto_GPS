@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../core/services/background_service.dart';
 import '../../core/services/gps_service.dart';
 import '../../core/services/map_service.dart';
