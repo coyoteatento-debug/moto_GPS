@@ -123,6 +123,7 @@ class _MotoGPSAppState extends ConsumerState<MotoGPSApp>
     _gpsService.dispose();   // ← AGREGADO
     _mapboxApi.dispose();
     _navService.disposeApi();
+    _tts.stop();
     super.dispose();
   }
 
