@@ -71,7 +71,7 @@ class LocationForegroundService : Service() {
                 Log.d(TAG, "Instrucción: $currentInstruction")
             }
         }
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     override fun onDestroy() {
