@@ -13,13 +13,11 @@ import '../data/sources/mapbox_api.dart';
 import '../data/sources/overpass_api.dart';
 import '../data/sources/prefs_source.dart';
 
-// ── Token global ─────────────────────────────────────────
 final mapboxTokenProvider = Provider<String>((ref) {
   const token = String.fromEnvironment('MAPBOX_TOKEN', defaultValue: '');
   return token;
 });
 
-// ── Servicios core ───────────────────────────────────────
 final prefsSourceProvider = Provider<PrefsSource>((ref) => PrefsSource());
 final geoUtilsProvider = Provider<GeoUtils>((ref) => const GeoUtils());
 final imageUtilsProvider = Provider<ImageUtils>((ref) => const ImageUtils());
@@ -36,7 +34,6 @@ final tripServiceProvider = Provider<TripService>((ref) {
   return TripService(prefs, geo);
 });
 
-// ── APIs ───────────────────────────────────────────────
 final mapboxApiProvider = Provider.family<MapboxApi, String>((ref, token) {
   return MapboxApi(token);
 });
