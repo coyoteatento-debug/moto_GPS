@@ -144,8 +144,6 @@ class _MapScreenState extends ConsumerState<MapScreen>
   }
 
   Widget _buildMapTab(MapState state, MapController controller) {
-    final geo = ref.read(geoUtilsProvider);
-
     return MapTab(
       navigating: state.navigating,
       showSearch: state.showSearch,
@@ -216,7 +214,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
       onAvatarPick: () async {
         final bytes = await controller.pickUserAvatar();
         if (bytes == null && mounted) {
-          _showSnack('Imagen muy grande, intenta con una más pequeña');
+          _showSnack('Imagen muy grande, intenta con una mas pequena');
         }
       },
       onVoiceSearch: _startVoiceSearch,
