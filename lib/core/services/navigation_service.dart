@@ -147,9 +147,7 @@ class NavigationService {
       announceText:       announceText,
       nextStepIndex:      nextIndex,
       nextInstruction:    nextInstruction ?? step['instruction'] as String,
-      nextDistance:       nextDistance   ?? dist,
     );
-  }
 
   // ── Verificar llegada ─────────────────────────────────
   bool hasArrived(
@@ -176,13 +174,11 @@ class TurnUpdate {
   final String? announceText;
   final int nextStepIndex;
   final String nextInstruction;
-  final double nextDistance;
 
   const TurnUpdate({
     required this.distanceToManeuver,
     required this.announceText,
     required this.nextStepIndex,
     required this.nextInstruction,
-    required this.nextDistance,
   });
 }
