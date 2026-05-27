@@ -74,7 +74,7 @@ class MapService {
     try { await style.removeStyleLayer('route-layer'); } catch (_) {}
     try { await style.removeStyleSource('route-source'); } catch (_) {}
 
-    // Rutas alternas (gris)
+    // Rutas alternas (gris) - 0xFF90A4AE = Colors.blueGrey
     for (int i = 1; i < alternateRoutes.length; i++) {
       final altGeom = alternateRoutes[i]['geometry'];
       if (altGeom == null) continue;
@@ -89,14 +89,14 @@ class MapService {
       await style.addLayer(mapbox.LineLayer(
         id: 'route-layer-\$i', 
         sourceId: 'route-source-\$i',
-        lineColor: const Color(0xFF90A4AE).value, 
+        lineColor: 0xFF90A4AE, 
         lineWidth: 5.0,
         lineCap: mapbox.LineCap.ROUND, 
         lineJoin: mapbox.LineJoin.ROUND,
       ));
     }
 
-    // Ruta principal (azul)
+    // Ruta principal (azul) - 0xFF1976D2 = Colors.blue[700]
     await style.addSource(mapbox.GeoJsonSource(
       id: 'route-source-0',
       data: json.encode({'type': 'Feature', 'geometry': geometry}),
@@ -104,7 +104,7 @@ class MapService {
     await style.addLayer(mapbox.LineLayer(
       id: 'route-layer-0', 
       sourceId: 'route-source-0',
-      lineColor: const Color(0xFF1976D2).value, 
+      lineColor: 0xFF1976D2, 
       lineWidth: 6.0,
       lineCap: mapbox.LineCap.ROUND, 
       lineJoin: mapbox.LineJoin.ROUND,
@@ -148,17 +148,17 @@ class MapService {
         data: geoJson,
       ));
 
-      // Círculo naranja
+      // Círculo naranja - 0xFFFF6D00
       await style.addLayer(mapbox.CircleLayer(
         id: 'gasolineras-layer',
         sourceId: 'gasolineras-source',
         circleRadius: 8.0,
-        circleColor: const Color(0xFFFF6D00).value,
+        circleColor: 0xFFFF6D00,
         circleStrokeWidth: 2.0,
-        circleStrokeColor: const Color(0xFFFFFFFF).value,
+        circleStrokeColor: 0xFFFFFFFF, // blanco
       ));
 
-      // Etiqueta de nombre
+      // Etiqueta de nombre - 0xFFFF6D00
       await style.addLayer(mapbox.SymbolLayer(
         id: 'gasolineras-label',
         sourceId: 'gasolineras-source',
@@ -167,7 +167,7 @@ class MapService {
         textOffset: const [0.0, 1.8],
         textAllowOverlap: false,
         textOptional: true,
-        textColor: const Color(0xFFFF6D00).value,
+        textColor: 0xFFFF6D00,
       ));
     } catch (e) {
       print('[MapService] updateGasolineraLayer error: \$e');
@@ -215,7 +215,6 @@ class MapService {
   }
 
   // ── Crear o actualizar marcador de moto ───────────────
-  // FIX: Usar un lock real en lugar de bool para evitar race conditions
   final Map<String, bool> _markerLocks = {};
 
   Future<mapbox.PointAnnotation?> updateMotoMarker({
@@ -229,7 +228,6 @@ class MapService {
   }) async {
     final lockKey = 'moto_marker';
 
-    // Si ya estamos creando, esperar un poco y reintentar
     if (_markerLocks[lockKey] == true) {
       await Future.delayed(const Duration(milliseconds: 100));
       if (_markerLocks[lockKey] == true) return current;
@@ -239,7 +237,6 @@ class MapService {
 
     try {
       if (current != null) {
-        // Actualizar posición del marcador existente
         current.geometry = mapbox.Point(
           coordinates: mapbox.Position(lng, lat));
         current.iconRotate = isAvatar ? 0.0 : bearing;
