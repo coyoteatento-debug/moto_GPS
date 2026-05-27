@@ -68,8 +68,8 @@ class MapService {
 
     // Limpiar rutas anteriores
     for (int i = 0; i < 5; i++) {
-      try { await style.removeStyleLayer('route-layer-\$i'); } catch (_) {}
-      try { await style.removeStyleSource('route-source-\$i'); } catch (_) {}
+      try { await style.removeStyleLayer('route-layer-$i'); } catch (_) {}
+      try { await style.removeStyleSource('route-source-$i'); } catch (_) {}
     }
     try { await style.removeStyleLayer('route-layer'); } catch (_) {}
     try { await style.removeStyleSource('route-source'); } catch (_) {}
@@ -80,15 +80,15 @@ class MapService {
       if (altGeom == null) continue;
 
       await style.addSource(mapbox.GeoJsonSource(
-        id: 'route-source-\$i',
+        id: 'route-source-$i',
         data: json.encode({
           'type': 'Feature',
           'geometry': altGeom,
         }),
       ));
       await style.addLayer(mapbox.LineLayer(
-        id: 'route-layer-\$i', 
-        sourceId: 'route-source-\$i',
+        id: 'route-layer-$i', 
+        sourceId: 'route-source-$i',
         lineColor: 0xFF90A4AE, 
         lineWidth: 5.0,
         lineCap: mapbox.LineCap.ROUND, 
@@ -175,19 +175,20 @@ class MapService {
   }
 
   // ── Limpiar todas las capas de ruta ──────────────────
-  Future<void> clearRouteLayers(mapbox.MapboxMap map) async {
-    try {
-      final style = await map.style;
-      for (int i = 0; i < 5; i++) {
-        try { await style.removeStyleLayer('route-layer-\$i'); } catch (_) {}
-        try { await style.removeStyleSource('route-source-\$i'); } catch (_) {}
+    Future<void> clearRouteLayers(mapbox.MapboxMap map) async {
+      try {
+        final style = await map.style;
+        // Limpiar TODAS las capas posibles, no solo 0-4
+        for (int i = 0; i < 10; i++) {
+          try { await style.removeStyleLayer('route-layer-$i'); } catch (_) {}
+          try { await style.removeStyleSource('route-source-$i'); } catch (_) {}
+        }
+        try { await style.removeStyleLayer('route-layer'); } catch (_) {}
+        try { await style.removeStyleSource('route-source'); } catch (_) {}
+      } catch (e) {
+        print('[MapService] clearRouteLayers error: $e');
       }
-      try { await style.removeStyleLayer('route-layer'); } catch (_) {}
-      try { await style.removeStyleSource('route-source'); } catch (_) {}
-    } catch (e) {
-      print('[MapService] clearRouteLayers error: \$e');
     }
-  }
 
   // ── Resaltar ruta seleccionada ────────────────────────
   Future<void> highlightRoute(
