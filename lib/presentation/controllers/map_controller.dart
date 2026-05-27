@@ -117,32 +117,32 @@ class MapController extends AutoDisposeNotifier<MapState> {
     await WakelockPlus.disable();
   }
 
-  Future<void> onMapCreated(mapbox.MapboxMap map) async {
-    _mapboxMap = map;
-    _annotationManager = await map.annotations.createPointAnnotationManager();
-    _mapCreated = true;
+    Future<void> onMapCreated(mapbox.MapboxMap map) async {
+      _mapboxMap = map;
+      _annotationManager = await map.annotations.createPointAnnotationManager();
+      _mapCreated = true;
+    
+      await Future.delayed(const Duration(milliseconds: 600));
+      await _applyNightOrDayStyle();
+      await _applyCustomRoadStyle();
+    
+      if (!_mapReadyCompleter.isCompleted) _mapReadyCompleter.complete();
 
-    await Future.delayed(const Duration(milliseconds: 600));
-    await _applyNightOrDayStyle();
-    await _applyCustomRoadStyle();
-
-    if (!_mapReadyCompleter.isCompleted) _mapReadyCompleter.complete();
-
-    // FIX: Intentar crear el marcador de moto si ya tenemos posición e imagen
-    if (state.currentPosition != null && state.pinImage != null) {
-      await _updateMotoMarker(
-        state.currentPosition!.latitude,
-        state.currentPosition!.longitude,
-        state.currentPosition!.heading,
-      );
-      _flyTo(
-        lat: state.currentPosition!.latitude,
-        lng: state.currentPosition!.longitude,
-        zoom: 15.0,
-        bearing: state.currentPosition!.heading,
-      );
+      // FIX: Solo crear marcador si NO existe ya
+      if (state.currentPosition != null && state.pinImage != null && _motoAnnotation == null) {
+        await _updateMotoMarker(
+          state.currentPosition!.latitude,
+          state.currentPosition!.longitude,
+          state.currentPosition!.heading,
+        );
+        _flyTo(
+          lat: state.currentPosition!.latitude,
+          lng: state.currentPosition!.longitude,
+          zoom: 15.0,
+          bearing: state.currentPosition!.heading,
+        );
+      }
     }
-  }
 
   bool _permissionFlowRunning = false;
 
@@ -177,35 +177,35 @@ class MapController extends AutoDisposeNotifier<MapState> {
         permission == LocationPermission.whileInUse;
   }
 
-  Future<void> _getInitialPosition() async {
-    final position = await _gpsService.getInitialPosition();
-    if (position == null) return;
+   Future<void> _getInitialPosition() async {
+     final position = await _gpsService.getInitialPosition();
+     if (position == null) return;
 
-    state = state.copyWith(
-      currentPosition: position,
-      currentSpeed: position.speed * 3.6,
-    );
-    state = state.copyWith(initialLocationSet: true);
+     state = state.copyWith(
+       currentPosition: position,
+       currentSpeed: position.speed * 3.6,
+     );
+     state = state.copyWith(initialLocationSet: true);
 
-    _smoother.updatePosition(
-      lat: position.latitude,
-      lng: position.longitude,
-      heading: position.heading,
-      speedMs: position.speed < 0 ? 0 : position.speed,
-    );
+     _smoother.updatePosition(
+       lat: position.latitude,
+       lng: position.longitude,
+       heading: position.heading,
+       speedMs: position.speed < 0 ? 0 : position.speed,
+     );
 
-    // FIX: Crear marcador de moto inmediatamente si el mapa ya está listo
-    if (_mapCreated && _annotationManager != null && state.pinImage != null) {
-      await _updateMotoMarker(position.latitude, position.longitude, position.heading);
-    }
+     // FIX: Solo crear marcador si NO existe ya
+     if (_mapCreated && _annotationManager != null && state.pinImage != null && _motoAnnotation == null) {
+       await _updateMotoMarker(position.latitude, position.longitude, position.heading);
+     }
 
-    _flyTo(
-      lat: position.latitude,
-      lng: position.longitude,
-      zoom: 15.0,
-      bearing: position.heading,
-    );
-  }
+     _flyTo(
+       lat: position.latitude,
+       lng: position.longitude,
+       zoom: 15.0,
+       bearing: position.heading,
+     );
+   }
 
   Future<void> _startLocationTracking() async {
     if (_locationSubscription != null) return;
@@ -333,7 +333,11 @@ class MapController extends AutoDisposeNotifier<MapState> {
       final now = DateTime.now();
       if (now.difference(_lastMarkerUpdate).inMilliseconds < 33) return;
       _lastMarkerUpdate = now;
-      _updateMotoMarker(pos.latitude, pos.longitude, pos.heading);
+    
+      // FIX: No recrear si acabamos de cambiar avatar (evita parpadeo)
+      if (_motoAnnotation == null || state.pinImage != null || state.userAvatarImage != null) {
+        _updateMotoMarker(pos.latitude, pos.longitude, pos.heading);
+      }
     });
   }
 
@@ -450,27 +454,33 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _waypointAnnotations.clear();
   }
 
-  Future<Uint8List?> pickUserAvatar() async {
-    final bytes = await _imageUtils.pickImageFromGallery();
-    if (bytes == null) return null;
-    final circular = await _imageUtils.makeCircularImage(bytes, 70);
-    final saved = await _prefs.saveAvatar(circular);
-    if (!saved) return null;
-    state = state.copyWith(userAvatarImage: circular);
-    if (_motoAnnotation != null && _annotationManager != null) {
-      await _mapService.deleteAnnotation(_annotationManager!, _motoAnnotation!);
-      _motoAnnotation = null;
+    Future<Uint8List?> pickUserAvatar() async {
+      final bytes = await _imageUtils.pickImageFromGallery();
+      if (bytes == null) return null;
+      final circular = await _imageUtils.makeCircularImage(bytes, 70);
+      final saved = await _prefs.saveAvatar(circular);
+      if (!saved) return null;
+    
+      // Actualizar estado primero
+      state = state.copyWith(userAvatarImage: circular);
+    
+      // FIX: Eliminar marcador viejo y forzar recreación con avatar
+      if (_motoAnnotation != null && _annotationManager != null) {
+        await _mapService.deleteAnnotation(_annotationManager!, _motoAnnotation!);
+        _motoAnnotation = null; // ← Importante: null para forzar recreación
+      }
+    
+      // Forzar recreación inmediata con el avatar
+      if (state.currentPosition != null) {
+        await _updateMotoMarker(
+          state.currentPosition!.latitude,
+          state.currentPosition!.longitude,
+          state.currentPosition!.heading,
+        );
+      }
+    
+      return circular;
     }
-    if (state.currentPosition != null) {
-      _smoother.updatePosition(
-        lat: state.currentPosition!.latitude,
-        lng: state.currentPosition!.longitude,
-        heading: state.currentPosition!.heading,
-        speedMs: 0,
-      );
-    }
-    return circular;
-  }
 
   Future<void> _loadUserAvatar() async {
     final bytes = await _prefs.loadAvatar();
