@@ -1020,42 +1020,48 @@ class MapController extends AutoDisposeNotifier<MapState> {
     }
   }
 
-    Future<void> fetchGasolineras() async {
-      if (_mapboxMap == null || state.currentPosition == null) {
-        print('[MapController] Mapa o posición null, no se buscan gasolineras');
-        return;
-      }
-      state = state.copyWith(gasolinerasLoading: true);
-      try {
-        print('[MapController] Buscando gasolineras en ${state.currentPosition!.latitude}, ${state.currentPosition!.longitude}');
-        final geoJson = await _overpassApi.fetchGasolineras(
-          state.currentPosition!.latitude,
-          state.currentPosition!.longitude,
-        );
-        print('[MapController] Respuesta Overpass: ${geoJson != null ? 'con datos' : 'null'}');
-      
-        if (geoJson != null) {
-          // FIX: Verificar que el geoJson tenga features
-          final decoded = json.decode(geoJson);
-          final features = decoded['features'] as List?;
-          print('[MapController] Features encontradas: ${features?.length ?? 0}');
-        
-          if (features != null && features.isNotEmpty) {
-            print('[MapController] Dibujando ${features.length} gasolineras...');
-            await _mapService.updateGasolineraLayer(_mapboxMap!, geoJson);
-            state = state.copyWith(gasolinerasVisible: true);
-          } else {
-            print('[MapController] GeoJson válido pero sin features');
+        Future<void> fetchGasolineras() async {
+          if (_mapboxMap == null || state.currentPosition == null) {
+            print('[MapController] ERROR: Mapa=${_mapboxMap != null}, Pos=${state.currentPosition != null}');
+            return;
           }
-        } else {
-          print('[MapController] No se encontraron gasolineras');
+    
+          state = state.copyWith(gasolinerasLoading: true);
+    
+          try {
+            print('[MapController] Lat: ${state.currentPosition!.latitude}, Lng: ${state.currentPosition!.longitude}');
+      
+            final geoJson = await _overpassApi.fetchGasolineras(
+              state.currentPosition!.latitude,
+              state.currentPosition!.longitude,
+            );
+      
+            print('[MapController] geoJson recibido: ${geoJson != null}');
+      
+            if (geoJson == null) {
+              print('[MapController] geoJson es NULL - no se encontraron gasolineras');
+              state = state.copyWith(gasolinerasLoading: false);
+              return;
+            }
+      
+            // Debug: imprimir primeros 200 chars del geoJson
+            print('[MapController] geoJson preview: ${geoJson.substring(0, geoJson.length > 200 ? 200 : geoJson.length)}');
+      
+            await _mapService.updateGasolineraLayer(_mapboxMap!, geoJson);
+      
+            state = state.copyWith(
+              gasolinerasVisible: true,
+              gasolinerasLoading: false,
+            );
+      
+            print('[MapController] Gasolineras dibujadas exitosamente');
+      
+          } catch (e, stack) {
+            print('[MapController] ERROR en fetchGasolineras: $e');
+            print('[MapController] Stack: $stack');
+            state = state.copyWith(gasolinerasLoading: false);
+          }
         }
-      } catch (e, stack) {
-        print('[MapController] Error buscando gasolineras: $e');
-        print('[MapController] Stack: $stack');
-      }
-      state = state.copyWith(gasolinerasLoading: false);
-    }
 
   Future<void> hideGasolineras() async {
     if (_mapboxMap == null) return;
