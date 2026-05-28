@@ -133,46 +133,58 @@ class MapService {
   }
 
   // ── Capa de gasolineras ───────────────────────────────
-  Future<void> updateGasolineraLayer(
-    mapbox.MapboxMap map,
-    String geoJson,
-  ) async {
-    try {
-      final style = await map.style;
-      try { await style.removeStyleLayer('gasolineras-layer'); } catch (_) {}
-      try { await style.removeStyleLayer('gasolineras-label'); } catch (_) {}
-      try { await style.removeStyleSource('gasolineras-source'); } catch (_) {}
+    Future<void> updateGasolineraLayer(
+      mapbox.MapboxMap map,
+      String geoJson,
+    ) async {
+      try {
+        final style = await map.style;
+      
+        // Limpiar capas anteriores
+        try { await style.removeStyleLayer('gasolineras-layer'); } catch (_) {}
+        try { await style.removeStyleLayer('gasolineras-label'); } catch (_) {}
+        try { await style.removeStyleSource('gasolineras-source'); } catch (_) {}
 
-      await style.addSource(mapbox.GeoJsonSource(
-        id: 'gasolineras-source', 
-        data: geoJson,
-      ));
+        // Verificar que geoJson sea válido
+        final decoded = json.decode(geoJson);
+        final features = decoded['features'] as List?;
+        if (features == null || features.isEmpty) {
+          print('[MapService] No hay features para dibujar');
+          return;
+        }
 
-      // Círculo naranja - 0xFFFF6D00
-      await style.addLayer(mapbox.CircleLayer(
-        id: 'gasolineras-layer',
-        sourceId: 'gasolineras-source',
-        circleRadius: 8.0,
-        circleColor: 0xFFFF6D00,
-        circleStrokeWidth: 2.0,
-        circleStrokeColor: 0xFFFFFFFF, // blanco
-      ));
+        await style.addSource(mapbox.GeoJsonSource(
+          id: 'gasolineras-source', 
+          data: geoJson,
+        ));
 
-      // Etiqueta de nombre - 0xFFFF6D00
-      await style.addLayer(mapbox.SymbolLayer(
-        id: 'gasolineras-label',
-        sourceId: 'gasolineras-source',
-        textField: '{name}',
-        textSize: 10.0,
-        textOffset: const [0.0, 1.8],
-        textAllowOverlap: false,
-        textOptional: true,
-        textColor: 0xFFFF6D00,
-      ));
-    } catch (e) {
-      print('[MapService] updateGasolineraLayer error: \$e');
+        // Círculo naranja
+        await style.addLayer(mapbox.CircleLayer(
+          id: 'gasolineras-layer',
+          sourceId: 'gasolineras-source',
+          circleRadius: 10.0,  // ← Un poco más grande para visibilidad
+          circleColor: 0xFFFF6D00,
+          circleStrokeWidth: 2.0,
+          circleStrokeColor: 0xFFFFFFFF,
+        ));
+
+        // Etiqueta de nombre
+        await style.addLayer(mapbox.SymbolLayer(
+          id: 'gasolineras-label',
+          sourceId: 'gasolineras-source',
+          textField: '{name}',
+          textSize: 12.0,  // ← Un poco más grande
+          textOffset: [0.0, 1.5],  // ← Corregido: sin const en lista
+          textAllowOverlap: false,
+          textOptional: true,
+          textColor: 0xFFFF6D00,
+        ));
+      
+        print('[MapService] Gasolineras dibujadas: ${features.length}');
+      } catch (e) {
+        print('[MapService] updateGasolineraLayer error: $e');
+      }
     }
-  }
 
   // ── Limpiar todas las capas de ruta ──────────────────
     Future<void> clearRouteLayers(mapbox.MapboxMap map) async {
