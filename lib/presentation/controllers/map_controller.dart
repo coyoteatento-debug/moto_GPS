@@ -333,12 +333,10 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _smoothSub = _smoother.positionStream.listen((SmoothPosition pos) {
       final now = DateTime.now();
       _lastMarkerUpdate = now;
-    
-        _updateMotoMarker(pos.latitude, pos.longitude, pos.heading);
-      }
+      _updateMotoMarker(pos.latitude, pos.longitude, pos.heading);
     });
   }
-
+  
     Future<void> _updateMotoMarker(double lat, double lng, double bearing) async {
       final markerImage = state.userAvatarImage ?? state.pinImage;
       if (_annotationManager == null || markerImage == null) return;
