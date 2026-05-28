@@ -326,13 +326,9 @@ class MapController extends AutoDisposeNotifier<MapState> {
     }
   }
 
-  DateTime _lastMarkerUpdate = DateTime.fromMillisecondsSinceEpoch(0);
-
   void _startSmoothMarker() {
     _smoothSub?.cancel();
     _smoothSub = _smoother.positionStream.listen((SmoothPosition pos) {
-      final now = DateTime.now();
-      _lastMarkerUpdate = now;
       _updateMotoMarker(pos.latitude, pos.longitude, pos.heading);
     });
   }
