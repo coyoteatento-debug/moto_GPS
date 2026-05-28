@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -331,7 +332,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _smoothSub?.cancel();
     _smoothSub = _smoother.positionStream.listen((SmoothPosition pos) {
       final now = DateTime.now();
-      if (now.difference(_lastMarkerUpdate).inMilliseconds < 33) return;
       _lastMarkerUpdate = now;
     
       // FIX: No recrear si acabamos de cambiar avatar (evita parpadeo)
@@ -341,22 +341,39 @@ class MapController extends AutoDisposeNotifier<MapState> {
     });
   }
 
-  Future<void> _updateMotoMarker(double lat, double lng, double bearing) async {
-    final markerImage = state.userAvatarImage ?? state.pinImage;
-    if (_annotationManager == null || markerImage == null) {
-      print('[MapController] No se puede crear marcador: annotationManager=$_annotationManager, markerImage=${markerImage != null}');
-      return;
+    Future<void> _updateMotoMarker(double lat, double lng, double bearing) async {
+      final markerImage = state.userAvatarImage ?? state.pinImage;
+      if (_annotationManager == null || markerImage == null) return;
+    
+      // FIX: Si ya existe marcador, solo actualizar posición, NO crear nuevo
+      if (_motoAnnotation != null) {
+        try {
+          _motoAnnotation!.geometry = mapbox.Point(
+            coordinates: mapbox.Position(lng, lat));
+          _motoAnnotation!.iconRotate = state.userAvatarImage != null ? 0.0 : bearing;
+          await _annotationManager!.update(_motoAnnotation!);
+          return; // ← Importante: salir si solo actualizamos
+        } catch (e) {
+          print('[MapController] Error actualizando marcador: $e');
+          // Si falla la actualización, eliminar y recrear
+          try {
+            await _annotationManager!.delete(_motoAnnotation!);
+          } catch (_) {}
+          _motoAnnotation = null;
+        }
+      }
+    
+      // Solo crear si no existe (o se eliminó arriba)
+      _motoAnnotation = await _mapService.updateMotoMarker(
+        manager: _annotationManager!,
+        current: _motoAnnotation,
+        lat: lat,
+        lng: lng,
+        bearing: bearing,
+        markerImage: markerImage,
+        isAvatar: state.userAvatarImage != null,
+      );
     }
-    _motoAnnotation = await _mapService.updateMotoMarker(
-      manager: _annotationManager!,
-      current: _motoAnnotation,
-      lat: lat,
-      lng: lng,
-      bearing: bearing,
-      markerImage: markerImage,
-      isAvatar: state.userAvatarImage != null,
-    );
-  }
 
   Future<void> _addDestinationMarker(double lat, double lng) async {
     if (_annotationManager == null || state.pinImage == null) {
@@ -1003,27 +1020,42 @@ class MapController extends AutoDisposeNotifier<MapState> {
     }
   }
 
-  Future<void> fetchGasolineras() async {
-    if (_mapboxMap == null || state.currentPosition == null) return;
-    state = state.copyWith(gasolinerasLoading: true);
-    try {
-      print('[MapController] Buscando gasolineras...');
-      final geoJson = await _overpassApi.fetchGasolineras(
-        state.currentPosition!.latitude,
-        state.currentPosition!.longitude,
-      );
-      if (geoJson != null) {
-        print('[MapController] Gasolineras encontradas, dibujando...');
-        await _mapService.updateGasolineraLayer(_mapboxMap!, geoJson);
-        state = state.copyWith(gasolinerasVisible: true);
-      } else {
-        print('[MapController] No se encontraron gasolineras');
+    Future<void> fetchGasolineras() async {
+      if (_mapboxMap == null || state.currentPosition == null) {
+        print('[MapController] Mapa o posición null, no se buscan gasolineras');
+        return;
       }
-    } catch (e) {
-      print('[MapController] Error buscando gasolineras: $e');
+      state = state.copyWith(gasolinerasLoading: true);
+      try {
+        print('[MapController] Buscando gasolineras en ${state.currentPosition!.latitude}, ${state.currentPosition!.longitude}');
+        final geoJson = await _overpassApi.fetchGasolineras(
+          state.currentPosition!.latitude,
+          state.currentPosition!.longitude,
+        );
+        print('[MapController] Respuesta Overpass: ${geoJson != null ? 'con datos' : 'null'}');
+      
+        if (geoJson != null) {
+          // FIX: Verificar que el geoJson tenga features
+          final decoded = json.decode(geoJson);
+          final features = decoded['features'] as List?;
+          print('[MapController] Features encontradas: ${features?.length ?? 0}');
+        
+          if (features != null && features.isNotEmpty) {
+            print('[MapController] Dibujando ${features.length} gasolineras...');
+            await _mapService.updateGasolineraLayer(_mapboxMap!, geoJson);
+            state = state.copyWith(gasolinerasVisible: true);
+          } else {
+            print('[MapController] GeoJson válido pero sin features');
+          }
+        } else {
+          print('[MapController] No se encontraron gasolineras');
+        }
+      } catch (e, stack) {
+        print('[MapController] Error buscando gasolineras: $e');
+        print('[MapController] Stack: $stack');
+      }
+      state = state.copyWith(gasolinerasLoading: false);
     }
-    state = state.copyWith(gasolinerasLoading: false);
-  }
 
   Future<void> hideGasolineras() async {
     if (_mapboxMap == null) return;
