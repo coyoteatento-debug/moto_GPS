@@ -334,8 +334,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
       final now = DateTime.now();
       _lastMarkerUpdate = now;
     
-      // FIX: No recrear si acabamos de cambiar avatar (evita parpadeo)
-      if (_motoAnnotation == null || state.pinImage != null || state.userAvatarImage != null) {
         _updateMotoMarker(pos.latitude, pos.longitude, pos.heading);
       }
     });
