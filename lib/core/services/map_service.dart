@@ -212,12 +212,12 @@ class MapService {
       final style = await map.style;
       for (int j = 0; j < totalRoutes; j++) {
         await style.setStyleLayerProperty(
-          'route-layer-\$j', 
+          'route-layer-$j', 
           'line-color',
           json.encode(j == selectedIndex ? '#1976D2' : '#90A4AE'),
         );
         await style.setStyleLayerProperty(
-          'route-layer-\$j', 
+          'route-layer-$j', 
           'line-width',
           json.encode(j == selectedIndex ? 6.0 : 4.0),
         );
