@@ -472,7 +472,11 @@ class MapController extends AutoDisposeNotifier<MapState> {
       if (bytes == null) return null;
       final circular = await _imageUtils.makeCircularImage(bytes, 70);
       final saved = await _prefs.saveAvatar(circular);
-      if (!saved) return null;
+      final saved = await _prefs.saveAvatar(circular);
+      if (!saved) {
+        print('[MapController] Avatar no guardado: imagen demasiado grande (>800KB)');
+        return null;
+      }
     
       // Actualizar estado primero
       state = state.copyWith(userAvatarImage: circular);
