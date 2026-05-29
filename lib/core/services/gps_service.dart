@@ -22,7 +22,9 @@ class GpsService {
 
   /// Stream unificado — funciona tanto en foreground como en background
   Stream<Position> get positionStream {
-    _controller ??= StreamController<Position>.broadcast();
+    if (_controller == null || _controller!.isClosed) {
+      _controller = StreamController<Position>.broadcast();
+    }
     return _controller!.stream;
   }
 
