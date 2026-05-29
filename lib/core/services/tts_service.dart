@@ -61,7 +61,8 @@ class TtsService {
 
   Future<void> stop() async {
     _safetyTimer?.cancel();
-    _isSpeaking = false;       // ← agrega esta línea
+    _safetyTimer = null;
+    _isSpeaking = false;
     _lastSpoken = '';
     await _tts.stop();
   }
