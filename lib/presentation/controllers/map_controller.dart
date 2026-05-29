@@ -153,7 +153,11 @@ class MapController extends AutoDisposeNotifier<MapState> {
     try {
       final granted = await _requestLocationPermissions();
       if (!granted) return false;
-      await _mapReadyCompleter.future;
+      await _mapReadyCompleter.future.timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {},
+      );
+      if (!_mapCreated) return false;
       await _getInitialPosition();
       _startLocationTracking();
       return true;
