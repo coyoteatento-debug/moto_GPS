@@ -767,6 +767,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
 
   Future<void> _handleArrival() async {
     if (!state.navigating) return;
+    if (!_tripService.isTracking) return;
     state = state.copyWith(navigating: false);
     final record = await _tripService.finishAndSave(
       destination: state.selectedPlace?['name'] ?? 'Destino',
@@ -778,7 +779,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
       newTrips.insert(0, record);
       state = state.copyWith(trips: newTrips);
     }
-    _tripService.reset();
     await cancelRoute();
   }
 
