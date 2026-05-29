@@ -13,7 +13,7 @@ class MapService {
       'road-motorway': '#FF6500',
       'road-motorway-case': '#CC4E00',
       'road-motorway-link': '#FF6500',
-      'road-motorway-link-case': '#CC4E00',F
+      'road-motorway-link-case': '#CC4E00',
       'road-motorway-trunk': '#FF6500',
       'road-motorway-trunk-case': '#CC4E00',
       'road-trunk': '#FF6500',
