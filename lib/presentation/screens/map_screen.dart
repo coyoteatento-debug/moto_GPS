@@ -221,6 +221,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
             ),
           );
         }
+      },  
       onVoiceSearch: _startVoiceSearch,
       isListening: controller.isListening,
       onGasolinerasToggle: controller.toggleGasolineras,
