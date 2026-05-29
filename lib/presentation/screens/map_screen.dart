@@ -213,10 +213,14 @@ class _MapScreenState extends ConsumerState<MapScreen>
       onRecenter: controller.recenter,
       onAvatarPick: () async {
         final bytes = await controller.pickUserAvatar();
-        if (bytes == null && mounted) {
-          _showSnack('Imagen muy grande, intenta con una mas pequena');
+        if (bytes == null && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No se pudo guardar la foto. Intenta con una imagen más pequeña.'),
+              duration: Duration(seconds: 3),
+            ),
+          );
         }
-      },
       onVoiceSearch: _startVoiceSearch,
       isListening: controller.isListening,
       onGasolinerasToggle: controller.toggleGasolineras,
