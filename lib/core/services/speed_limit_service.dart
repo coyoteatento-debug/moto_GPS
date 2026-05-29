@@ -13,6 +13,7 @@ class SpeedLimitService {
   double? _lastQueryLng;
   DateTime? _lastQueryTime;
   bool _isFetching = false;
+  http.Client? _client;
   // ── Obtener límite de velocidad ──────────────────────
 
   /// Retorna el límite de velocidad en km/h de la vía más cercana
@@ -26,14 +27,14 @@ class SpeedLimitService {
     }
 
     _isFetching = true;
-    final client = http.Client();
+    _client = http.Client();
     try {
       final query =
           '[out:json][timeout:10];'
           'way[maxspeed](around:25,$lat,$lng);'
           'out tags 1;';
       final uri = Uri.parse('https://overpass-api.de/api/interpreter');
-      final response = await client.post(
+      final response = await _client!.post(
         uri,
         headers: {
           'User-Agent':   'MotoGPS/1.0',
@@ -44,7 +45,7 @@ class SpeedLimitService {
       ).timeout(
         const Duration(seconds: 10),
         onTimeout: () {
-          client.close();
+          _client!.close();
           throw TimeoutException('SpeedLimit timeout');
         },
       );
@@ -65,7 +66,8 @@ class SpeedLimitService {
     } catch (_) {
       return _lastSpeedLimit;
     } finally {
-      client.close();
+      _client?.close();
+      _client = null;
       _isFetching = false;
     }
   }
@@ -77,6 +79,8 @@ class SpeedLimitService {
     _lastQueryLng   = null;
     _lastQueryTime  = null;
     _isFetching     = false;
+    _client?.close();
+    _client = null;
   }
 
   // ── Helpers ──────────────────────────────────────────
