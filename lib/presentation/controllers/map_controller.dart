@@ -287,6 +287,13 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _tripService.accumulate(position.latitude, position.longitude);
     _checkRouteDeviation(position.latitude, position.longitude);
     await _updateRemainingRoute(position.latitude, position.longitude);
+
+    // FIX: si se detectó llegada, _updateRemainingRoute ya ejecutó
+    // _handleArrival() + cancelRoute() y reseteó el estado. Cortar aquí
+    // para no seguir con turn-by-turn/waypoints ni mover la cámara
+    // con configuración de navegación sobre una ruta ya cancelada.
+    if (!state.navigating) return;
+
     _updateTurnByTurn(position.latitude, position.longitude);
     _checkWaypointArrival(position.latitude, position.longitude);
 
