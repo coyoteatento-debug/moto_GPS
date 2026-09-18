@@ -18,9 +18,24 @@ class ImageUtils {
 
   // ── Imagen circular con borde azul ───────────────────
   Future<Uint8List> makeCircularImage(Uint8List data, int size) async {
-    final codec = await ui.instantiateImageCodec(
-        data, targetWidth: size, targetHeight: size);
-    final frame    = await codec.getNextFrame();
+    // FIX: decodificar sin forzar width/height para no perder el
+    // aspect ratio original de la foto.
+    final codec = await ui.instantiateImageCodec(data);
+    final frame = await codec.getNextFrame();
+    final image = frame.image;
+
+    // FIX: recorte cuadrado centrado (crop, no stretch) — evita
+    // deformar fotos rectangulares al forzarlas a un cuadrado.
+    final cropSize = image.width < image.height
+        ? image.width.toDouble()
+        : image.height.toDouble();
+    final srcRect = Rect.fromLTWH(
+      (image.width - cropSize) / 2,
+      (image.height - cropSize) / 2,
+      cropSize,
+      cropSize,
+    );
+
     final recorder = ui.PictureRecorder();
     final canvas   = Canvas(recorder);
     final paint    = Paint()..isAntiAlias = true;
@@ -29,9 +44,8 @@ class ImageUtils {
     canvas.clipPath(Path()..addOval(rect));
     canvas.drawRect(rect, paint..color = Colors.white);
     canvas.drawImageRect(
-      frame.image,
-      Rect.fromLTWH(0, 0,
-          frame.image.width.toDouble(), frame.image.height.toDouble()),
+      image,
+      srcRect,
       rect,
       paint,
     );
@@ -45,7 +59,7 @@ class ImageUtils {
     );
 
     final picture  = recorder.endRecording();
-    frame.image.dispose();
+    image.dispose();
     final img      = await picture.toImage(size, size);
     final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
     img.dispose();
