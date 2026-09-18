@@ -10,7 +10,6 @@ import '../core/services/tts_service.dart';
 import '../core/utils/geo_utils.dart';
 import '../core/utils/image_utils.dart';
 import '../data/sources/mapbox_api.dart';
-import '../data/sources/overpass_api.dart';
 import '../data/sources/prefs_source.dart';
 
 final mapboxTokenProvider = Provider<String>((ref) {
@@ -38,7 +37,6 @@ final mapboxApiProvider = Provider.family<MapboxApi, String>((ref, token) {
   return MapboxApi(token);
 });
 
-final overpassApiProvider = Provider<OverpassApi>((ref) => const OverpassApi());
 
 final navigationServiceProvider = Provider.family<NavigationService, String>((ref, token) {
   final api = ref.read(mapboxApiProvider(token));
