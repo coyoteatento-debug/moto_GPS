@@ -22,7 +22,6 @@ import '../../core/utils/geo_utils.dart';
 import '../../core/utils/image_utils.dart';
 import '../../data/models/trip_record.dart';
 import '../../data/sources/mapbox_api.dart';
-import '../../data/sources/overpass_api.dart';
 import '../../data/sources/prefs_source.dart';
 import '../../di/providers.dart';
 import '../state/map_state.dart';
@@ -65,7 +64,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
   late final TripService _tripService;
   late final NavigationService _navService;
   late final MapboxApi _mapboxApi;
-  late final OverpassApi _overpassApi;
   final SpeechToText _speech = SpeechToText();
   bool _speechAvailable = false;
 
@@ -88,7 +86,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _tripService = ref.read(tripServiceProvider);
     _mapboxApi = ref.read(mapboxApiProvider(_token));
     _navService = ref.read(navigationServiceProvider(_token));
-    _overpassApi = ref.read(overpassApiProvider);
 
     ref.onDispose(_onDispose);
     return const MapState();
@@ -1026,67 +1023,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
     }
   }
 
-        Future<void> fetchGasolineras() async {
-          if (_mapboxMap == null || state.currentPosition == null) {
-            print('[MapController] ERROR: Mapa=${_mapboxMap != null}, Pos=${state.currentPosition != null}');
-            return;
-          }
-    
-          state = state.copyWith(gasolinerasLoading: true);
-    
-          try {
-            print('[MapController] Lat: ${state.currentPosition!.latitude}, Lng: ${state.currentPosition!.longitude}');
-      
-            final geoJson = await _overpassApi.fetchGasolineras(
-              state.currentPosition!.latitude,
-              state.currentPosition!.longitude,
-            );
-      
-            print('[MapController] geoJson recibido: ${geoJson != null}');
-      
-            if (geoJson == null) {
-              print('[MapController] geoJson es NULL - no se encontraron gasolineras');
-              state = state.copyWith(gasolinerasLoading: false);
-              return;
-            }
-      
-            // Debug: imprimir primeros 200 chars del geoJson
-            print('[MapController] geoJson preview: ${geoJson.substring(0, geoJson.length > 200 ? 200 : geoJson.length)}');
-      
-            await _mapService.updateGasolineraLayer(_mapboxMap!, geoJson);
-      
-            state = state.copyWith(
-              gasolinerasVisible: true,
-              gasolinerasLoading: false,
-            );
-      
-            print('[MapController] Gasolineras dibujadas exitosamente');
-      
-          } catch (e, stack) {
-            print('[MapController] ERROR en fetchGasolineras: $e');
-            print('[MapController] Stack: $stack');
-            state = state.copyWith(gasolinerasLoading: false);
-          }
-        }
-
-  Future<void> hideGasolineras() async {
-    if (_mapboxMap == null) return;
-    state = state.copyWith(gasolinerasVisible: false);
-    try {
-      final style = await _mapboxMap!.style;
-      try { await style.removeStyleLayer('gasolineras-layer'); } catch (_) {}
-      try { await style.removeStyleLayer('gasolineras-label'); } catch (_) {}
-      try { await style.removeStyleSource('gasolineras-source'); } catch (_) {}
-    } catch (_) {}
-  }
-
-  void toggleGasolineras() {
-    if (state.gasolinerasVisible) {
-      hideGasolineras();
-    } else {
-      fetchGasolineras();
-    }
-  }
 
   bool _isNightTime() {
     final hour = DateTime.now().hour;
@@ -1153,9 +1089,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
         'type': 'LineString',
         'coordinates': state.routeCoordinates,
       });
-    }
-    if (state.currentPosition != null && state.gasolinerasVisible) {
-      await fetchGasolineras();
     }
     await _recreateAnnotationsAfterStyleChange();
   }
