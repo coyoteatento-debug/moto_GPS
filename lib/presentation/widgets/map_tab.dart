@@ -163,8 +163,6 @@ class MapTab extends StatelessWidget {
   final VoidCallback onWaypointModeToggle;
   final VoidCallback onWaypointDone;
   final VoidCallback onWaypointClear;
-  final bool gasolinerasVisible;
-  final bool gasolinerasLoading;
   final bool routeDrawn;
   final bool showTapConfirm;
   final bool isRecalculating;
@@ -204,7 +202,6 @@ class MapTab extends StatelessWidget {
   final VoidCallback onAvatarPick;
   final VoidCallback onVoiceSearch;
   final bool isListening;
-  final VoidCallback onGasolinerasToggle;
   final VoidCallback onSatelliteToggle;
   final VoidCallback onNightModeToggle;
   final VoidCallback onTapConfirm;
@@ -227,8 +224,6 @@ class MapTab extends StatelessWidget {
     required this.onWaypointModeToggle,
     required this.onWaypointDone,
     required this.onWaypointClear,
-    required this.gasolinerasVisible,
-    required this.gasolinerasLoading,
     required this.routeDrawn,
     required this.showTapConfirm,
     required this.isRecalculating,
@@ -258,7 +253,6 @@ class MapTab extends StatelessWidget {
     required this.onAvatarPick,
     required this.onVoiceSearch,
     required this.isListening,
-    required this.onGasolinerasToggle,
     required this.onSatelliteToggle,
     required this.onNightModeToggle,
     required this.onTapConfirm,
@@ -490,37 +484,6 @@ class MapTab extends StatelessWidget {
           ),
         ),
 
-      // ── Botón gasolineras ──────────────────────────────
-      if (!navigating)
-        Positioned(
-          bottom: 230, right: 16,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onGasolinerasToggle,
-            child: Container(
-              width: 46, height: 46,
-              decoration: BoxDecoration(
-                color: gasolinerasVisible
-                    ? Colors.orange[700] : Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: const [BoxShadow(
-                    color: Colors.black38, blurRadius: 8,
-                    offset: Offset(0, 2))],
-              ),
-              child: gasolinerasLoading
-                  ? Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          color: Colors.orange[700]),
-                    )
-                  : Icon(Icons.local_gas_station,
-                      color: gasolinerasVisible
-                          ? Colors.white : Colors.orange[700],
-                      size: 24),
-            ),
-          ),
-        ),
 
       // ── Botón capas (satélite + modo nocturno) ─────────
       if (!navigating)
