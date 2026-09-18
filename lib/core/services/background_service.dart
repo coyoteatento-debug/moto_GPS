@@ -25,13 +25,13 @@ class BackgroundService {
   Future<void> stop() async {
     try {
       await _methodChannel.invokeMethod('stopService');
-      await _locationSub?.cancel();
-      _locationSub = null;
-      await _controller?.close();
-      _controller = null;
     } on PlatformException catch (e) {
       debugPrint('[BackgroundService] Error al detener: ${e.message}');
     }
+    await _locationSub?.cancel();
+    _locationSub = null;
+    await _controller?.close();
+    _controller = null;
   }
 
   Future<void> updateInstruction(String instruction) async {
