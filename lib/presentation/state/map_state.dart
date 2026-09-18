@@ -11,8 +11,6 @@ class MapState {
   final bool showTapConfirm;
   final bool userIsExploring;
   final bool isSatellite;
-  final bool gasolinerasVisible;
-  final bool gasolinerasLoading;
   final bool isRecalculating;
   final bool searchLoading;
   final bool isProgrammaticMove;
@@ -52,8 +50,6 @@ class MapState {
     this.showTapConfirm = false,
     this.userIsExploring = false,
     this.isSatellite = false,
-    this.gasolinerasVisible = false,
-    this.gasolinerasLoading = false,
     this.isRecalculating = false,
     this.searchLoading = false,
     this.isProgrammaticMove = false,
@@ -94,8 +90,6 @@ class MapState {
     bool? showTapConfirm,
     bool? userIsExploring,
     bool? isSatellite,
-    bool? gasolinerasVisible,
-    bool? gasolinerasLoading,
     bool? isRecalculating,
     bool? searchLoading,
     bool? isProgrammaticMove,
@@ -140,8 +134,6 @@ class MapState {
       showTapConfirm: showTapConfirm ?? this.showTapConfirm,
       userIsExploring: userIsExploring ?? this.userIsExploring,
       isSatellite: isSatellite ?? this.isSatellite,
-      gasolinerasVisible: gasolinerasVisible ?? this.gasolinerasVisible,
-      gasolinerasLoading: gasolinerasLoading ?? this.gasolinerasLoading,
       isRecalculating: isRecalculating ?? this.isRecalculating,
       searchLoading: searchLoading ?? this.searchLoading,
       isProgrammaticMove: isProgrammaticMove ?? this.isProgrammaticMove,
