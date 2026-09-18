@@ -1185,9 +1185,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
       );
     }
     if (state.waypoints.isNotEmpty) {
-      for (final a in _waypointAnnotations) {
-        try { await _annotationManager!.delete(a); } catch (_) {}
-      }
       _waypointAnnotations.clear();
       for (final wp in state.waypoints) {
         await _addWaypointAnnotation(
