@@ -223,7 +223,7 @@ class MapService {
         );
       }
     } catch (e) {
-      print('[MapService] highlightRoute error: \$e');
+      print('[MapService] highlightRoute error: $e');
     }
   }
 
@@ -269,7 +269,7 @@ class MapService {
         return annotation;
       }
     } catch (e) {
-      print('[MapService] updateMotoMarker error: \$e');
+      print('[MapService] updateMotoMarker error: $e');
       return current;
     } finally {
       _markerLocks[lockKey] = false;
@@ -298,7 +298,7 @@ class MapService {
         ),
       );
     } catch (e) {
-      print('[MapService] updateDestinationMarker error: \$e');
+      print('[MapService] updateDestinationMarker error: $e');
       return null;
     }
   }
@@ -309,7 +309,7 @@ class MapService {
     mapbox.PointAnnotation annotation,
   ) async {
     try { await manager.delete(annotation); } catch (e) {
-      print('[MapService] deleteAnnotation error: \$e');
+      print('[MapService] deleteAnnotation error: $e');
     }
   }
 }
