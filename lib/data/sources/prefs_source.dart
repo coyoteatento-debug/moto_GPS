@@ -28,9 +28,11 @@ class PrefsSource {
   Future<void> saveTrips(List<TripRecord> trips) async {
     final prefs   = await _instance;
     final limited = trips.take(50).toList();
-    final useCompact = limited.any((t) => t.routeCoords.length > 100);
     final encoded = json.encode(
-      limited.map((t) => useCompact ? t.toJsonCompact() : t.toJson()).toList(),
+      limited
+          .map((t) =>
+              t.routeCoords.length > 100 ? t.toJsonCompact() : t.toJson())
+          .toList(),
     );
     await prefs.setString('trip_records', encoded);
   }
