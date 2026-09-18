@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,7 +20,18 @@ class _MapScreenState extends ConsumerState<MapScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
 
   final _searchController = TextEditingController();
-  DateTime _lastUserInteraction = DateTime.fromMillisecondsSinceEpoch(0);
+    Timer? _autoRecenterTimer;
+
+  void _scheduleAutoRecenter() {
+    _autoRecenterTimer?.cancel();
+    _autoRecenterTimer = Timer(const Duration(seconds: 15), () {
+      if (!mounted) return;
+      final current = ref.read(mapControllerProvider);
+      if (current.navigating && current.userIsExploring) {
+        ref.read(mapControllerProvider.notifier).recenter();
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -36,6 +48,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
+    _autoRecenterTimer?.cancel();
     super.dispose();
   }
 
@@ -184,7 +197,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
       ),
       onCameraChange: (_) {
         if (!state.isProgrammaticMove) {
-          _lastUserInteraction = DateTime.now();
+          _scheduleAutoRecenter();
         }
         if (state.isProgrammaticMove) {
           Future.delayed(const Duration(milliseconds: 1200), () {
