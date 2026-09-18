@@ -6,8 +6,7 @@ class OverpassApi {
   const OverpassApi();
 
   Future<String?> fetchGasolineras(double lat, double lng) async {
-    // Radio reducido a 500m para prueba - si estás a 300m debería encontrar
-    const radius = 500;
+    const radius = 3000;
     
     final query = """
 [out:json][timeout:10];
@@ -36,7 +35,7 @@ out body;
       print('[OverpassApi] Elementos encontrados: ${elements.length}');
       
       if (elements.isEmpty) {
-        print('[OverpassApi] Sin elementos - ampliando radio a 2000m...');
+        print('[OverpassApi] Sin elementos - ampliando radio a 8000m...');
         // Fallback: intentar con radio mayor
         return _fetchWithLargerRadius(lat, lng);
       }
@@ -75,7 +74,7 @@ out body;
   }
   
   Future<String?> _fetchWithLargerRadius(double lat, double lng) async {
-    const radius = 2000;
+    const radius = 8000;
     
     final query = """
 [out:json][timeout:10];
