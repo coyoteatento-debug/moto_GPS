@@ -166,6 +166,12 @@ class MapTab extends StatelessWidget {
   final bool routeDrawn;
   final bool showTapConfirm;
   final bool isRecalculating;
+  final double fuelTankLiters;
+  final double fuelAutonomyKm;
+  final double fuelKmSinceRefuel;
+  final bool showLowFuelWarning;
+  final void Function(double liters, double autonomyKm) onFuelSettingsSave;
+  final VoidCallback onMarkRefueled;
 
   // ── Datos de ruta ─────────────────────────────────────
   final String routeDistance;
@@ -227,6 +233,12 @@ class MapTab extends StatelessWidget {
     required this.routeDrawn,
     required this.showTapConfirm,
     required this.isRecalculating,
+    required this.fuelTankLiters,
+    required this.fuelAutonomyKm,
+    required this.fuelKmSinceRefuel,
+    required this.showLowFuelWarning,
+    required this.onFuelSettingsSave,
+    required this.onMarkRefueled,
     required this.routeDistance,
     required this.routeDuration,
     required this.currentInstruction,
@@ -341,6 +353,35 @@ class MapTab extends StatelessWidget {
           ),
         ),
 
+      // ── Banner combustible bajo ──────────────────────────
+      if (showLowFuelWarning)
+        Positioned(
+          bottom: navigating ? 200 : 110,
+          left: 16, right: 16,
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.red[700],
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: const [BoxShadow(
+                  color: Colors.black38, blurRadius: 10,
+                  offset: Offset(0, 4))],
+            ),
+            child: Row(children: [
+              const Icon(Icons.local_gas_station,
+                  color: Colors.white, size: 22),
+              const SizedBox(width: 10),
+              const Expanded(child: Text(
+                  'Combustible bajo — cerca de tu reserva',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15))),
+            ]),
+          ),
+        ),
+      
       // ── Banner llegada a parada ─────────────────────────
       if (showWaypointArrival)
         Positioned(
@@ -755,9 +796,22 @@ class MapTab extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              _Speedometer(
-                currentSpeed: currentSpeed,
-                speedLimit:   speedLimit,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _Speedometer(
+                    currentSpeed: currentSpeed,
+                    speedLimit:   speedLimit,
+                  ),
+                  const SizedBox(height: 8),
+                  _FuelGauge(
+                    tankLiters: fuelTankLiters,
+                    autonomyKm: fuelAutonomyKm,
+                    kmSinceRefuel: fuelKmSinceRefuel,
+                    onSettingsSave: onFuelSettingsSave,
+                    onMarkRefueled: onMarkRefueled,
+                  ),
+                ],
               ),
               ElevatedButton.icon(
                 onPressed: onCancelRoute,
@@ -849,9 +903,22 @@ class MapTab extends StatelessWidget {
       if (!navigating && !routeDrawn && !showTapConfirm)
         Positioned(
           bottom: 30, left: 20,
-          child: _Speedometer(
-            currentSpeed: currentSpeed,
-            speedLimit:   speedLimit,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _Speedometer(
+                currentSpeed: currentSpeed,
+                speedLimit:   speedLimit,
+              ),
+              const SizedBox(height: 8),
+              _FuelGauge(
+                tankLiters: fuelTankLiters,
+                autonomyKm: fuelAutonomyKm,
+                kmSinceRefuel: fuelKmSinceRefuel,
+                onSettingsSave: onFuelSettingsSave,
+                onMarkRefueled: onMarkRefueled,
+              ),
+            ],
           ),
         ),
     ]);
@@ -924,6 +991,125 @@ class _Speedometer extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _FuelGauge extends StatelessWidget {
+  final double tankLiters;
+  final double autonomyKm;
+  final double kmSinceRefuel;
+  final void Function(double liters, double autonomyKm) onSettingsSave;
+  final VoidCallback onMarkRefueled;
+
+  const _FuelGauge({
+    required this.tankLiters,
+    required this.autonomyKm,
+    required this.kmSinceRefuel,
+    required this.onSettingsSave,
+    required this.onMarkRefueled,
+  });
+
+  bool get _configured => autonomyKm > 0;
+
+  double get _remainingKm =>
+      (autonomyKm - kmSinceRefuel).clamp(0, autonomyKm);
+
+  double get _percent =>
+      autonomyKm > 0 ? (_remainingKm / autonomyKm).clamp(0.0, 1.0) : 1.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final bgColor = !_configured
+        ? Colors.black87
+        : _percent <= 0.25
+            ? Colors.red[700]!
+            : _percent <= 0.5
+                ? Colors.orange[700]!
+                : Colors.black87;
+
+    return GestureDetector(
+      onTap: () => _showFuelDialog(context),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.local_gas_station,
+                color: Colors.white, size: 20),
+            const SizedBox(width: 6),
+            Text(
+              _configured ? '${_remainingKm.toStringAsFixed(0)} km' : 'Config.',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showFuelDialog(BuildContext context) {
+    final litersCtrl = TextEditingController(
+        text: tankLiters > 0 ? tankLiters.toStringAsFixed(0) : '');
+    final autonomyCtrl = TextEditingController(
+        text: autonomyKm > 0 ? autonomyKm.toStringAsFixed(0) : '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Combustible'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: litersCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                  labelText: 'Capacidad del tanque (litros)'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: autonomyCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                  labelText: 'Autonomía con tanque lleno (km)'),
+            ),
+          ],
+        ),
+        actions: [
+          if (_configured)
+            TextButton(
+              onPressed: () {
+                onMarkRefueled();
+                Navigator.pop(ctx);
+              },
+              child: const Text('Tanque lleno ⛽'),
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final liters = double.tryParse(litersCtrl.text) ?? 0.0;
+              final autonomy = double.tryParse(autonomyCtrl.text) ?? 0.0;
+              if (liters > 0 && autonomy > 0) {
+                onSettingsSave(liters, autonomy);
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('Guardar'),
+          ),
         ],
       ),
     );
