@@ -9,14 +9,13 @@ class MapboxApi {
 
   void dispose() => _client.close();
 
-    // ── Geocoding (buscador) ──────────────────────────────
+      // ── Búsqueda de lugares (Search Box API) ──────────────
   Future<List<Map<String, dynamic>>> searchPlaces(
     String query, {
     double? proximityLat,
     double? proximityLng,
   }) async {
     if (query.trim().length < 3) return [];
-    const types = 'poi,place,locality,neighborhood,address,district';
     final proximity = (proximityLat != null && proximityLng != null)
         ? '&proximity=$proximityLng,$proximityLat'
         : '';
@@ -33,24 +32,23 @@ class MapboxApi {
       bbox = '&bbox=$minLng,$minLat,$maxLng,$maxLat';
     }
 
-    final local = await _fetchPlaces(query, types, proximity, bbox);
+    final local = await _fetchPlaces(query, proximity, bbox);
     if (local.isNotEmpty) return local;
 
     // Fallback: sin bbox, pero restringido a México — por si el
     // lugar buscado está en otra ciudad del país.
-    return _fetchPlaces(query, types, proximity, '');
+    return _fetchPlaces(query, proximity, '');
   }
 
   Future<List<Map<String, dynamic>>> _fetchPlaces(
-    String query, String types, String proximity, String bbox,
+    String query, String proximity, String bbox,
   ) async {
     final url =
-        'https://api.mapbox.com/geocoding/v5/mapbox.places/'
-        '${Uri.encodeComponent(query)}.json'
-        '?access_token=$token'
+        'https://api.mapbox.com/search/searchbox/v1/forward'
+        '?q=${Uri.encodeComponent(query)}'
+        '&access_token=$token'
         '&language=es'
         '&country=mx'
-        '&types=$types'
         '&limit=7'
         '$proximity'
         '$bbox';
@@ -69,12 +67,14 @@ class MapboxApi {
       final features = data['features'] as List? ?? [];
 
       return features.map((f) {
-        final center = f['center'] as List;
+        final coords = f['geometry']['coordinates'] as List;
+        final props = f['properties'] as Map<String, dynamic>;
         return {
-          'name': f['text'] as String? ?? 'Sin nombre',
-          'full_name': f['place_name'] as String? ?? 'Sin nombre',
-          'lat': (center[1] as num).toDouble(),
-          'lng': (center[0] as num).toDouble(),
+          'name': props['name'] as String? ?? 'Sin nombre',
+          'full_name': (props['full_address'] ?? props['place_formatted'])
+                  as String? ?? 'Sin nombre',
+          'lat': (coords[1] as num).toDouble(),
+          'lng': (coords[0] as num).toDouble(),
         };
       }).toList();
     } on TimeoutException {
