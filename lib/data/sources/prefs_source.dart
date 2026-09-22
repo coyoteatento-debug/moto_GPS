@@ -37,11 +37,36 @@ class PrefsSource {
     await prefs.setString('trip_records', encoded);
   }
 
-  Future<List<TripRecord>> loadTrips() async {
+    Future<List<TripRecord>> loadTrips() async {
     final prefs = await _instance;
     final raw = prefs.getString('trip_records');
     if (raw == null) return [];
     final data = json.decode(raw) as List;
     return data.map((e) => TripRecord.fromJson(e)).toList();
+  }
+
+  // ── Combustible ───────────────────────────────────────
+  Future<void> saveFuelSettings(double tankLiters, double autonomyKm) async {
+    final prefs = await _instance;
+    await prefs.setDouble('fuel_tank_liters', tankLiters);
+    await prefs.setDouble('fuel_autonomy_km', autonomyKm);
+  }
+
+  Future<Map<String, double>> loadFuelSettings() async {
+    final prefs = await _instance;
+    return {
+      'tankLiters': prefs.getDouble('fuel_tank_liters') ?? 0.0,
+      'autonomyKm': prefs.getDouble('fuel_autonomy_km') ?? 0.0,
+    };
+  }
+
+  Future<void> saveFuelKm(double km) async {
+    final prefs = await _instance;
+    await prefs.setDouble('fuel_km_since_refuel', km);
+  }
+
+  Future<double> loadFuelKm() async {
+    final prefs = await _instance;
+    return prefs.getDouble('fuel_km_since_refuel') ?? 0.0;
   }
 }
