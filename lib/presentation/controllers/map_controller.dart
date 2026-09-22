@@ -11,6 +11,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../core/services/background_service.dart';
+import '../../core/services/fuel_service.dart';
 import '../../core/services/gps_service.dart';
 import '../../core/services/map_service.dart';
 import '../../core/services/navigation_service.dart';
@@ -43,6 +44,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
   StreamSubscription<SmoothPosition>? _smoothSub;
   Timer? _nightModeTimer;
   Timer? _waypointArrivalTimer;
+  Timer? _lowFuelWarningTimer;
   final Completer<void> _mapReadyCompleter = Completer();
 
   int _deviationCount = 0;
@@ -62,6 +64,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
   late final SpeedLimitService _speedLimitService;
   late final SmoothLocationService _smoother;
   late final TripService _tripService;
+  late final FuelService _fuelService;
   late final NavigationService _navService;
   late final MapboxApi _mapboxApi;
   final SpeechToText _speech = SpeechToText();
@@ -84,6 +87,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _speedLimitService = ref.read(speedLimitServiceProvider);
     _smoother = ref.read(smoothLocationServiceProvider);
     _tripService = ref.read(tripServiceProvider);
+    _fuelService = ref.read(fuelServiceProvider);
     _mapboxApi = ref.read(mapboxApiProvider(_token));
     _navService = ref.read(navigationServiceProvider(_token));
 
@@ -95,6 +99,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _smoother.start();
     _startNightModeTimer();
     await _loadTrips();
+    await _loadFuelSettings();
     await _loadUserAvatar();
     await _loadImages(); // Carga las imágenes primero
     await _initTts();
@@ -107,6 +112,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _smoother.stop();
     _nightModeTimer?.cancel();
     _waypointArrivalTimer?.cancel();
+    _lowFuelWarningTimer?.cancel();
     await _gpsService.dispose();
     _mapboxApi.dispose();
     _navService.disposeApi();
@@ -219,6 +225,8 @@ class MapController extends AutoDisposeNotifier<MapState> {
         currentPosition: position,
       );
 
+      await _accumulateFuel(position.latitude, position.longitude);
+
       if (!state.navigating) {
         _smoother.updatePosition(
           lat: position.latitude,
@@ -261,6 +269,48 @@ class MapController extends AutoDisposeNotifier<MapState> {
     });
   }
 
+// ── Combustible ────────────────────────────────────────
+  Future<void> _loadFuelSettings() async {
+    await _fuelService.load();
+    state = state.copyWith(
+      fuelTankLiters: _fuelService.tankLiters,
+      fuelAutonomyKm: _fuelService.autonomyKm,
+      fuelKmSinceRefuel: _fuelService.kmSinceRefuel,
+    );
+  }
+
+  Future<void> _accumulateFuel(double lat, double lng) async {
+    final oldPercent = _fuelService.percentRemaining;
+    await _fuelService.accumulate(lat, lng);
+    final newPercent = _fuelService.percentRemaining;
+
+    state = state.copyWith(fuelKmSinceRefuel: _fuelService.kmSinceRefuel);
+
+    if (_fuelService.isConfigured && oldPercent > 0.25 && newPercent <= 0.25) {
+      state = state.copyWith(showLowFuelWarning: true);
+      _lowFuelWarningTimer?.cancel();
+      _lowFuelWarningTimer = Timer(const Duration(seconds: 6), () {
+        state = state.copyWith(showLowFuelWarning: false);
+      });
+    }
+  }
+
+  Future<void> saveFuelSettings(double liters, double autonomyKm) async {
+    await _fuelService.saveSettings(liters, autonomyKm);
+    state = state.copyWith(
+      fuelTankLiters: liters,
+      fuelAutonomyKm: autonomyKm,
+    );
+  }
+
+  Future<void> markFuelRefueled() async {
+    await _fuelService.markRefueled();
+    state = state.copyWith(
+      fuelKmSinceRefuel: 0.0,
+      showLowFuelWarning: false,
+    );
+  }
+  
   Future<void> _handleNavigationUpdate(Position position) async {
     final snapped = _geo.snapToRoute(
       position.latitude, position.longitude, state.routeCoordinates,
