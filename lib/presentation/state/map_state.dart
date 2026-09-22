@@ -40,6 +40,10 @@ class MapState {
   final bool showWaypointArrival;
   final String waypointArrivalMessage;
   final int currentWaypointIndex;
+  final double fuelTankLiters;
+  final double fuelAutonomyKm;
+  final double fuelKmSinceRefuel;
+  final bool showLowFuelWarning;
 
   const MapState({
     this.currentSpeed = 0.0,
@@ -79,6 +83,10 @@ class MapState {
     this.showWaypointArrival = false,
     this.waypointArrivalMessage = '',
     this.currentWaypointIndex = 0,
+    this.fuelTankLiters = 0.0,
+    this.fuelAutonomyKm = 0.0,
+    this.fuelKmSinceRefuel = 0.0,
+    this.showLowFuelWarning = false,
   });
 
   MapState copyWith({
@@ -119,6 +127,10 @@ class MapState {
     bool? showWaypointArrival,
     String? waypointArrivalMessage,
     int? currentWaypointIndex,
+    double? fuelTankLiters,
+    double? fuelAutonomyKm,
+    double? fuelKmSinceRefuel,
+    bool? showLowFuelWarning,
     bool clearCurrentPosition = false,
     bool clearSelectedPlace = false,
     bool clearTappedLat = false,
@@ -163,6 +175,10 @@ class MapState {
       showWaypointArrival: showWaypointArrival ?? this.showWaypointArrival,
       waypointArrivalMessage: waypointArrivalMessage ?? this.waypointArrivalMessage,
       currentWaypointIndex: currentWaypointIndex ?? this.currentWaypointIndex,
+      fuelTankLiters: fuelTankLiters ?? this.fuelTankLiters,
+      fuelAutonomyKm: fuelAutonomyKm ?? this.fuelAutonomyKm,
+      fuelKmSinceRefuel: fuelKmSinceRefuel ?? this.fuelKmSinceRefuel,
+      showLowFuelWarning: showLowFuelWarning ?? this.showLowFuelWarning,
     );
   }
 }
