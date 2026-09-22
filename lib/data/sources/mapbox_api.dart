@@ -9,25 +9,51 @@ class MapboxApi {
 
   void dispose() => _client.close();
 
-  // ── Geocoding (buscador) ──────────────────────────────
+    // ── Geocoding (buscador) ──────────────────────────────
   Future<List<Map<String, dynamic>>> searchPlaces(
     String query, {
     double? proximityLat,
     double? proximityLng,
   }) async {
     if (query.trim().length < 3) return [];
-    const types = 'place,locality,neighborhood,address,district';
+    const types = 'poi,place,locality,neighborhood,address,district';
     final proximity = (proximityLat != null && proximityLng != null)
         ? '&proximity=$proximityLng,$proximityLat'
         : '';
+
+    // Caja de ~50km alrededor de la ubicación actual, como filtro
+    // duro (proximity solo reordena resultados, no los excluye).
+    String bbox = '';
+    if (proximityLat != null && proximityLng != null) {
+      const delta = 0.45;
+      final minLng = proximityLng - delta;
+      final maxLng = proximityLng + delta;
+      final minLat = proximityLat - delta;
+      final maxLat = proximityLat + delta;
+      bbox = '&bbox=$minLng,$minLat,$maxLng,$maxLat';
+    }
+
+    final local = await _fetchPlaces(query, types, proximity, bbox);
+    if (local.isNotEmpty) return local;
+
+    // Fallback: sin bbox, pero restringido a México — por si el
+    // lugar buscado está en otra ciudad del país.
+    return _fetchPlaces(query, types, proximity, '');
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchPlaces(
+    String query, String types, String proximity, String bbox,
+  ) async {
     final url =
         'https://api.mapbox.com/geocoding/v5/mapbox.places/'
         '${Uri.encodeComponent(query)}.json'
         '?access_token=$token'
         '&language=es'
+        '&country=mx'
         '&types=$types'
         '&limit=7'
-        '$proximity';
+        '$proximity'
+        '$bbox';
 
     try {
       final response = await _client
