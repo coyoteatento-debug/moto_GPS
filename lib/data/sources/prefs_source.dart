@@ -69,4 +69,18 @@ class PrefsSource {
     final prefs = await _instance;
     return prefs.getDouble('fuel_km_since_refuel') ?? 0.0;
   }
+
+  // ── Mapas sin conexión ──────────────────────────────────
+  Future<void> saveOfflineRegions(List<Map<String, String>> regions) async {
+    final prefs = await _instance;
+    await prefs.setString('offline_regions', json.encode(regions));
+  }
+
+  Future<List<Map<String, String>>> loadOfflineRegions() async {
+    final prefs = await _instance;
+    final raw = prefs.getString('offline_regions');
+    if (raw == null) return [];
+    final data = json.decode(raw) as List;
+    return data.map((e) => Map<String, String>.from(e)).toList();
+  }
 }
