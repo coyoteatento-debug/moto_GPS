@@ -380,6 +380,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
       _gpsService.onAppForeground();
       if (!state.navigating) {
         await _bgService.stop(); // si no hay navegación activa, apaga el servicio nativo al volver a foreground
+      }
     } else {
       await _mapReadyCompleter.future;
       await _getInitialPosition();
