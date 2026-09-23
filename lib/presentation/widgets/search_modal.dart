@@ -105,11 +105,44 @@ class SearchModal extends StatelessWidget {
                 separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (_, i) {
                   final place = results[i];
+                  final isPoi = place['type'] == 'poi';
+                  final category = place['category'] as String?;
                   return ListTile(
-                    leading: const Icon(Icons.location_on_outlined, color: Colors.blue),
-                    title: Text(
-                      place['name'] as String,
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                    leading: Icon(
+                      isPoi ? Icons.storefront : Icons.location_on_outlined,
+                      color: isPoi ? Colors.orange[700] : Colors.blue,
+                    ),
+                    title: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            place['name'] as String,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 14),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (isPoi) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.orange[50],
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.orange[200]!),
+                            ),
+                            child: Text(
+                              category ?? 'Negocio',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.orange[800],
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     subtitle: Text(
                       place['full_name'] as String,
