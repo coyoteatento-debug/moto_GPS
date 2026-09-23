@@ -215,6 +215,7 @@ class MapTab extends StatelessWidget {
   final VoidCallback onCancelRoute;
   final VoidCallback onStartNavigation;
   final ValueChanged<int> onRouteSelect;
+  final VoidCallback onOpenMenu;
 
   MapTab({
     super.key,
@@ -272,6 +273,7 @@ class MapTab extends StatelessWidget {
     required this.onCancelRoute,
     required this.onStartNavigation,
     required this.onRouteSelect,
+    required this.onOpenMenu,
   });
 
   IconData _maneuverIcon(String instruction) {
@@ -301,6 +303,27 @@ class MapTab extends StatelessWidget {
         ),
       ),
 
+// ── Botón menú principal ────────────────────────────
+      if (!navigating)
+        Positioned(
+          top: 50, left: 16,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onOpenMenu,
+            child: Container(
+              width: 46, height: 46,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [BoxShadow(
+                    color: Colors.black38, blurRadius: 8,
+                    offset: Offset(0, 2))],
+              ),
+              child: const Icon(Icons.menu, color: Colors.black87, size: 24),
+            ),
+          ),
+        ),
+      
       // ── Banner modo selección de paradas ───────────────
       if (isSelectingWaypoints)
         Positioned(
