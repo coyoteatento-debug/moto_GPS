@@ -8,6 +8,7 @@ import '../../di/providers.dart';
 import '../widgets/map_tab.dart';
 import '../widgets/trip_book.dart';
 import '../controllers/map_controller.dart';
+import 'main_menu_screen.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -248,6 +249,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
       onCancelRoute: controller.cancelRoute,
       onStartNavigation: controller.startNavigation,
       onRouteSelect: controller.selectRoute,
+      onOpenMenu: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const MainMenuScreen()),
+      ),
     );
   }
 }
