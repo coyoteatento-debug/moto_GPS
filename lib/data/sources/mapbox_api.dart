@@ -66,17 +66,26 @@ class MapboxApi {
       final data = json.decode(response.body);
       final features = data['features'] as List? ?? [];
 
-      return features.map((f) {
-        final coords = f['geometry']['coordinates'] as List;
-        final props = f['properties'] as Map<String, dynamic>;
-        return {
-          'name': props['name'] as String? ?? 'Sin nombre',
-          'full_name': (props['full_address'] ?? props['place_formatted'])
-                  as String? ?? 'Sin nombre',
-          'lat': (coords[1] as num).toDouble(),
-          'lng': (coords[0] as num).toDouble(),
-        };
-      }).toList();
+            return features.map((f) {
+              final coords = f['geometry']['coordinates'] as List;
+              final props = f['properties'] as Map<String, dynamic>;
+              final categories = props['poi_category'] as List?;
+              final brands = props['brand'] as List?;
+              return {
+                'name': props['name'] as String? ?? 'Sin nombre',
+                'full_name': (props['full_address'] ?? props['place_formatted'])
+                        as String? ?? 'Sin nombre',
+                'lat': (coords[1] as num).toDouble(),
+                'lng': (coords[0] as num).toDouble(),
+                'type': props['feature_type'] as String? ?? '',
+                'category': (categories != null && categories.isNotEmpty)
+                    ? categories.first as String
+                    : null,
+                'brand': (brands != null && brands.isNotEmpty)
+                    ? brands.first as String
+                    : null,
+              };
+            }).toList();
     } on TimeoutException {
       print('[MapboxApi] searchPlaces timeout');
       return [];
