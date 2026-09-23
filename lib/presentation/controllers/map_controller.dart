@@ -363,6 +363,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
 
   Future<void> onAppBackground() async {
     if (_locationSubscription != null) {
+      await _bgService.start(); // garantiza que el servicio nativo esté activo aunque no haya navegación
       _gpsService.onAppBackground();
     }
   }
@@ -377,6 +378,8 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _startSmoothMarker();
     if (_locationSubscription != null) {
       _gpsService.onAppForeground();
+      if (!state.navigating) {
+        await _bgService.stop(); // si no hay navegación activa, apaga el servicio nativo al volver a foreground
     } else {
       await _mapReadyCompleter.future;
       await _getInitialPosition();
