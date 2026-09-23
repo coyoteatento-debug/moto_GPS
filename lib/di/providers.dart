@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/services/background_service.dart';
 import '../core/services/fuel_service.dart';
+import '../core/services/offline_map_service.dart';
 import '../core/services/gps_service.dart';
 import '../core/services/map_service.dart';
 import '../core/services/navigation_service.dart';
@@ -39,6 +40,9 @@ final fuelServiceProvider = Provider<FuelService>((ref) {
   final geo = ref.read(geoUtilsProvider);
   return FuelService(prefs, geo);
 });
+
+final offlineMapServiceProvider =
+    Provider<OfflineMapService>((ref) => OfflineMapService());
 
 final mapboxApiProvider = Provider.family<MapboxApi, String>((ref, token) {
   return MapboxApi(token);
