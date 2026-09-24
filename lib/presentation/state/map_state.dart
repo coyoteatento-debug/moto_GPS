@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:geolocator/geolocator.dart';
 import '../../data/models/trip_record.dart';
+import '../../data/models/poi_record.dart';
 
 class MapState {
   final double currentSpeed;
@@ -44,6 +45,9 @@ class MapState {
   final double fuelAutonomyKm;
   final double fuelKmSinceRefuel;
   final bool showLowFuelWarning;
+  final bool handsFreeActive;
+  final List<PoiRecord> savedPois;
+  final String? lastVoiceCommandMessage;
 
   const MapState({
     this.currentSpeed = 0.0,
@@ -87,6 +91,9 @@ class MapState {
     this.fuelAutonomyKm = 0.0,
     this.fuelKmSinceRefuel = 0.0,
     this.showLowFuelWarning = false,
+    this.handsFreeActive = false,
+    this.savedPois = const [],
+    this.lastVoiceCommandMessage,
   });
 
   MapState copyWith({
@@ -131,6 +138,10 @@ class MapState {
     double? fuelAutonomyKm,
     double? fuelKmSinceRefuel,
     bool? showLowFuelWarning,
+    bool? handsFreeActive,
+    List<PoiRecord>? savedPois,
+    String? lastVoiceCommandMessage,
+    bool clearVoiceCommandMessage = false,
     bool clearCurrentPosition = false,
     bool clearSelectedPlace = false,
     bool clearTappedLat = false,
@@ -179,6 +190,11 @@ class MapState {
       fuelAutonomyKm: fuelAutonomyKm ?? this.fuelAutonomyKm,
       fuelKmSinceRefuel: fuelKmSinceRefuel ?? this.fuelKmSinceRefuel,
       showLowFuelWarning: showLowFuelWarning ?? this.showLowFuelWarning,
+      handsFreeActive: handsFreeActive ?? this.handsFreeActive,
+      savedPois: savedPois ?? this.savedPois,
+      lastVoiceCommandMessage: clearVoiceCommandMessage
+          ? null
+          : lastVoiceCommandMessage ?? this.lastVoiceCommandMessage,
     );
   }
 }
