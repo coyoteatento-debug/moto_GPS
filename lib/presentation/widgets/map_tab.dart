@@ -491,8 +491,7 @@ class MapTab extends StatelessWidget {
 
 // ── Botón modo manos libres (comandos de voz offline) ──
       Positioned(
-        top: navigating ? null : MediaQuery.of(context).padding.top + 8,
-        bottom: navigating ? 30 : null,
+        top: navigating ? 140 : MediaQuery.of(context).padding.top + 8,
         right: navigating ? 16 : 124,
         child: GestureDetector(
           onTap: onToggleHandsFree,
