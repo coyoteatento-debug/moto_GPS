@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
 import 'search_modal.dart';
 import '../../core/services/speed_limit_service.dart';
+import 'saved_points_sheet.dart';
+import '../../data/models/poi_record.dart';
 
 // ── Botón de capas expandible ─────────────────────────
 class _LayersButton extends StatefulWidget {
@@ -208,6 +210,9 @@ class MapTab extends StatelessWidget {
   final VoidCallback onAvatarPick;
   final VoidCallback onVoiceSearch;
   final bool isListening;
+  final bool handsFreeActive;
+  final VoidCallback onToggleHandsFree;
+  final List<PoiRecord> savedPois;
   final VoidCallback onSatelliteToggle;
   final VoidCallback onNightModeToggle;
   final VoidCallback onTapConfirm;
@@ -266,6 +271,9 @@ class MapTab extends StatelessWidget {
     required this.onAvatarPick,
     required this.onVoiceSearch,
     required this.isListening,
+    required this.handsFreeActive,
+    required this.onToggleHandsFree,
+    required this.savedPois,
     required this.onSatelliteToggle,
     required this.onNightModeToggle,
     required this.onTapConfirm,
@@ -481,6 +489,57 @@ class MapTab extends StatelessWidget {
           ),
         ),
 
+// ── Botón modo manos libres (comandos de voz offline) ──
+      Positioned(
+        top: navigating ? null : MediaQuery.of(context).padding.top + 8,
+        bottom: navigating ? 30 : null,
+        right: navigating ? 16 : 124,
+        child: GestureDetector(
+          onTap: onToggleHandsFree,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            width: 46, height: 46,
+            decoration: BoxDecoration(
+              color: handsFreeActive ? Colors.green[700] : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [BoxShadow(
+                color: handsFreeActive
+                    ? Colors.green.withOpacity(0.5)
+                    : Colors.black38,
+                blurRadius: handsFreeActive ? 12 : 8,
+                offset: const Offset(0, 2),
+              )],
+            ),
+            child: Icon(
+              handsFreeActive ? Icons.hearing : Icons.hearing_disabled,
+              color: handsFreeActive ? Colors.white : Colors.black87,
+              size: 22,
+            ),
+          ),
+        ),
+      ),
+
+      // ── Botón puntos guardados por voz ──────────────────
+      if (!navigating)
+        Positioned(
+          bottom: 230, right: 16,
+          child: GestureDetector(
+            onTap: () => showSavedPointsSheet(context, savedPois),
+            child: Container(
+              width: 46, height: 46,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [BoxShadow(
+                    color: Colors.black38, blurRadius: 8,
+                    offset: Offset(0, 2))],
+              ),
+              child: const Icon(Icons.bookmark_border,
+                  color: Colors.deepPurple, size: 22),
+            ),
+          ),
+        ),
+      
       // ── Modal búsqueda ─────────────────────────────────
       if (showSearch && !navigating)
         Positioned(
