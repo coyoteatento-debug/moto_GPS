@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/trip_record.dart';
+import '../models/poi_record.dart';
 
 class PrefsSource {
   SharedPreferences? _prefs;
@@ -68,6 +69,22 @@ class PrefsSource {
   Future<double> loadFuelKm() async {
     final prefs = await _instance;
     return prefs.getDouble('fuel_km_since_refuel') ?? 0.0;
+  }
+
+    // ── Puntos guardados por voz (peligro / punto de interés) ──
+  Future<void> savePois(List<PoiRecord> pois) async {
+    final prefs = await _instance;
+    final limited = pois.take(200).toList();
+    await prefs.setString(
+        'poi_records', json.encode(limited.map((p) => p.toJson()).toList()));
+  }
+
+  Future<List<PoiRecord>> loadPois() async {
+    final prefs = await _instance;
+    final raw = prefs.getString('poi_records');
+    if (raw == null) return [];
+    final data = json.decode(raw) as List;
+    return data.map((e) => PoiRecord.fromJson(e)).toList();
   }
 
   // ── Mapas sin conexión ──────────────────────────────────
