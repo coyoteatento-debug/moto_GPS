@@ -19,9 +19,11 @@ import '../../core/services/smooth_location_service.dart';
 import '../../core/services/speed_limit_service.dart';
 import '../../core/services/trip_service.dart';
 import '../../core/services/tts_service.dart';
+import '../../core/services/voice_command_service.dart';
 import '../../core/utils/geo_utils.dart';
 import '../../core/utils/image_utils.dart';
 import '../../data/models/trip_record.dart';
+import '../../data/models/poi_record.dart';
 import '../../data/sources/mapbox_api.dart';
 import '../../data/sources/prefs_source.dart';
 import '../../di/providers.dart';
@@ -69,6 +71,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
   late final MapboxApi _mapboxApi;
   final SpeechToText _speech = SpeechToText();
   bool _speechAvailable = false;
+  late final VoiceCommandService _voiceCmd;
 
   // FIX: Flag para saber si el mapa está listo y las imágenes cargadas
   bool _imagesLoaded = false;
@@ -90,6 +93,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _fuelService = ref.read(fuelServiceProvider);
     _mapboxApi = ref.read(mapboxApiProvider(_token));
     _navService = ref.read(navigationServiceProvider(_token));
+    _voiceCmd = ref.read(voiceCommandServiceProvider);
 
     ref.onDispose(_onDispose);
     return const MapState();
@@ -100,7 +104,8 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _startNightModeTimer();
     await _loadTrips();
     await _loadFuelSettings();
-    await _loadUserAvatar();
+    await _loadUserAvatar
+    await _loadPois();
     await _loadImages(); // Carga las imágenes primero
     await _initTts();
     await _initSpeech();
@@ -113,6 +118,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _nightModeTimer?.cancel();
     _waypointArrivalTimer?.cancel();
     _lowFuelWarningTimer?.cancel();
+    _voiceCmd.stop();
     await _gpsService.dispose();
     _mapboxApi.dispose();
     _navService.disposeApi();
@@ -614,6 +620,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
     required VoidCallback onListeningStopped,
   }) async {
     if (!_speechAvailable) return;
+    if (state.handsFreeActive) await toggleHandsFree();
     if (_isListening) {
       await _speech.stop();
       _isListening = false;
@@ -643,6 +650,71 @@ class MapController extends AutoDisposeNotifier<MapState> {
 
   bool get isListening => _isListening;
 
+   Future<bool> toggleHandsFree() async {
+    if (state.handsFreeActive) {
+      _voiceCmd.stop();
+      state = state.copyWith(handsFreeActive: false);
+      return false;
+    }
+    await stopVoiceSearch();
+    final started = await _voiceCmd.start(
+      onCommand: _onVoiceCommand,
+      onListeningChange: (_) {},
+    );
+    state = state.copyWith(handsFreeActive: started);
+    if (!started) {
+      print('[MapController] No se pudo iniciar el modo manos libres');
+    }
+    return started;
+  }
+
+  void _onVoiceCommand(VoiceCommand cmd) {
+    switch (cmd.type) {
+      case VoiceCommandType.markDanger:
+        _saveQuickPoi('peligro');
+        _speak('Peligro marcado');
+        break;
+      case VoiceCommandType.savePoint:
+        _saveQuickPoi('punto');
+        _speak('Punto guardado');
+        break;
+      case VoiceCommandType.findGasStation:
+        _speak('Buscando gasolinera cercana');
+        _autoRouteToNearest('gasolinera');
+        break;
+    }
+  }
+
+  Future<void> _saveQuickPoi(String type) async {
+    final pos = state.currentPosition;
+    if (pos == null) return;
+    final poi = PoiRecord(
+        type: type, lat: pos.latitude, lng: pos.longitude, date: DateTime.now());
+    final updated = List<PoiRecord>.from(state.savedPois)..insert(0, poi);
+    state = state.copyWith(savedPois: updated, lastVoiceCommandMessage: poi.label);
+    await _prefs.savePois(updated);
+  }
+
+  Future<void> _loadPois() async {
+    final pois = await _prefs.loadPois();
+    state = state.copyWith(savedPois: pois);
+  }
+
+  Future<void> _autoRouteToNearest(String query) async {
+    if (state.currentPosition == null) return;
+    final results = await _mapboxApi.searchPlaces(
+      query,
+      proximityLat: state.currentPosition!.latitude,
+      proximityLng: state.currentPosition!.longitude,
+    );
+    if (results.isEmpty) {
+      _speak('No encontré resultados. Puede que no haya señal');
+      return;
+    }
+    await selectSearchResult(results.first);
+    _speak('Ruta calculada');
+  }
+  
   Future<void> stopVoiceSearch() async {
     if (_isListening) {
       await _speech.stop();
