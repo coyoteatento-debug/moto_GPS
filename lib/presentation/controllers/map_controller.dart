@@ -671,12 +671,14 @@ class MapController extends AutoDisposeNotifier<MapState> {
   void _onVoiceCommand(VoiceCommand cmd) {
     switch (cmd.type) {
       case VoiceCommandType.markDanger:
-        _saveQuickPoi('peligro');
-        _speak('Peligro marcado');
+        _saveQuickPoi('peligro').then((saved) {
+          _speak(saved ? 'Peligro marcado' : 'No se detectó tu ubicación, intenta de nuevo');
+        });
         break;
       case VoiceCommandType.savePoint:
-        _saveQuickPoi('punto');
-        _speak('Punto guardado');
+        _saveQuickPoi('punto').then((saved) {
+          _speak(saved ? 'Punto guardado' : 'No se detectó tu ubicación, intenta de nuevo');
+        });
         break;
       case VoiceCommandType.findGasStation:
         _speak('Buscando gasolinera cercana');
@@ -685,14 +687,15 @@ class MapController extends AutoDisposeNotifier<MapState> {
     }
   }
 
-  Future<void> _saveQuickPoi(String type) async {
+  Future<bool> _saveQuickPoi(String type) async {
     final pos = state.currentPosition;
-    if (pos == null) return;
+    if (pos == null) return false;
     final poi = PoiRecord(
         type: type, lat: pos.latitude, lng: pos.longitude, date: DateTime.now());
     final updated = List<PoiRecord>.from(state.savedPois)..insert(0, poi);
     state = state.copyWith(savedPois: updated, lastVoiceCommandMessage: poi.label);
     await _prefs.savePois(updated);
+    return true;
   }
 
   Future<void> _loadPois() async {
