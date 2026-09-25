@@ -5,6 +5,7 @@ import 'search_modal.dart';
 import '../../core/services/speed_limit_service.dart';
 import 'saved_points_sheet.dart';
 import '../../data/models/poi_record.dart';
+import '../controllers/map_controller.dart';
 
 // ── Botón de capas expandible ─────────────────────────
 class _LayersButton extends StatefulWidget {
@@ -168,20 +169,11 @@ class MapTab extends StatelessWidget {
   final bool routeDrawn;
   final bool showTapConfirm;
   final bool isRecalculating;
-  final double fuelTankLiters;
-  final double fuelAutonomyKm;
-  final double fuelKmSinceRefuel;
   final bool showLowFuelWarning;
-  final void Function(double liters, double autonomyKm) onFuelSettingsSave;
-  final VoidCallback onMarkRefueled;
 
   // ── Datos de ruta ─────────────────────────────────────
   final String routeDistance;
   final String routeDuration;
-  final String currentInstruction;
-  final double distanceToNextManeuver;
-  final double currentSpeed;
-  final int? speedLimit;
   final double? tappedLat;
   final double? tappedLng;
   final Map<String, dynamic>? selectedPlace;
@@ -239,18 +231,9 @@ class MapTab extends StatelessWidget {
     required this.routeDrawn,
     required this.showTapConfirm,
     required this.isRecalculating,
-    required this.fuelTankLiters,
-    required this.fuelAutonomyKm,
-    required this.fuelKmSinceRefuel,
     required this.showLowFuelWarning,
-    required this.onFuelSettingsSave,
-    required this.onMarkRefueled,
     required this.routeDistance,
     required this.routeDuration,
-    required this.currentInstruction,
-    required this.distanceToNextManeuver,
-    required this.currentSpeed,
-    required this.speedLimit,
     required this.tappedLat,
     required this.tappedLng,
     required this.selectedPlace,
@@ -283,17 +266,6 @@ class MapTab extends StatelessWidget {
     required this.onRouteSelect,
     required this.onOpenMenu,
   });
-
-  IconData _maneuverIcon(String instruction) {
-    final i = instruction.toLowerCase();
-    if (i.contains('izquierda'))                         return Icons.turn_left;
-    if (i.contains('derecha'))                           return Icons.turn_right;
-    if (i.contains('gira'))                              return Icons.turn_slight_right;
-    if (i.contains('rotonda') || i.contains('redondel')) return Icons.roundabout_left;
-    if (i.contains('destino') || i.contains('llegada'))  return Icons.flag;
-    if (i.contains('continúa') || i.contains('sigue'))   return Icons.straight;
-    return Icons.navigation;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -880,18 +852,9 @@ class MapTab extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _Speedometer(
-                    currentSpeed: currentSpeed,
-                    speedLimit:   speedLimit,
-                  ),
+                  const _SpeedometerConsumer(),
                   const SizedBox(height: 8),
-                  _FuelGauge(
-                    tankLiters: fuelTankLiters,
-                    autonomyKm: fuelAutonomyKm,
-                    kmSinceRefuel: fuelKmSinceRefuel,
-                    onSettingsSave: onFuelSettingsSave,
-                    onMarkRefueled: onMarkRefueled,
-                  ),
+                  const _FuelGaugeConsumer(),
                 ],
               ),
               ElevatedButton.icon(
@@ -936,49 +899,10 @@ class MapTab extends StatelessWidget {
         ),
 
       // ── Banner turn-by-turn ────────────────────────────
-      if (navigating && currentInstruction.isNotEmpty && !isRecalculating)
-        Positioned(
-          top: 0, left: 0, right: 0,
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(16, 48, 16, 16),
-            decoration: const BoxDecoration(
-              color: Color(0xFF1565C0),
-              borderRadius: BorderRadius.vertical(
-                  bottom: Radius.circular(20)),
-              boxShadow: [BoxShadow(
-                  color: Colors.black38, blurRadius: 10,
-                  offset: Offset(0, 3))],
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Icon(_maneuverIcon(currentInstruction),
-                    color: Colors.white, size: 36),
-                const SizedBox(width: 12),
-                Expanded(child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(currentInstruction,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 4),
-                    Text(
-                      distanceToNextManeuver >= 1000
-                          ? '${(distanceToNextManeuver / 1000).toStringAsFixed(1)} km'
-                          : '${distanceToNextManeuver.toStringAsFixed(0)} m',
-                      style: const TextStyle(
-                          color: Colors.white70, fontSize: 13),
-                    ),
-                  ],
-                )),
-              ],
-            ),
-          ),
-        ),
+      _TurnByTurnBanner(
+        navigating: navigating,
+        isRecalculating: isRecalculating,
+      ),
 
       // ── Velocímetro modo libre ─────────────────────────
       if (!navigating && !routeDrawn && !showTapConfirm)
@@ -987,18 +911,9 @@ class MapTab extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _Speedometer(
-                currentSpeed: currentSpeed,
-                speedLimit:   speedLimit,
-              ),
+              const _SpeedometerConsumer(),
               const SizedBox(height: 8),
-              _FuelGauge(
-                tankLiters: fuelTankLiters,
-                autonomyKm: fuelAutonomyKm,
-                kmSinceRefuel: fuelKmSinceRefuel,
-                onSettingsSave: onFuelSettingsSave,
-                onMarkRefueled: onMarkRefueled,
-              ),
+              const _FuelGaugeConsumer(),
             ],
           ),
         ),
@@ -1006,17 +921,16 @@ class MapTab extends StatelessWidget {
   }
 }
 
-class _Speedometer extends StatelessWidget {
-  final double currentSpeed;
-  final int?   speedLimit;
-
-  const _Speedometer({
-    required this.currentSpeed,
-    required this.speedLimit,
-  });
+class _SpeedometerConsumer extends ConsumerWidget {
+  const _SpeedometerConsumer();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final data = ref.watch(mapControllerProvider.select(
+      (s) => (speed: s.currentSpeed, limit: s.speedLimit),
+    ));
+    final currentSpeed = data.speed;
+    final speedLimit = data.limit;
     final status = SpeedStatus.evaluate(currentSpeed, speedLimit);
 
     final bgColor = switch (status.level) {
@@ -1078,41 +992,120 @@ class _Speedometer extends StatelessWidget {
   }
 }
 
-class _FuelGauge extends StatelessWidget {
-  final double tankLiters;
-  final double autonomyKm;
-  final double kmSinceRefuel;
-  final void Function(double liters, double autonomyKm) onSettingsSave;
-  final VoidCallback onMarkRefueled;
+        ],
+      ),
+    );
+  }
+}
 
-  const _FuelGauge({
-    required this.tankLiters,
-    required this.autonomyKm,
-    required this.kmSinceRefuel,
-    required this.onSettingsSave,
-    required this.onMarkRefueled,
+IconData _maneuverIcon(String instruction) {
+  final i = instruction.toLowerCase();
+  if (i.contains('izquierda'))                         return Icons.turn_left;
+  if (i.contains('derecha'))                           return Icons.turn_right;
+  if (i.contains('gira'))                              return Icons.turn_slight_right;
+  if (i.contains('rotonda') || i.contains('redondel')) return Icons.roundabout_left;
+  if (i.contains('destino') || i.contains('llegada'))  return Icons.flag;
+  if (i.contains('continúa') || i.contains('sigue'))   return Icons.straight;
+  return Icons.navigation;
+}
+
+class _TurnByTurnBanner extends ConsumerWidget {
+  final bool navigating;
+  final bool isRecalculating;
+
+  const _TurnByTurnBanner({
+    required this.navigating,
+    required this.isRecalculating,
   });
 
-  bool get _configured => autonomyKm > 0;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!navigating || isRecalculating) return const SizedBox.shrink();
 
-  double get _remainingKm =>
-      (autonomyKm - kmSinceRefuel).clamp(0, autonomyKm);
+    final nav = ref.watch(mapControllerProvider.select(
+      (s) => (instruction: s.currentInstruction, distance: s.distanceToNextManeuver),
+    ));
+    final currentInstruction = nav.instruction;
+    final distanceToNextManeuver = nav.distance;
+    if (currentInstruction.isEmpty) return const SizedBox.shrink();
 
-  double get _percent =>
-      autonomyKm > 0 ? (_remainingKm / autonomyKm).clamp(0.0, 1.0) : 1.0;
+    return Positioned(
+      top: 0, left: 0, right: 0,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 48, 16, 16),
+        decoration: const BoxDecoration(
+          color: Color(0xFF1565C0),
+          borderRadius: BorderRadius.vertical(
+              bottom: Radius.circular(20)),
+          boxShadow: [BoxShadow(
+              color: Colors.black38, blurRadius: 10,
+              offset: Offset(0, 3))],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(_maneuverIcon(currentInstruction),
+                color: Colors.white, size: 36),
+            const SizedBox(width: 12),
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(currentInstruction,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 4),
+                Text(
+                  distanceToNextManeuver >= 1000
+                      ? '${(distanceToNextManeuver / 1000).toStringAsFixed(1)} km'
+                      : '${distanceToNextManeuver.toStringAsFixed(0)} m',
+                  style: const TextStyle(
+                      color: Colors.white70, fontSize: 13),
+                ),
+              ],
+            )),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FuelGaugeConsumer extends ConsumerWidget {
+  const _FuelGaugeConsumer();
 
   @override
-  Widget build(BuildContext context) {
-    final bgColor = !_configured
+  Widget build(BuildContext context, WidgetRef ref) {
+    final fuel = ref.watch(mapControllerProvider.select(
+      (s) => (
+        tankLiters: s.fuelTankLiters,
+        autonomyKm: s.fuelAutonomyKm,
+        kmSinceRefuel: s.fuelKmSinceRefuel,
+      ),
+    ));
+    final tankLiters = fuel.tankLiters;
+    final autonomyKm = fuel.autonomyKm;
+    final kmSinceRefuel = fuel.kmSinceRefuel;
+
+    final configured = autonomyKm > 0;
+    final remainingKm = (autonomyKm - kmSinceRefuel).clamp(0, autonomyKm);
+    final percent = autonomyKm > 0
+        ? (remainingKm / autonomyKm).clamp(0.0, 1.0)
+        : 1.0;
+
+    final bgColor = !configured
         ? Colors.black87
-        : _percent <= 0.25
+        : percent <= 0.25
             ? Colors.red[700]!
-            : _percent <= 0.5
+            : percent <= 0.5
                 ? Colors.orange[700]!
                 : Colors.black87;
 
     return GestureDetector(
-      onTap: () => _showFuelDialog(context),
+      onTap: () => _showFuelDialog(context, ref, tankLiters, autonomyKm, configured),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
@@ -1126,7 +1119,7 @@ class _FuelGauge extends StatelessWidget {
                 color: Colors.white, size: 20),
             const SizedBox(width: 6),
             Text(
-              _configured ? '${_remainingKm.toStringAsFixed(0)} km' : 'Config.',
+              configured ? '${remainingKm.toStringAsFixed(0)} km' : 'Config.',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 15,
@@ -1139,7 +1132,14 @@ class _FuelGauge extends StatelessWidget {
     );
   }
 
-  void _showFuelDialog(BuildContext context) {
+  void _showFuelDialog(
+    BuildContext context,
+    WidgetRef ref,
+    double tankLiters,
+    double autonomyKm,
+    bool configured,
+  ) {
+    final controller = ref.read(mapControllerProvider.notifier);
     final litersCtrl = TextEditingController(
         text: tankLiters > 0 ? tankLiters.toStringAsFixed(0) : '');
     final autonomyCtrl = TextEditingController(
@@ -1168,10 +1168,10 @@ class _FuelGauge extends StatelessWidget {
           ],
         ),
         actions: [
-          if (_configured)
+          if (configured)
             TextButton(
               onPressed: () {
-                onMarkRefueled();
+                controller.markFuelRefueled();
                 Navigator.pop(ctx);
               },
               child: const Text('Tanque lleno ⛽'),
@@ -1185,7 +1185,7 @@ class _FuelGauge extends StatelessWidget {
               final liters = double.tryParse(litersCtrl.text) ?? 0.0;
               final autonomy = double.tryParse(autonomyCtrl.text) ?? 0.0;
               if (liters > 0 && autonomy > 0) {
-                onSettingsSave(liters, autonomy);
+                controller.saveFuelSettings(liters, autonomy);
               }
               Navigator.pop(ctx);
             },
