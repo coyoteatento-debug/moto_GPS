@@ -42,8 +42,13 @@ class PrefsSource {
     final prefs = await _instance;
     final raw = prefs.getString('trip_records');
     if (raw == null) return [];
-    final data = json.decode(raw) as List;
-    return data.map((e) => TripRecord.fromJson(e)).toList();
+    try {
+      final data = json.decode(raw) as List;
+      return data.map((e) => TripRecord.fromJson(e)).toList();
+    } catch (e) {
+      print('[PrefsSource] Error leyendo trip_records: $e');
+      return [];
+    }
   }
 
   // ── Combustible ───────────────────────────────────────
@@ -79,12 +84,17 @@ class PrefsSource {
         'poi_records', json.encode(limited.map((p) => p.toJson()).toList()));
   }
 
-  Future<List<PoiRecord>> loadPois() async {
+    Future<List<PoiRecord>> loadPois() async {
     final prefs = await _instance;
     final raw = prefs.getString('poi_records');
     if (raw == null) return [];
-    final data = json.decode(raw) as List;
-    return data.map((e) => PoiRecord.fromJson(e)).toList();
+    try {
+      final data = json.decode(raw) as List;
+      return data.map((e) => PoiRecord.fromJson(e)).toList();
+    } catch (e) {
+      print('[PrefsSource] Error leyendo poi_records: $e');
+      return [];
+    }
   }
 
   // ── Mapas sin conexión ──────────────────────────────────
@@ -93,11 +103,16 @@ class PrefsSource {
     await prefs.setString('offline_regions', json.encode(regions));
   }
 
-  Future<List<Map<String, String>>> loadOfflineRegions() async {
+    Future<List<Map<String, String>>> loadOfflineRegions() async {
     final prefs = await _instance;
     final raw = prefs.getString('offline_regions');
     if (raw == null) return [];
-    final data = json.decode(raw) as List;
-    return data.map((e) => Map<String, String>.from(e)).toList();
+    try {
+      final data = json.decode(raw) as List;
+      return data.map((e) => Map<String, String>.from(e)).toList();
+    } catch (e) {
+      print('[PrefsSource] Error leyendo offline_regions: $e');
+      return [];
+    }
   }
 }
