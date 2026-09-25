@@ -115,7 +115,35 @@ class _MapScreenState extends ConsumerState<MapScreen>
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(mapControllerProvider);
+    final state = ref.watch(mapControllerProvider.select((s) => (
+      navigating: s.navigating,
+      showSearch: s.showSearch,
+      userIsExploring: s.userIsExploring,
+      isSatellite: s.isSatellite,
+      isNightMode: s.isNightMode,
+      waypoints: s.waypoints,
+      isSelectingWaypoints: s.isSelectingWaypoints,
+      showWaypointArrival: s.showWaypointArrival,
+      waypointArrivalMessage: s.waypointArrivalMessage,
+      routeDrawn: s.routeDrawn,
+      showTapConfirm: s.showTapConfirm,
+      isRecalculating: s.isRecalculating,
+      showLowFuelWarning: s.showLowFuelWarning,
+      routeDistance: s.routeDistance,
+      routeDuration: s.routeDuration,
+      tappedLat: s.tappedLat,
+      tappedLng: s.tappedLng,
+      selectedPlace: s.selectedPlace,
+      alternateRoutes: s.alternateRoutes,
+      selectedRouteIndex: s.selectedRouteIndex,
+      userAvatarImage: s.userAvatarImage,
+      handsFreeActive: s.handsFreeActive,
+      savedPois: s.savedPois,
+      searchLoading: s.searchLoading,
+      searchResults: s.searchResults,
+      currentTabIndex: s.currentTabIndex,
+      trips: s.trips,
+    )));
     final controller = ref.read(mapControllerProvider.notifier);
 
     return Scaffold(
@@ -125,7 +153,9 @@ class _MapScreenState extends ConsumerState<MapScreen>
               currentIndex: state.currentTabIndex,
               onTap: (i) {
                 controller.setTabIndex(i);
-                if (i == 0 && state.currentPosition != null) {
+                final hasPosition =
+                    ref.read(mapControllerProvider).currentPosition != null;
+                if (i == 0 && hasPosition) {
                   Future.delayed(const Duration(milliseconds: 300), () {
                     controller.recenter();
                   });
@@ -150,111 +180,100 @@ class _MapScreenState extends ConsumerState<MapScreen>
       body: IndexedStack(
         index: state.currentTabIndex,
         children: [
-          _buildMapTab(state, controller),
+          MapTab(
+            navigating: state.navigating,
+            showSearch: state.showSearch,
+            userIsExploring: state.userIsExploring,
+            isSatellite: state.isSatellite,
+            isNightMode: state.isNightMode,
+            waypoints: state.waypoints,
+            isSelectingWaypoints: state.isSelectingWaypoints,
+            showWaypointArrival: state.showWaypointArrival,
+            waypointArrivalMessage: state.waypointArrivalMessage,
+            onWaypointModeToggle: controller.toggleWaypointMode,
+            onWaypointDone: controller.finishWaypointSelection,
+            onWaypointClear: controller.clearWaypointsAndReRoute,
+            routeDrawn: state.routeDrawn,
+            showTapConfirm: state.showTapConfirm,
+            isRecalculating: state.isRecalculating,
+            showLowFuelWarning: state.showLowFuelWarning,
+            routeDistance: state.routeDistance,
+            routeDuration: state.routeDuration,
+            tappedLat: state.tappedLat,
+            tappedLng: state.tappedLng,
+            selectedPlace: state.selectedPlace,
+            alternateRoutes: state.alternateRoutes,
+            selectedRouteIndex: state.selectedRouteIndex,
+            userAvatarImage: state.userAvatarImage,
+            searchController: _searchController,
+            handsFreeActive: state.handsFreeActive,
+            onToggleHandsFree: controller.toggleHandsFree,
+            savedPois: state.savedPois,
+            searchLoading: state.searchLoading,
+            searchResults: state.searchResults,
+            onMapCreated: controller.onMapCreated,
+            onMapTap: (ctx) => controller.onMapTap(
+              ctx.point.coordinates.lat.toDouble(),
+              ctx.point.coordinates.lng.toDouble(),
+            ),
+            onCameraChange: (_) {
+              final isProgrammatic =
+                  ref.read(mapControllerProvider).isProgrammaticMove;
+              if (!isProgrammatic) {
+                _scheduleAutoRecenter();
+              }
+              if (isProgrammatic) {
+                Future.delayed(const Duration(milliseconds: 1200), () {
+                  if (mounted) controller.setIsProgrammaticMove(false);
+                });
+              } else {
+                controller.onCameraChanged();
+              }
+            },
+            onSearchToggle: () {
+              controller.state = controller.state.copyWith(
+                showSearch: !state.showSearch,
+                searchResults: !state.showSearch ? const [] : state.searchResults,
+              );
+              if (state.showSearch) _searchController.clear();
+            },
+            onSearchClose: () {
+              controller.state = controller.state.copyWith(
+                showSearch: false,
+                searchResults: const [],
+              );
+              _searchController.clear();
+            },
+            onSearchChanged: controller.searchPlaces,
+            onSearchSelect: controller.selectSearchResult,
+            onRecenter: controller.recenter,
+            onAvatarPick: () async {
+              final bytes = await controller.pickUserAvatar();
+              if (bytes == null && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('No se pudo guardar la foto. Intenta con una imagen más pequeña.'),
+                    duration: Duration(seconds: 3),
+                  ),
+                );
+              }
+            },
+            onVoiceSearch: _startVoiceSearch,
+            isListening: controller.isListening,
+            onSatelliteToggle: controller.toggleSatellite,
+            onNightModeToggle: controller.toggleNightMode,
+            onTapConfirm: controller.confirmTappedDestination,
+            onTapCancel: controller.cancelTap,
+            onCancelRoute: controller.cancelRoute,
+            onStartNavigation: controller.startNavigation,
+            onRouteSelect: controller.selectRoute,
+            onOpenMenu: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const MainMenuScreen()),
+            ),
+          ),
           TripBook(trips: state.trips),
         ],
-      ),
-    );
-  }
-
-  Widget _buildMapTab(MapState state, MapController controller) {
-    return MapTab(
-      navigating: state.navigating,
-      showSearch: state.showSearch,
-      userIsExploring: state.userIsExploring,
-      isSatellite: state.isSatellite,
-      isNightMode: state.isNightMode,
-      waypoints: state.waypoints,
-      isSelectingWaypoints: state.isSelectingWaypoints,
-      showWaypointArrival: state.showWaypointArrival,
-      waypointArrivalMessage: state.waypointArrivalMessage,
-      onWaypointModeToggle: controller.toggleWaypointMode,
-      onWaypointDone: controller.finishWaypointSelection,
-      onWaypointClear: controller.clearWaypointsAndReRoute,
-      routeDrawn: state.routeDrawn,
-      showTapConfirm: state.showTapConfirm,
-      isRecalculating: state.isRecalculating,
-      fuelTankLiters: state.fuelTankLiters,
-      fuelAutonomyKm: state.fuelAutonomyKm,
-      fuelKmSinceRefuel: state.fuelKmSinceRefuel,
-      showLowFuelWarning: state.showLowFuelWarning,
-      onFuelSettingsSave: controller.saveFuelSettings,
-      onMarkRefueled: controller.markFuelRefueled,
-      routeDistance: state.routeDistance,
-      routeDuration: state.routeDuration,
-      currentInstruction: state.currentInstruction,
-      distanceToNextManeuver: state.distanceToNextManeuver,
-      currentSpeed: state.currentSpeed,
-      speedLimit: state.speedLimit,
-      tappedLat: state.tappedLat,
-      tappedLng: state.tappedLng,
-      selectedPlace: state.selectedPlace,
-      alternateRoutes: state.alternateRoutes,
-      selectedRouteIndex: state.selectedRouteIndex,
-      userAvatarImage: state.userAvatarImage,
-      searchController: _searchController,
-      handsFreeActive: state.handsFreeActive,
-      onToggleHandsFree: controller.toggleHandsFree,
-      savedPois: state.savedPois,
-      searchLoading: state.searchLoading,
-      searchResults: state.searchResults,
-      onMapCreated: controller.onMapCreated,
-      onMapTap: (ctx) => controller.onMapTap(
-        ctx.point.coordinates.lat.toDouble(),
-        ctx.point.coordinates.lng.toDouble(),
-      ),
-      onCameraChange: (_) {
-        if (!state.isProgrammaticMove) {
-          _scheduleAutoRecenter();
-        }
-        if (state.isProgrammaticMove) {
-          Future.delayed(const Duration(milliseconds: 1200), () {
-            if (mounted) controller.setIsProgrammaticMove(false);
-          });
-        } else {
-          controller.onCameraChanged();
-        }
-      },
-      onSearchToggle: () {
-        controller.state = controller.state.copyWith(
-          showSearch: !state.showSearch,
-          searchResults: !state.showSearch ? const [] : state.searchResults,
-        );
-        if (state.showSearch) _searchController.clear();
-      },
-      onSearchClose: () {
-        controller.state = controller.state.copyWith(
-          showSearch: false,
-          searchResults: const [],
-        );
-        _searchController.clear();
-      },
-      onSearchChanged: controller.searchPlaces,
-      onSearchSelect: controller.selectSearchResult,
-      onRecenter: controller.recenter,
-      onAvatarPick: () async {
-        final bytes = await controller.pickUserAvatar();
-        if (bytes == null && context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No se pudo guardar la foto. Intenta con una imagen más pequeña.'),
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
-      },  
-      onVoiceSearch: _startVoiceSearch,
-      isListening: controller.isListening,
-      onSatelliteToggle: controller.toggleSatellite,
-      onNightModeToggle: controller.toggleNightMode,
-      onTapConfirm: controller.confirmTappedDestination,
-      onTapCancel: controller.cancelTap,
-      onCancelRoute: controller.cancelRoute,
-      onStartNavigation: controller.startNavigation,
-      onRouteSelect: controller.selectRoute,
-      onOpenMenu: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const MainMenuScreen()),
       ),
     );
   }
