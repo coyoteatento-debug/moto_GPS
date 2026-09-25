@@ -993,12 +993,6 @@ class _SpeedometerConsumer extends ConsumerWidget {
   }
 }
 
-        ],
-      ),
-    );
-  }
-}
-
 IconData _maneuverIcon(String instruction) {
   final i = instruction.toLowerCase();
   if (i.contains('izquierda'))                         return Icons.turn_left;
@@ -1017,18 +1011,18 @@ class _TurnByTurnBanner extends ConsumerWidget {
   const _TurnByTurnBanner({
     required this.navigating,
     required this.isRecalculating,
-  });
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (!navigating || isRecalculating) return const SizedBox.shrink();
+    if (!navigating || isRecalculating) return const SizedBox.shrink(
 
     final nav = ref.watch(mapControllerProvider.select(
       (s) => (instruction: s.currentInstruction, distance: s.distanceToNextManeuver),
-    ));
+    )
     final currentInstruction = nav.instruction;
     final distanceToNextManeuver = nav.distance;
-    if (currentInstruction.isEmpty) return const SizedBox.shrink();
+    if (currentInstruction.isEmpty) return const SizedBox.shrink(
 
     return Positioned(
       top: 0, left: 0, right: 0,
@@ -1071,7 +1065,7 @@ class _TurnByTurnBanner extends ConsumerWidget {
           ],
         ),
       ),
-    );
+    
   }
 }
 
