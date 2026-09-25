@@ -1193,6 +1193,9 @@ class _FuelGauge extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ).then((_) {
+      litersCtrl.dispose();
+      autonomyCtrl.dispose();
+    });
   }
 }
