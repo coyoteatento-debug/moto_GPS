@@ -898,22 +898,23 @@ class MapController extends AutoDisposeNotifier<MapState> {
     await _mapService.updateRemainingRoute(_mapboxMap!, remaining);
   }
 
-  Future<void> _handleArrival() async {
-    if (!state.navigating) return;
-    if (!_tripService.isTracking) return;
-    state = state.copyWith(navigating: false);
-    final record = await _tripService.finishAndSave(
-      destination: state.selectedPlace?['name'] ?? 'Destino',
-      routeCoords: state.routeCoordinates,
-      existingTrips: state.trips,
-    );
-    if (record != null) {
-      final newTrips = List<TripRecord>.from(state.trips);
-      newTrips.insert(0, record);
-      state = state.copyWith(trips: newTrips);
+    Future<void> _handleArrival() async {
+      if (!state.navigating) return;
+      state = state.copyWith(navigating: false);
+      if (_tripService.isTracking) {
+        final record = await _tripService.finishAndSave(
+          destination: state.selectedPlace?['name'] ?? 'Destino',
+          routeCoords: state.routeCoordinates,
+          existingTrips: state.trips,
+        );
+        if (record != null) {
+          final newTrips = List<TripRecord>.from(state.trips);
+          newTrips.insert(0, record);
+          state = state.copyWith(trips: newTrips);
+        }
+      }
+      await cancelRoute();
     }
-    await cancelRoute();
-  }
 
   Future<void> selectRoute(int index) async {
     final r = state.alternateRoutes[index];
