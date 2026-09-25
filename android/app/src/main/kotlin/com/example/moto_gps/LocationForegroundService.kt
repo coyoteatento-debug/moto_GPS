@@ -128,20 +128,25 @@ class LocationForegroundService : Service() {
         }
     }
 
-    private fun buildNotification(instruction: String): Notification {
-        val pendingIntent = PendingIntent.getActivity(
-            this, 0,
-            packageManager.getLaunchIntentForPackage(packageName),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("🏍️ Moto GPS activo")
-            .setContentText(instruction)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentIntent(pendingIntent)
-            .setOngoing(true)
-            .build()
-    }
+        private fun buildNotification(instruction: String): Notification {
+            val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+                ?: Intent(Intent.ACTION_MAIN).apply {
+                    setPackage(packageName)
+                    addCategory(Intent.CATEGORY_LAUNCHER)
+                }
+            val pendingIntent = PendingIntent.getActivity(
+                this, 0,
+                launchIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+                .setContentTitle("🏍️ Moto GPS activo")
+                .setContentText(instruction)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentIntent(pendingIntent)
+                .setOngoing(true)
+            return builder.build()
+        }
 
     private fun updateNotification(instruction: String) {
         val notification = buildNotification(instruction)
