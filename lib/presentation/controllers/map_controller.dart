@@ -104,7 +104,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _startNightModeTimer();
     await _loadTrips();
     await _loadFuelSettings();
-    await _loadUserAvatar;
+    await _loadUserAvatar();
     await _loadPois();
     await _loadImages(); // Carga las imágenes primero
     await _initTts();
