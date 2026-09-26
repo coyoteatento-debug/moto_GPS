@@ -690,8 +690,8 @@ class MapController extends AutoDisposeNotifier<MapState> {
         });
         break;
       case VoiceCommandType.savePoint:
-        _saveQuickPoi('punto').then((saved) {
-          _speak(saved ? 'Punto guardado' : 'No se detectó tu ubicación, intenta de nuevo');
+        _saveQuickPoi('lugar').then((saved) {
+          _speak(saved ? 'Lugar guardado' : 'No se detectó tu ubicación, intenta de nuevo');
         });
         break;
       case VoiceCommandType.findGasStation:
