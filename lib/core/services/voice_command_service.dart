@@ -119,7 +119,7 @@ class VoiceCommandService {
     if (_containsAny(normalized, ['peligro', 'precaucion', 'riesgo'])) {
       return VoiceCommand(VoiceCommandType.markDanger, text);
     }
-    if (_containsAny(normalized, ['marcar punto', 'guardar punto', 'punto de interes'])) {
+    if (_containsAny(normalized, ['marcar lugar', 'guardar lugar', 'lugar de interes'])) {
       return VoiceCommand(VoiceCommandType.savePoint, text);
     }
     if (_containsAny(normalized, ['gasolinera', 'gasolina', 'combustible'])) {
