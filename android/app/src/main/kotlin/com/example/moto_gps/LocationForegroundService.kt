@@ -56,9 +56,14 @@ class LocationForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
-                startForegroundService()
-                startLocationUpdates()
-                Log.d(TAG, "Servicio iniciado")
+                try {
+                    startForegroundService()
+                    startLocationUpdates()
+                    Log.d(TAG, "Servicio iniciado")
+                } catch (e: SecurityException) {
+                    Log.e(TAG, "No se pudo iniciar el foreground service (permiso no vigente): ${e.message}")
+                    stopSelf()
+                }
             }
             ACTION_STOP -> {
                 stopSelf()
