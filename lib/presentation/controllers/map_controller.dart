@@ -406,6 +406,8 @@ class MapController extends AutoDisposeNotifier<MapState> {
     });
   }
   
+    bool _creatingMotoMarker = false;
+
     Future<void> _updateMotoMarker(double lat, double lng, double bearing) async {
       final markerImage = state.userAvatarImage ?? state.pinImage;
       if (_annotationManager == null || markerImage == null) return;
@@ -427,17 +429,24 @@ class MapController extends AutoDisposeNotifier<MapState> {
           _motoAnnotation = null;
         }
       }
-    
-      // Solo crear si no existe (o se eliminó arriba)
-      _motoAnnotation = await _mapService.updateMotoMarker(
-        manager: _annotationManager!,
-        current: _motoAnnotation,
-        lat: lat,
-        lng: lng,
-        bearing: bearing,
-        markerImage: markerImage,
-        isAvatar: state.userAvatarImage != null,
-      );
+
+      // Evita que dos llamadas concurrentes creen el marcador dos veces
+      if (_creatingMotoMarker) return;
+      _creatingMotoMarker = true;
+      try {
+        // Solo crear si no existe (o se eliminó arriba)
+        _motoAnnotation = await _mapService.updateMotoMarker(
+          manager: _annotationManager!,
+          current: _motoAnnotation,
+          lat: lat,
+          lng: lng,
+          bearing: bearing,
+          markerImage: markerImage,
+          isAvatar: state.userAvatarImage != null,
+        );
+      } finally {
+        _creatingMotoMarker = false;
+      }
     }
 
   Future<void> _addDestinationMarker(double lat, double lng) async {
