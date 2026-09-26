@@ -10,15 +10,11 @@ class VoiceCommand {
   const VoiceCommand(this.type, this.rawText);
 }
 
-/// Reconocimiento de voz continuo, EN EL DISPOSITIVO (offline), para
-/// comandos cortos tipo "GPS, marcar peligro" — pensado para usarse con
-/// el casco puesto y sin señal telefónica (sierra, zonas rurales, etc).
-///
-/// Nota realista: forzar `onDevice: true` requiere que el idioma tenga
-/// el paquete de reconocimiento offline instalado en el teléfono
-/// (Android lo gestiona en Ajustes > Voz > Reconocimiento offline).
-/// Si no está instalado, el motor puede fallar silenciosamente — por
-/// eso reintentamos solos ante error en vez de tronar la función.
+/// Reconocimiento de voz continuo EN LÍNEA, para comandos cortos tipo
+/// "GPS, marcar peligro" — pensado para usarse con el casco/intercomunicador
+/// puesto. Requiere datos móviles o WiFi (el reconocimiento 100% offline
+/// no procesa correctamente el audio que llega por Bluetooth SCO en la
+/// mayoría de intercomunicadores, así que se usa el motor en línea).
 class VoiceCommandService {
   static final VoiceCommandService _instance =
       VoiceCommandService._internal();
@@ -97,13 +93,9 @@ class VoiceCommandService {
       localeId: _localeId,
       listenFor: const Duration(seconds: 8),
       pauseFor: const Duration(seconds: 3),
-      partialResults: true, // algunos motores onDevice nunca marcan finalResult=true
+      partialResults: true,
       cancelOnError: true,
       listenMode: ListenMode.confirmation,
-      onDevice: true, // ← fuerza reconocimiento local, sin datos móviles
-      // Si tu versión resuelta de speech_to_text no acepta `onDevice`
-      // como parámetro directo, cámbialo por:
-      // listenOptions: SpeechListenOptions(onDevice: true, listenMode: ..., cancelOnError: true, partialResults: false),
     );
   }
 
