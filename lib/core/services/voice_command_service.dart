@@ -91,12 +91,13 @@ class VoiceCommandService {
 
   Future<void> _listenCycle() async {
     if (!_active) return;
+    _commandHandledThisCycle = false;
     await _speech.listen(
       onResult: _handleResult,
       localeId: _localeId,
       listenFor: const Duration(seconds: 8),
       pauseFor: const Duration(seconds: 3),
-      partialResults: false, // solo frases completas: menos falsos positivos con ruido de casco
+      partialResults: true, // algunos motores onDevice nunca marcan finalResult=true
       cancelOnError: true,
       listenMode: ListenMode.confirmation,
       onDevice: true, // ← fuerza reconocimiento local, sin datos móviles
@@ -106,10 +107,15 @@ class VoiceCommandService {
     );
   }
 
+  bool _commandHandledThisCycle = false;
+
   void _handleResult(SpeechRecognitionResult result) {
-    if (!result.finalResult) return;
+    if (_commandHandledThisCycle) return;
     final command = _parseCommand(result.recognizedWords);
-    if (command != null) _onCommand?.call(command);
+    if (command == null) return;
+    _commandHandledThisCycle = true;
+    _onCommand?.call(command);
+    _speech.stop();
   }
 
   /// Reconoce comandos con la palabra de activación "gps" seguida de
