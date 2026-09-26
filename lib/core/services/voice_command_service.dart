@@ -33,6 +33,8 @@ class VoiceCommandService {
 
   bool get isActive => _active;
 
+  String _localeId = 'es-MX';
+
   Future<bool> _ensureInit() async {
     if (_available) return true;
     _available = await _speech.initialize(
@@ -43,6 +45,15 @@ class VoiceCommandService {
         if (_active) _scheduleRestart();
       },
     );
+    if (_available) {
+      final locales = await _speech.locales();
+      for (final preferred in ['es-MX', 'es-US', 'es-ES']) {
+        if (locales.any((l) => l.localeId == preferred)) {
+          _localeId = preferred;
+          break;
+        }
+      }
+    }
     return _available;
   }
 
@@ -82,7 +93,7 @@ class VoiceCommandService {
     if (!_active) return;
     await _speech.listen(
       onResult: _handleResult,
-      localeId: 'es-MX',
+      localeId: _localeId,
       listenFor: const Duration(seconds: 8),
       pauseFor: const Duration(seconds: 3),
       partialResults: false, // solo frases completas: menos falsos positivos con ruido de casco
