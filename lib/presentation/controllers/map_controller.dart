@@ -369,7 +369,12 @@ class MapController extends AutoDisposeNotifier<MapState> {
 
   Future<void> onAppBackground() async {
     if (_locationSubscription != null) {
-      await _bgService.start(); // garantiza que el servicio nativo esté activo aunque no haya navegación
+      final permission = await Geolocator.checkPermission();
+      final hasPermission = permission == LocationPermission.always ||
+          permission == LocationPermission.whileInUse;
+      if (hasPermission) {
+        await _bgService.start(); // garantiza que el servicio nativo esté activo aunque no haya navegación
+      }
       _gpsService.onAppBackground();
     }
   }
