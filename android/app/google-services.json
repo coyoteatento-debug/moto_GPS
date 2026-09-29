@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "115174965275",
+    "project_id": "motogps-interconectado",
+    "storage_bucket": "motogps-interconectado.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:115174965275:android:cd43d89fef6ae2d76878be",
+        "android_client_info": {
+          "package_name": "com.coyoteatento.motogps"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAvTesiYbjqeigPn_mS0f8FQtBtR1-h9rs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
