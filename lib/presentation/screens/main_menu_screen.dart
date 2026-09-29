@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'offline_maps_screen.dart';
+import 'friends_screen.dart';
 
 class MainMenuScreen extends StatelessWidget {
   const MainMenuScreen({super.key});
@@ -26,6 +27,21 @@ class MainMenuScreen extends StatelessWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const OfflineMapsScreen()),
+            ),
+          ),
+          const Divider(color: Colors.white24, height: 1),
+          ListTile(
+            leading: const Icon(Icons.people_outline, color: Colors.white70),
+            title: const Text('GPS Interconectado',
+                style: TextStyle(color: Colors.white)),
+            subtitle: const Text(
+                'Ve a tus amigos en el mapa',
+                style: TextStyle(color: Colors.white54)),
+            trailing:
+                const Icon(Icons.chevron_right, color: Colors.white54),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const FriendsScreen()),
             ),
           ),
           const Divider(color: Colors.white24, height: 1),
