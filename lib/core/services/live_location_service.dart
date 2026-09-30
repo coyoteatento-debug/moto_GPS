@@ -38,7 +38,13 @@ class LiveLocationService {
     return _db.ref('liveLocations/$friendUid').onValue.map((event) {
       final data = event.snapshot.value;
       if (data == null) return null;
-      return Map<String, dynamic>.from(data as Map);
+      final map = Map<String, dynamic>.from(data as Map);
+      final updatedAt = map['updatedAt'];
+      if (updatedAt is int) {
+        final ageMs = DateTime.now().millisecondsSinceEpoch - updatedAt;
+        if (ageMs > 90000) return null; // más de 90s sin actualizar: se oculta
+      }
+      return map;
     });
   }
 }
