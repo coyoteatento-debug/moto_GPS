@@ -592,6 +592,13 @@ class MapTab extends StatelessWidget {
           ),
         ),
 
+// ── Botón GPS Interconectado ────────────────────────
+      if (!navigating)
+        const Positioned(
+          bottom: 290, right: 16,
+          child: _LocationShareButton(),
+        ),
+      
       // ── Confirmar tap ──────────────────────────────────
       if (showTapConfirm && !navigating)
         Positioned(
@@ -921,6 +928,35 @@ class MapTab extends StatelessWidget {
     ]);
   }
 }
+
+class _LocationShareButton extends ConsumerWidget {
+  const _LocationShareButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isSharing = ref.watch(
+        mapControllerProvider.select((s) => s.isSharingLocation));
+    return GestureDetector(
+      onTap: () =>
+          ref.read(mapControllerProvider.notifier).toggleLocationSharing(),
+      child: Container(
+        width: 46, height: 46,
+        decoration: BoxDecoration(
+          color: isSharing ? Colors.green[700] : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: const [BoxShadow(
+              color: Colors.black38, blurRadius: 8, offset: Offset(0, 2))],
+        ),
+        child: Icon(
+          isSharing ? Icons.share_location : Icons.location_disabled,
+          color: isSharing ? Colors.white : Colors.blueGrey.shade700,
+          size: 24,
+        ),
+      ),
+    );
+  }
+}
+
 
 class _SpeedometerConsumer extends ConsumerWidget {
   const _SpeedometerConsumer();
