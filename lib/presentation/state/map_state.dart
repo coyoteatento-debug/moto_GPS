@@ -48,6 +48,7 @@ class MapState {
   final bool handsFreeActive;
   final List<PoiRecord> savedPois;
   final String? lastVoiceCommandMessage;
+  final bool isSharingLocation;
 
   const MapState({
     this.currentSpeed = 0.0,
@@ -94,6 +95,7 @@ class MapState {
     this.handsFreeActive = false,
     this.savedPois = const [],
     this.lastVoiceCommandMessage,
+    this.isSharingLocation = false,
   });
 
   MapState copyWith({
@@ -141,6 +143,7 @@ class MapState {
     bool? handsFreeActive,
     List<PoiRecord>? savedPois,
     String? lastVoiceCommandMessage,
+    bool? isSharingLocation,
     bool clearVoiceCommandMessage = false,
     bool clearCurrentPosition = false,
     bool clearSelectedPlace = false,
@@ -195,6 +198,7 @@ class MapState {
       lastVoiceCommandMessage: clearVoiceCommandMessage
           ? null
           : lastVoiceCommandMessage ?? this.lastVoiceCommandMessage,
+      isSharingLocation: isSharingLocation ?? this.isSharingLocation,
     );
   }
 }
