@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class FriendsService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseDatabase _rtdb = FirebaseDatabase.instance;
 
   String get _uid => _auth.currentUser!.uid;
 
@@ -85,6 +87,11 @@ class FriendsService {
         _db.collection('friendships').doc(fromUid).collection('friends').doc(_uid),
         {'username': myUsername, 'since': FieldValue.serverTimestamp()});
     await batch.commit();
+
+    // Espejo mínimo en Realtime Database, solo para que las reglas de
+    // seguridad de liveLocations puedan verificar la amistad.
+    await _rtdb.ref('friendships/$_uid/$fromUid').set(true);
+    await _rtdb.ref('friendships/$fromUid/$_uid').set(true);
   }
 
   Future<void> rejectRequest(String requestId) async {
@@ -97,5 +104,8 @@ class FriendsService {
     batch.delete(_db.collection('friendships').doc(_uid).collection('friends').doc(friendUid));
     batch.delete(_db.collection('friendships').doc(friendUid).collection('friends').doc(_uid));
     await batch.commit();
+
+    await _rtdb.ref('friendships/$_uid/$friendUid').remove();
+    await _rtdb.ref('friendships/$friendUid/$_uid').remove();
   }
 }
