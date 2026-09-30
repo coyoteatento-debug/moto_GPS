@@ -20,6 +20,8 @@ import '../../core/services/speed_limit_service.dart';
 import '../../core/services/trip_service.dart';
 import '../../core/services/tts_service.dart';
 import '../../core/services/voice_command_service.dart';
+import '../../core/services/live_location_service.dart';
+import '../../core/services/friends_service.dart';
 import '../../core/utils/geo_utils.dart';
 import '../../core/utils/image_utils.dart';
 import '../../data/models/trip_record.dart';
@@ -111,6 +113,13 @@ class MapController extends AutoDisposeNotifier<MapState> {
     await _initSpeech();
   }
 
+  final LiveLocationService _liveLocation = LiveLocationService();
+  final FriendsService _friendsService = FriendsService();
+  StreamSubscription? _friendsListSub;
+  final Map<String, StreamSubscription> _friendLocationSubs = {};
+  final Map<String, mapbox.PointAnnotation?> _friendAnnotations = {};
+  DateTime? _lastLocationShareWrite;
+
   Future<void> _onDispose() async {
     _locationSubscription?.cancel();
     _smoothSub?.cancel();
@@ -119,12 +128,111 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _waypointArrivalTimer?.cancel();
     _lowFuelWarningTimer?.cancel();
     _voiceCmd.stop();
+    _stopWatchingFriends();
+    if (_liveLocation.isSharing) await _liveLocation.stopSharing();
     await _gpsService.dispose();
     _mapboxApi.dispose();
     _navService.disposeApi();
     await _tts.stop();
     await _bgService.stop();
     await WakelockPlus.disable();
+  }
+
+  // ── GPS Interconectado ─────────────────────────────────
+  Future<void> toggleLocationSharing() async {
+    final newValue = !state.isSharingLocation;
+    state = state.copyWith(isSharingLocation: newValue);
+    if (newValue) {
+      await _liveLocation.startSharing();
+      _startWatchingFriends();
+    } else {
+      await _liveLocation.stopSharing();
+      _stopWatchingFriends();
+    }
+  }
+
+  void _startWatchingFriends() {
+    _friendsListSub?.cancel();
+    _friendsListSub = _friendsService.myFriends().listen((friends) {
+      final currentUids = friends.map((f) => f['uid'] as String).toSet();
+
+      final toRemove = _friendLocationSubs.keys
+          .where((uid) => !currentUids.contains(uid)).toList();
+      for (final uid in toRemove) {
+        _friendLocationSubs[uid]?.cancel();
+        _friendLocationSubs.remove(uid);
+        _removeFriendMarker(uid);
+      }
+
+      for (final friend in friends) {
+        final uid = friend['uid'] as String;
+        final username = friend['username'] as String? ?? 'Amigo';
+        if (_friendLocationSubs.containsKey(uid)) continue;
+        _friendLocationSubs[uid] =
+            _liveLocation.watchFriendLocation(uid).listen((loc) {
+          if (loc == null) {
+            _removeFriendMarker(uid);
+          } else {
+            _updateFriendMarker(
+              uid,
+              username,
+              (loc['lat'] as num).toDouble(),
+              (loc['lng'] as num).toDouble(),
+            );
+          }
+        });
+      }
+    });
+  }
+
+  void _stopWatchingFriends() {
+    _friendsListSub?.cancel();
+    _friendsListSub = null;
+    for (final sub in _friendLocationSubs.values) {
+      sub.cancel();
+    }
+    _friendLocationSubs.clear();
+    for (final uid in _friendAnnotations.keys.toList()) {
+      _removeFriendMarker(uid);
+    }
+  }
+
+  Future<void> _updateFriendMarker(
+      String uid, String username, double lat, double lng) async {
+    if (_annotationManager == null) return;
+    final existing = _friendAnnotations[uid];
+    try {
+      if (existing != null) {
+        existing.geometry = mapbox.Point(coordinates: mapbox.Position(lng, lat));
+        await _annotationManager!.update(existing);
+      } else {
+        final markerImage = state.pinImage;
+        if (markerImage == null) return;
+        final annotation = await _annotationManager!.create(
+          mapbox.PointAnnotationOptions(
+            geometry: mapbox.Point(coordinates: mapbox.Position(lng, lat)),
+            image: markerImage,
+            iconSize: 0.7,
+            iconAnchor: mapbox.IconAnchor.CENTER,
+            textField: username,
+            textOffset: [0, 1.8],
+            textColor: Colors.white.value,
+          ),
+        );
+        _friendAnnotations[uid] = annotation;
+      }
+    } catch (e) {
+      print('[MapController] Error marcador de amigo $uid: $e');
+    }
+  }
+
+  Future<void> _removeFriendMarker(String uid) async {
+    final annotation = _friendAnnotations.remove(uid);
+    if (annotation != null && _annotationManager != null) {
+      try {
+        await _annotationManager!.delete(annotation);
+      } catch (_) {}
+    }
   }
 
     Future<void> onMapCreated(mapbox.MapboxMap map) async {
@@ -247,6 +355,14 @@ class MapController extends AutoDisposeNotifier<MapState> {
           now.difference(_lastSpeedLimitCall!).inSeconds >= 5) {
         _lastSpeedLimitCall = now;
         await _updateSpeedLimit(position.latitude, position.longitude);
+      }
+
+      if (state.isSharingLocation &&
+          (_lastLocationShareWrite == null ||
+              now.difference(_lastLocationShareWrite!).inSeconds >= 12)) {
+        _lastLocationShareWrite = now;
+        await _liveLocation.updateMyLocation(
+            position.latitude, position.longitude, position.heading);
       }
 
       if (!state.initialLocationSet && _mapboxMap != null) {
