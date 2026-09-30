@@ -26,7 +26,7 @@ class AuthService {
       });
       return null; // sin error
     } on FirebaseAuthException catch (e) {
-      return _mapAuthError(e.code);
+      return _mapAuthError(e.code, e.message);
     }
   }
 
@@ -38,13 +38,13 @@ class AuthService {
       );
       return null;
     } on FirebaseAuthException catch (e) {
-      return _mapAuthError(e.code);
+      return _mapAuthError(e.code, e.message);
     }
   }
 
   Future<void> logout() => _auth.signOut();
 
-  String _mapAuthError(String code) {
+  String _mapAuthError(String code, [String? message]) {
     switch (code) {
       case 'email-already-in-use':
         return 'Ese correo ya está registrado.';
@@ -57,7 +57,7 @@ class AuthService {
       case 'invalid-credential':
         return 'Correo o contraseña incorrectos.';
       default:
-        return 'Error: $code';
+        return 'Error [$code]: ${message ?? "sin detalle"}';
     }
   }
 }
