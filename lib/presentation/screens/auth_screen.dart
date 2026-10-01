@@ -42,7 +42,7 @@ class _AuthScreenState extends State<AuthScreen> {
       _loading = false;
       _errorMessage = error;
     });
-  }
+    if (error == null) Navigator.of(context).pop(true);
 
   @override
   Widget build(BuildContext context) {
