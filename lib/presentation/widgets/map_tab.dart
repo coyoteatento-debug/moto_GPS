@@ -6,6 +6,7 @@ import 'search_modal.dart';
 import '../../core/services/speed_limit_service.dart';
 import 'saved_points_sheet.dart';
 import '../../data/models/poi_record.dart';
+import '../../data/models/saved_place.dart';
 import '../controllers/map_controller.dart';
 
 // ── Botón de capas expandible ─────────────────────────
@@ -206,6 +207,8 @@ class MapTab extends StatelessWidget {
   final bool handsFreeActive;
   final VoidCallback onToggleHandsFree;
   final List<PoiRecord> savedPois;
+  final List<SavedPlaceRecord> savedPlaces;
+  final ValueChanged<SavedPlaceRecord> onGoToSavedPlace;
   final VoidCallback onSatelliteToggle;
   final VoidCallback onNightModeToggle;
   final VoidCallback onTapConfirm;
@@ -258,6 +261,8 @@ class MapTab extends StatelessWidget {
     required this.handsFreeActive,
     required this.onToggleHandsFree,
     required this.savedPois,
+    required this.savedPlaces,
+    required this.onGoToSavedPlace,
     required this.onSatelliteToggle,
     required this.onNightModeToggle,
     required this.onTapConfirm,
@@ -496,7 +501,8 @@ class MapTab extends StatelessWidget {
         Positioned(
           bottom: 230, right: 16,
           child: GestureDetector(
-            onTap: () => showSavedPointsSheet(context, savedPois),
+            onTap: () => showSavedPointsSheet(
+                context, savedPois, savedPlaces, onGoToSavedPlace),
             child: Container(
               width: 46, height: 46,
               decoration: BoxDecoration(
@@ -693,6 +699,10 @@ class MapTab extends StatelessWidget {
                     ],
                   ),
                 ),
+              ),
+              const Padding(
+                padding: EdgeInsets.only(bottom: 10),
+                child: _SavePlaceButton(),
               ),
               Row(children: [
                 Expanded(child: OutlinedButton.icon(
@@ -926,6 +936,60 @@ class MapTab extends StatelessWidget {
           ),
         ),
     ]);
+  }
+}
+
+class _SavePlaceButton extends ConsumerWidget {
+  const _SavePlaceButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () => _showNameDialog(context, ref),
+        icon: const Icon(Icons.star_border, color: Colors.amber),
+        label: const Text('Guardar como favorito',
+            style: TextStyle(color: Colors.amber)),
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: Colors.amber),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      ),
+    );
+  }
+
+  void _showNameDialog(BuildContext context, WidgetRef ref) {
+    final nameCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Guardar lugar'),
+        content: TextField(
+          controller: nameCtrl,
+          autofocus: true,
+          decoration: const InputDecoration(
+              hintText: 'Ej. Casa, Trabajo, Taller...'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final name = nameCtrl.text.trim();
+              if (name.isNotEmpty) {
+                ref.read(mapControllerProvider.notifier).saveTappedAsFavorite(name);
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    ).then((_) => nameCtrl.dispose());
   }
 }
 
