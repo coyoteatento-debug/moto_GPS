@@ -1,19 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../data/models/poi_record.dart';
+import '../../data/models/saved_place.dart';
 
-void showSavedPointsSheet(BuildContext context, List<PoiRecord> pois) {
+void showSavedPointsSheet(
+  BuildContext context,
+  List<PoiRecord> pois,
+  List<SavedPlaceRecord> places,
+  ValueChanged<SavedPlaceRecord> onGoToPlace,
+) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _SavedPointsSheet(pois: pois),
+    builder: (_) => _SavedPointsSheet(
+      pois: pois,
+      places: places,
+      onGoToPlace: onGoToPlace,
+    ),
   );
 }
 
 class _SavedPointsSheet extends StatelessWidget {
   final List<PoiRecord> pois;
-  const _SavedPointsSheet({required this.pois});
+  final List<SavedPlaceRecord> places;
+  final ValueChanged<SavedPlaceRecord> onGoToPlace;
+  const _SavedPointsSheet({
+    required this.pois,
+    required this.places,
+    required this.onGoToPlace,
+  });
 
   String _formatDate(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')} '
@@ -22,7 +38,7 @@ class _SavedPointsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
+      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.8),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -39,26 +55,51 @@ class _SavedPointsSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          const Text('Puntos guardados por voz',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
-          const SizedBox(height: 16),
           Flexible(
-            child: pois.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                const Text('Lugares favoritos',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                const SizedBox(height: 8),
+                if (places.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
                     child: Text(
-                      'Di "GPS, marcar peligro" o "GPS, marcar punto"\nmientras manejas para guardarlos aquí.',
+                      'Toca el mapa, confirma un destino y usa\n"Guardar como favorito" para verlo aquí.\nLuego di "GPS, llévame a [nombre]".',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.grey),
                     ),
                   )
-                : ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: pois.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (_, i) {
-                      final poi = pois[i];
-                      return ListTile(
+                else
+                  ...places.map((p) => ListTile(
+                        leading: const Icon(Icons.star, color: Colors.amber),
+                        title: Text(p.name,
+                            style: const TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: Text(_formatDate(p.date)),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.navigation, color: Colors.blue),
+                          onPressed: () {
+                            Navigator.pop(context);
+                            onGoToPlace(p);
+                          },
+                        ),
+                      )),
+                const Divider(height: 32),
+                const Text('Puntos guardados por voz',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                const SizedBox(height: 8),
+                if (pois.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      'Di "GPS, marcar peligro" o "GPS, marcar lugar"\nmientras manejas para guardarlos aquí.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  )
+                else
+                  ...pois.map((poi) => ListTile(
                         leading: Text(
                           poi.type == 'peligro' ? '⚠️' : '📍',
                           style: const TextStyle(fontSize: 22),
@@ -70,9 +111,9 @@ class _SavedPointsSheet extends StatelessWidget {
                           icon: const Icon(Icons.share, color: Colors.blue),
                           onPressed: () => Share.share(poi.shareText),
                         ),
-                      );
-                    },
-                  ),
+                      )),
+              ],
+            ),
           ),
         ],
       ),
