@@ -810,11 +810,53 @@ class MapController extends AutoDisposeNotifier<MapState> {
           _speak(saved ? 'Lugar guardado' : 'No se detectó tu ubicación, intenta de nuevo');
         });
         break;
-      case VoiceCommandType.findGasStation:
+            case VoiceCommandType.findGasStation:
         _speak('Buscando gasolinera cercana');
         _autoRouteToNearest('gasolinera');
         break;
+      case VoiceCommandType.routeStatus:
+        _speakRouteStatus();
+        break;
+      case VoiceCommandType.cancelRoute:
+        if (state.navigating || state.routeDrawn) {
+          cancelRoute();
+          _speak('Ruta cancelada');
+        } else {
+          _speak('No tienes una ruta activa');
+        }
+        break;
     }
+  }
+
+  void _speakRouteStatus() {
+    if (!state.navigating || state.currentPosition == null ||
+        state.routeCoordinates.isEmpty) {
+      _speak('No tienes una ruta activa');
+      return;
+    }
+    final pos = state.currentPosition!;
+    final idx = _geo.findClosestPointIndex(
+        pos.latitude, pos.longitude, state.routeCoordinates,
+        lastIdx: state.currentStepIndex);
+    final remaining = state.routeCoordinates.sublist(idx);
+
+    double meters = 0;
+    for (var i = 0; i < remaining.length - 1; i++) {
+      meters += _geo.distanceBetween(
+          remaining[i][1], remaining[i][0], remaining[i + 1][1], remaining[i + 1][0]);
+    }
+
+    final km = meters / 1000;
+    final distanceText = km >= 1
+        ? '${km.toStringAsFixed(1)} kilómetros'
+        : '${meters.toStringAsFixed(0)} metros';
+
+    String etaText = '';
+    if (state.currentSpeed > 5) {
+      final minutes = km / state.currentSpeed * 60;
+      if (minutes >= 1) etaText = ', aproximadamente ${minutes.round()} minutos';
+    }
+    _speak('Te faltan $distanceText$etaText');
   }
 
   Future<bool> _saveQuickPoi(String type) async {
