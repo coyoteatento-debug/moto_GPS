@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'offline_maps_screen.dart';
 import 'friends_screen.dart';
+import '../../core/services/auth_service.dart';
 
 class MainMenuScreen extends StatelessWidget {
   const MainMenuScreen({super.key});
@@ -43,6 +45,49 @@ class MainMenuScreen extends StatelessWidget {
               context,
               MaterialPageRoute(builder: (_) => const FriendsScreen()),
             ),
+          ),
+          const Divider(color: Colors.white24, height: 1),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+            child: Text(
+              FirebaseAuth.instance.currentUser?.email ?? '',
+              style: const TextStyle(color: Colors.white38, fontSize: 12),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.logout, color: Colors.redAccent),
+            title: const Text('Cerrar sesión',
+                style: TextStyle(color: Colors.redAccent)),
+            onTap: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (_) => AlertDialog(
+                  backgroundColor: const Color(0xFF1A1A1A),
+                  title: const Text('Cerrar sesión',
+                      style: TextStyle(color: Colors.white)),
+                  content: const Text(
+                      '¿Seguro que quieres cerrar sesión?',
+                      style: TextStyle(color: Colors.white70)),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancelar'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Cerrar sesión',
+                          style: TextStyle(color: Colors.redAccent)),
+                    ),
+                  ],
+                ),
+              );
+              if (confirm == true) {
+                await AuthService().logout();
+                if (context.mounted) {
+                  Navigator.of(context).popUntil((r) => r.isFirst);
+                }
+              }
+            },
           ),
           const Divider(color: Colors.white24, height: 1),
           const Padding(
