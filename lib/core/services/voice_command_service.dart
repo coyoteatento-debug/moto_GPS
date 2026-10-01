@@ -2,7 +2,13 @@ import 'dart:async';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 
-enum VoiceCommandType { markDanger, savePoint, findGasStation }
+enum VoiceCommandType {
+  markDanger,
+  savePoint,
+  findGasStation,
+  routeStatus,
+  cancelRoute,
+}
 
 class VoiceCommand {
   final VoiceCommandType type;
@@ -124,6 +130,12 @@ class VoiceCommandService {
     }
     if (_containsAny(normalized, ['gasolinera', 'gasolina', 'combustible'])) {
       return VoiceCommand(VoiceCommandType.findGasStation, text);
+    }
+    if (_containsAny(normalized, ['cuanto falta', 'cuanto me falta', 'tiempo restante', 'distancia restante'])) {
+      return VoiceCommand(VoiceCommandType.routeStatus, text);
+    }
+    if (_containsAny(normalized, ['cancela la ruta', 'cancelar ruta', 'cancela ruta'])) {
+      return VoiceCommand(VoiceCommandType.cancelRoute, text);
     }
     return null;
   }
