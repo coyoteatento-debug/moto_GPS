@@ -26,6 +26,7 @@ import '../../core/utils/geo_utils.dart';
 import '../../core/utils/image_utils.dart';
 import '../../data/models/trip_record.dart';
 import '../../data/models/poi_record.dart';
+import '../../data/models/saved_place.dart';
 import '../../data/sources/mapbox_api.dart';
 import '../../data/sources/prefs_source.dart';
 import '../../di/providers.dart';
@@ -108,6 +109,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
     await _loadFuelSettings();
     await _loadUserAvatar();
     await _loadPois();
+    await _loadSavedPlaces();
     await _loadImages(); // Carga las imágenes primero
     await _initTts();
     await _initSpeech();
@@ -825,6 +827,9 @@ class MapController extends AutoDisposeNotifier<MapState> {
           _speak('No tienes una ruta activa');
         }
         break;
+      case VoiceCommandType.goToSavedPlace:
+        if (cmd.extra != null) goToSavedPlace(cmd.extra!);
+        break;
     }
   }
 
@@ -873,6 +878,52 @@ class MapController extends AutoDisposeNotifier<MapState> {
   Future<void> _loadPois() async {
     final pois = await _prefs.loadPois();
     state = state.copyWith(savedPois: pois);
+  }
+
+  Future<void> _loadSavedPlaces() async {
+    final places = await _prefs.loadPlaces();
+    state = state.copyWith(savedPlaces: places);
+  }
+
+  Future<void> saveTappedAsFavorite(String name) async {
+    if (state.tappedLat == null || state.tappedLng == null) return;
+    final place = SavedPlaceRecord(
+      name: name,
+      lat: state.tappedLat!,
+      lng: state.tappedLng!,
+      date: DateTime.now(),
+    );
+    final updated = List<SavedPlaceRecord>.from(state.savedPlaces)..insert(0, place);
+    state = state.copyWith(savedPlaces: updated);
+    await _prefs.savePlaces(updated);
+  }
+
+  Future<void> removeSavedPlace(SavedPlaceRecord place) async {
+    final updated = List<SavedPlaceRecord>.from(state.savedPlaces)
+      ..removeWhere((p) => p.name == place.name && p.lat == place.lat && p.lng == place.lng);
+    state = state.copyWith(savedPlaces: updated);
+    await _prefs.savePlaces(updated);
+  }
+
+  Future<void> goToSavedPlace(String spokenName) async {
+    if (state.savedPlaces.isEmpty) {
+      _speak('No tienes lugares guardados');
+      return;
+    }
+    SavedPlaceRecord? match;
+    for (final p in state.savedPlaces) {
+      final n = p.name.toLowerCase();
+      if (n == spokenName || n.contains(spokenName) || spokenName.contains(n)) {
+        match = p;
+        break;
+      }
+    }
+    if (match == null) {
+      _speak('No encontré un lugar guardado llamado $spokenName');
+      return;
+    }
+    _speak('Llevándote a ${match.name}');
+    await selectSearchResult({'name': match.name, 'lat': match.lat, 'lng': match.lng});
   }
 
   Future<void> _autoRouteToNearest(String query) async {
