@@ -8,12 +8,14 @@ enum VoiceCommandType {
   findGasStation,
   routeStatus,
   cancelRoute,
+  goToSavedPlace,
 }
 
 class VoiceCommand {
   final VoiceCommandType type;
   final String rawText;
-  const VoiceCommand(this.type, this.rawText);
+  final String? extra;
+  const VoiceCommand(this.type, this.rawText, {this.extra});
 }
 
 /// Reconocimiento de voz continuo EN LÍNEA, para comandos cortos tipo
@@ -136,6 +138,15 @@ class VoiceCommandService {
     }
     if (_containsAny(normalized, ['cancela la ruta', 'cancelar ruta', 'cancela ruta'])) {
       return VoiceCommand(VoiceCommandType.cancelRoute, text);
+    }
+    for (final prefix in ['llevame a ', 'lleva a ', 'ir a ']) {
+      if (normalized.contains(prefix)) {
+        final idx = normalized.indexOf(prefix);
+        final placeName = normalized.substring(idx + prefix.length).trim();
+        if (placeName.isNotEmpty) {
+          return VoiceCommand(VoiceCommandType.goToSavedPlace, text, extra: placeName);
+        }
+      }
     }
     return null;
   }
