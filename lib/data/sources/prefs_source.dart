@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/trip_record.dart';
 import '../models/poi_record.dart';
+import '../models/saved_place.dart';
 
 class PrefsSource {
   SharedPreferences? _prefs;
@@ -112,6 +113,26 @@ class PrefsSource {
       return data.map((e) => Map<String, String>.from(e)).toList();
     } catch (e) {
       print('[PrefsSource] Error leyendo offline_regions: $e');
+      return [];
+    }
+  }
+
+  // ── Lugares guardados con nombre (favoritos) ────────────
+  Future<void> savePlaces(List<SavedPlaceRecord> places) async {
+    final prefs = await _instance;
+    await prefs.setString(
+        'saved_places', json.encode(places.map((p) => p.toJson()).toList()));
+  }
+
+  Future<List<SavedPlaceRecord>> loadPlaces() async {
+    final prefs = await _instance;
+    final raw = prefs.getString('saved_places');
+    if (raw == null) return [];
+    try {
+      final data = json.decode(raw) as List;
+      return data.map((e) => SavedPlaceRecord.fromJson(e)).toList();
+    } catch (e) {
+      print('[PrefsSource] Error leyendo saved_places: $e');
       return [];
     }
   }
