@@ -171,7 +171,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
         final uid = friend['uid'] as String;
         final username = friend['username'] as String? ?? 'Amigo';
         if (_friendLocationSubs.containsKey(uid)) continue;
-      b _friendLocationSubs[uid] =
+        _friendLocationSubs[uid] =
             _liveLocation.watchFriendLocation(uid).listen((loc) {
           if (loc == null) {
             _friendLastKnown.remove(uid);
