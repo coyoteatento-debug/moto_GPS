@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:geolocator/geolocator.dart';
 import '../../data/models/trip_record.dart';
 import '../../data/models/poi_record.dart';
+import '../../data/models/saved_place.dart';
 
 class MapState {
   final double currentSpeed;
@@ -49,6 +50,7 @@ class MapState {
   final List<PoiRecord> savedPois;
   final String? lastVoiceCommandMessage;
   final bool isSharingLocation;
+  final List<SavedPlaceRecord> savedPlaces;
 
   const MapState({
     this.currentSpeed = 0.0,
@@ -96,6 +98,7 @@ class MapState {
     this.savedPois = const [],
     this.lastVoiceCommandMessage,
     this.isSharingLocation = false,
+    this.savedPlaces = const [],
   });
 
   MapState copyWith({
@@ -144,6 +147,7 @@ class MapState {
     List<PoiRecord>? savedPois,
     String? lastVoiceCommandMessage,
     bool? isSharingLocation,
+    List<SavedPlaceRecord>? savedPlaces,
     bool clearVoiceCommandMessage = false,
     bool clearCurrentPosition = false,
     bool clearSelectedPlace = false,
@@ -199,6 +203,7 @@ class MapState {
           ? null
           : lastVoiceCommandMessage ?? this.lastVoiceCommandMessage,
       isSharingLocation: isSharingLocation ?? this.isSharingLocation,
+      savedPlaces: savedPlaces ?? this.savedPlaces,
     );
   }
 }
