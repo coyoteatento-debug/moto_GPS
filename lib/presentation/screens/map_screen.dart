@@ -139,6 +139,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
       userAvatarImage: s.userAvatarImage,
       handsFreeActive: s.handsFreeActive,
       savedPois: s.savedPois,
+      savedPlaces: s.savedPlaces,
       searchLoading: s.searchLoading,
       searchResults: s.searchResults,
       currentTabIndex: s.currentTabIndex,
@@ -209,6 +210,9 @@ class _MapScreenState extends ConsumerState<MapScreen>
             handsFreeActive: state.handsFreeActive,
             onToggleHandsFree: controller.toggleHandsFree,
             savedPois: state.savedPois,
+            savedPlaces: state.savedPlaces,
+            onGoToSavedPlace: (place) => controller.selectSearchResult(
+                {'name': place.name, 'lat': place.lat, 'lng': place.lng}),
             searchLoading: state.searchLoading,
             searchResults: state.searchResults,
             onMapCreated: controller.onMapCreated,
