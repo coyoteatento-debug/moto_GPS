@@ -120,6 +120,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
   StreamSubscription? _friendsListSub;
   final Map<String, StreamSubscription> _friendLocationSubs = {};
   final Map<String, mapbox.PointAnnotation?> _friendAnnotations = {};
+  final Map<String, Map<String, dynamic>> _friendLastKnown = {};
   DateTime? _lastLocationShareWrite;
 
   Future<void> _onDispose() async {
@@ -170,17 +171,20 @@ class MapController extends AutoDisposeNotifier<MapState> {
         final uid = friend['uid'] as String;
         final username = friend['username'] as String? ?? 'Amigo';
         if (_friendLocationSubs.containsKey(uid)) continue;
-        _friendLocationSubs[uid] =
+      b _friendLocationSubs[uid] =
             _liveLocation.watchFriendLocation(uid).listen((loc) {
           if (loc == null) {
+            _friendLastKnown.remove(uid);
             _removeFriendMarker(uid);
           } else {
-            _updateFriendMarker(
-              uid,
-              username,
-              (loc['lat'] as num).toDouble(),
-              (loc['lng'] as num).toDouble(),
-            );
+            final lat = (loc['lat'] as num).toDouble();
+            final lng = (loc['lng'] as num).toDouble();
+            _friendLastKnown[uid] = {
+              'username': username,
+              'lat': lat,
+              'lng': lng,
+            };
+            _updateFriendMarker(uid, username, lat, lng);
           }
         });
       }
@@ -194,6 +198,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
       sub.cancel();
     }
     _friendLocationSubs.clear();
+    _friendLastKnown.clear();
     for (final uid in _friendAnnotations.keys.toList()) {
       _removeFriendMarker(uid);
     }
@@ -1479,6 +1484,19 @@ class MapController extends AutoDisposeNotifier<MapState> {
           wp['index'] as int,
         );
       }
+    }
+
+    // FIX bug #1: las referencias viejas en _friendAnnotations apuntan
+    // al _annotationManager anterior (ya inválido). Hay que limpiarlas
+    // y recrear cada marcador usando la última ubicación conocida.
+    _friendAnnotations.clear();
+    for (final entry in _friendLastKnown.entries) {
+      await _updateFriendMarker(
+        entry.key,
+        entry.value['username'] as String,
+        entry.value['lat'] as double,
+        entry.value['lng'] as double,
+      );
     }
   }
 
