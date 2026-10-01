@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
@@ -143,6 +144,10 @@ class MapController extends AutoDisposeNotifier<MapState> {
 
   // ── GPS Interconectado ─────────────────────────────────
   Future<void> toggleLocationSharing() async {
+    if (FirebaseAuth.instance.currentUser == null) {
+      _speak('Necesitas iniciar sesión para compartir tu ubicación');
+      return;
+    }
     final newValue = !state.isSharingLocation;
     state = state.copyWith(isSharingLocation: newValue);
     if (newValue) {
