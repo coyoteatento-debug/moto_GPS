@@ -234,7 +234,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
         _friendAnnotations[uid] = annotation;
       }
     } catch (e) {
-      print('[MapController] Error marcador de amigo $uid: $e');
+      debugPrint('[MapController] Error marcador de amigo $uid: $e');
     }
   }
 
@@ -549,7 +549,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
           await _annotationManager!.update(_motoAnnotation!);
           return; // ← Importante: salir si solo actualizamos
         } catch (e) {
-          print('[MapController] Error actualizando marcador: $e');
+          debugPrint('[MapController] Error actualizando marcador: $e');
           // Si falla la actualización, eliminar y recrear
           try {
             await _annotationManager!.delete(_motoAnnotation!);
@@ -579,7 +579,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
 
   Future<void> _addDestinationMarker(double lat, double lng) async {
     if (_annotationManager == null || state.pinImage == null) {
-      print('[MapController] No se puede crear destino: annotationManager=$_annotationManager, pinImage=${state.pinImage != null}');
+      debugPrint('[MapController] No se puede crear destino: annotationManager=$_annotationManager, pinImage=${state.pinImage != null}');
       return;
     }
     _destinationAnnotation = await _mapService.updateDestinationMarker(
@@ -646,7 +646,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
       image2.dispose();
       return bytes2?.buffer.asUint8List() ?? state.pinImage ?? Uint8List(0);
     } catch (e) {
-      print('[MapController] Error creando waypoint image: $e');
+      debugPrint('[MapController] Error creando waypoint image: $e');
       return state.pinImage ?? Uint8List(0);
     }
   }
@@ -679,7 +679,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
       final circular = await _imageUtils.makeCircularImage(bytes, 70);
       final saved = await _prefs.saveAvatar(circular);
       if (!saved) {
-        print('[MapController] Avatar no guardado: imagen demasiado grande (>800KB)');
+        debugPrint('[MapController] Avatar no guardado: imagen demasiado grande (>800KB)');
         return null;
       }
     
@@ -717,9 +717,9 @@ class MapController extends AutoDisposeNotifier<MapState> {
       );
       state = state.copyWith(pinImage: pinResized);
       _imagesLoaded = true;
-      print('[MapController] Imagen pin cargada: ${pinResized.length} bytes');
+      debugPrint('[MapController] Imagen pin cargada: ${pinResized.length} bytes');
     } catch (e) {
-      print('[MapController] Error cargando imagen pin: $e');
+      debugPrint('[MapController] Error cargando imagen pin: $e');
     }
   }
 
@@ -740,7 +740,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
         _speechAvailable = await _speech.initialize();
       } else {
         _speechAvailable = false;
-        print('[MapController] Permiso de micrófono denegado');
+        debugPrint('[MapController] Permiso de micrófono denegado');
       }
     }
 
@@ -805,7 +805,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
     );
     state = state.copyWith(handsFreeActive: started);
     if (!started) {
-      print('[MapController] No se pudo iniciar el modo manos libres');
+      debugPrint('[MapController] No se pudo iniciar el modo manos libres');
     }
     return started;
   }
@@ -966,17 +966,17 @@ class MapController extends AutoDisposeNotifier<MapState> {
     final token = ++_searchToken;
     state = state.copyWith(searchLoading: true);
     try {
-      print('[MapController] Buscando: "$query"');
+      debugPrint('[MapController] Buscando: "$query"');
       final results = await _mapboxApi.searchPlaces(
         query,
         proximityLat: state.currentPosition?.latitude,
         proximityLng: state.currentPosition?.longitude,
       );
-      print('[MapController] Resultados: ${results.length}');
+      debugPrint('[MapController] Resultados: ${results.length}');
       if (token != _searchToken) return;
       state = state.copyWith(searchResults: results);
     } catch (e) {
-      print('[MapController] Error buscando: $e');
+      debugPrint('[MapController] Error buscando: $e');
       if (token == _searchToken) state = state.copyWith(searchResults: const []);
     } finally {
       if (token == _searchToken) state = state.copyWith(searchLoading: false);
@@ -1029,7 +1029,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
     try {
       placeName = await _mapboxApi.reverseGeocode(lat, lng);
     } catch (e) {
-      print('[MapController] Error reverse geocode: $e');
+      debugPrint('[MapController] Error reverse geocode: $e');
     }
     state = state.copyWith(
       selectedPlace: {'name': placeName, 'lat': lat, 'lng': lng},
@@ -1049,11 +1049,11 @@ class MapController extends AutoDisposeNotifier<MapState> {
 
   Future<void> _getRoute(double destLat, double destLng, {int fromWaypointIndex = 0}) async {
     if (state.currentPosition == null) {
-      print('[MapController] No hay posición actual para calcular ruta');
+      debugPrint('[MapController] No hay posición actual para calcular ruta');
       return;
     }
     try {
-      print('[MapController] Calculando ruta a $destLat, $destLng');
+      debugPrint('[MapController] Calculando ruta a $destLat, $destLng');
 
       final pendingWaypoints = state.waypoints.length > fromWaypointIndex
           ? state.waypoints.sublist(fromWaypointIndex)
@@ -1068,11 +1068,11 @@ class MapController extends AutoDisposeNotifier<MapState> {
       );
 
       if (routes.isEmpty) {
-        print('[MapController] No se encontraron rutas');
+        debugPrint('[MapController] No se encontraron rutas');
         return;
       }
 
-      print('[MapController] Rutas encontradas: ${routes.length}');
+      debugPrint('[MapController] Rutas encontradas: ${routes.length}');
 
       state = state.copyWith(
         routeDrawn: true,
@@ -1110,16 +1110,16 @@ class MapController extends AutoDisposeNotifier<MapState> {
       }
       _fitRouteBounds(destLat, destLng);
     } catch (e) {
-      print('[MapController] Error en _getRoute: $e');
+      debugPrint('[MapController] Error en _getRoute: $e');
     }
   }
 
   Future<void> _drawRouteOnMap(Map<String, dynamic> geometry) async {
     if (_mapboxMap == null) {
-      print('[MapController] Mapa no listo para dibujar ruta');
+      debugPrint('[MapController] Mapa no listo para dibujar ruta');
       return;
     }
-    print('[MapController] Dibujando ruta...');
+    debugPrint('[MapController] Dibujando ruta...');
     await _mapService.drawRouteOnMap(_mapboxMap!, geometry, state.alternateRoutes);
   }
 
