@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class MapboxApi {
@@ -59,7 +60,7 @@ class MapboxApi {
           .timeout(const Duration(seconds: 10));
 
       if (response.statusCode != 200) {
-        print('[MapboxApi] searchPlaces status: ${response.statusCode}, body: ${response.body}');
+        debugPrint('[MapboxApi] searchPlaces status: ${response.statusCode}, body: ${response.body}');
         return [];
       }
 
@@ -87,10 +88,10 @@ class MapboxApi {
               };
             }).toList();
     } on TimeoutException {
-      print('[MapboxApi] searchPlaces timeout');
+      debugPrint('[MapboxApi] searchPlaces timeout');
       return [];
     } catch (e) {
-      print('[MapboxApi] searchPlaces error: $e');
+      debugPrint('[MapboxApi] searchPlaces error: $e');
       return [];
     }
   }
@@ -115,7 +116,7 @@ class MapboxApi {
 
       return features[0]['place_name'] as String? ?? 'Destino seleccionado';
     } catch (e) {
-      print('[MapboxApi] reverseGeocode error: $e');
+      debugPrint('[MapboxApi] reverseGeocode error: $e');
       return 'Destino seleccionado';
     }
   }
@@ -148,16 +149,16 @@ class MapboxApi {
           .timeout(const Duration(seconds: 15));
 
       if (response.statusCode != 200) {
-        print('[MapboxApi] getRoute status: ${response.statusCode}, body: ${response.body}');
+        debugPrint('[MapboxApi] getRoute status: ${response.statusCode}, body: ${response.body}');
         return null;
       }
 
       return json.decode(response.body) as Map<String, dynamic>;
     } on TimeoutException {
-      print('[MapboxApi] getRoute timeout');
+      debugPrint('[MapboxApi] getRoute timeout');
       return null;
     } catch (e) {
-      print('[MapboxApi] getRoute error: $e');
+      debugPrint('[MapboxApi] getRoute error: $e');
       return null;
     }
   }
