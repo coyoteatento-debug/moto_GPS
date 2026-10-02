@@ -23,6 +23,7 @@ import '../../core/services/tts_service.dart';
 import '../../core/services/voice_command_service.dart';
 import '../../core/services/live_location_service.dart';
 import '../../core/services/friends_service.dart';
+import '../../core/services/group_ride_service.dart';
 import '../../core/utils/geo_utils.dart';
 import '../../core/utils/image_utils.dart';
 import '../../data/models/trip_record.dart';
@@ -100,6 +101,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _voiceCmd = ref.read(voiceCommandServiceProvider);
     _liveLocation = ref.read(liveLocationServiceProvider);
     _friendsService = ref.read(friendsServiceProvider);
+    _groupRide = ref.read(groupRideServiceProvider);
 
     ref.onDispose(_onDispose);
     return const MapState();
@@ -116,10 +118,49 @@ class MapController extends AutoDisposeNotifier<MapState> {
     await _loadImages(); // Carga las imágenes primero
     await _initTts();
     await _initSpeech();
+    _startWatchingActiveRide();
+  }
+
+  void _startWatchingActiveRide() {
+    _activeRideSub?.cancel();
+    _activeRideSub = _groupRide.myActiveRide().listen((ride) {
+      if (ride == null) {
+        _rideStatusSub?.cancel();
+        _rideStatusSub = null;
+        _lastRidePosition = null;
+        if (state.activeRide != null) {
+          state = state.copyWith(clearActiveRide: true, rideParticipants: const {});
+        }
+        return;
+      }
+      final rideId = ride['id'] as String;
+      if (state.activeRide?['id'] != rideId) {
+        state = state.copyWith(activeRide: ride);
+        _rideStatusSub?.cancel();
+        _rideStatusSub = _groupRide.watchRideStatus(rideId).listen((statusMap) {
+          final participants = <String, Map<String, dynamic>>{};
+          statusMap.forEach((uid, data) {
+            participants[uid as String] = Map<String, dynamic>.from(data as Map);
+          });
+          state = state.copyWith(rideParticipants: participants);
+        });
+      }
+    });
+  }
+
+  Future<void> endActiveRide() async {
+    if (state.activeRide == null) return;
+    await _groupRide.endRide(state.activeRide!['id'] as String);
   }
 
   late final LiveLocationService _liveLocation;
   late final FriendsService _friendsService;
+  late final GroupRideService _groupRide;
+  StreamSubscription? _activeRideSub;
+  StreamSubscription? _rideStatusSub;
+  String? _myRideUsername;
+  Map<String, double>? _lastRidePosition;
+  DateTime? _lastRideStatusWrite;
   StreamSubscription? _friendsListSub;
   final Map<String, StreamSubscription> _friendLocationSubs = {};
   final Map<String, mapbox.PointAnnotation?> _friendAnnotations = {};
@@ -128,6 +169,8 @@ class MapController extends AutoDisposeNotifier<MapState> {
 
   Future<void> _onDispose() async {
     _locationSubscription?.cancel();
+    _smoothSub?.cancel();
+    _rideStatusSub?.cancel();
     _smoothSub?.cancel();
     _smoother.stop();
     _nightModeTimer?.cancel();
@@ -371,12 +414,30 @@ class MapController extends AutoDisposeNotifier<MapState> {
         await _updateSpeedLimit(position.latitude, position.longitude);
       }
 
-      if (state.isSharingLocation &&
+            if (state.isSharingLocation &&
           (_lastLocationShareWrite == null ||
               now.difference(_lastLocationShareWrite!).inSeconds >= 12)) {
         _lastLocationShareWrite = now;
         await _liveLocation.updateMyLocation(
             position.latitude, position.longitude, position.heading);
+      }
+
+      if (state.activeRide != null &&
+          (_lastRideStatusWrite == null ||
+              now.difference(_lastRideStatusWrite!).inSeconds >= 10)) {
+        _lastRideStatusWrite = now;
+        bool moved = true;
+        if (_lastRidePosition != null) {
+          final d = _geo.distanceBetween(_lastRidePosition!['lat']!,
+              _lastRidePosition!['lng']!, position.latitude, position.longitude);
+          moved = d > 30;
+        }
+        if (moved) {
+          _lastRidePosition = {'lat': position.latitude, 'lng': position.longitude};
+        }
+        _myRideUsername ??= await _groupRide.myUsername();
+        await _groupRide.updateMyStatus(state.activeRide!['id'] as String,
+            position.latitude, position.longitude, _myRideUsername!, moved);
       }
 
       if (!state.initialLocationSet && _mapboxMap != null) {
