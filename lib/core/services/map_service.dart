@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
 import 'dart:typed_data';
 
@@ -128,7 +129,7 @@ class MapService {
         }),
       );
     } catch (e) {
-      print('[MapService] updateRemainingRoute error: $e');
+      debugPrint('[MapService] updateRemainingRoute error: $e');
     }
   }
 
@@ -144,7 +145,7 @@ class MapService {
         try { await style.removeStyleLayer('route-layer'); } catch (_) {}
         try { await style.removeStyleSource('route-source'); } catch (_) {}
       } catch (e) {
-        print('[MapService] clearRouteLayers error: $e');
+        debugPrint('[MapService] clearRouteLayers error: $e');
       }
     }
 
@@ -169,7 +170,7 @@ class MapService {
         );
       }
     } catch (e) {
-      print('[MapService] highlightRoute error: $e');
+      debugPrint('[MapService] highlightRoute error: $e');
     }
   }
 
@@ -215,7 +216,7 @@ class MapService {
         return annotation;
       }
     } catch (e) {
-      print('[MapService] updateMotoMarker error: $e');
+      debugPrint('[MapService] updateMotoMarker error: $e');
       return current;
     } finally {
       _markerLocks[lockKey] = false;
@@ -244,7 +245,7 @@ class MapService {
         ),
       );
     } catch (e) {
-      print('[MapService] updateDestinationMarker error: $e');
+      debugPrint('[MapService] updateDestinationMarker error: $e');
       return null;
     }
   }
@@ -255,7 +256,7 @@ class MapService {
     mapbox.PointAnnotation annotation,
   ) async {
     try { await manager.delete(annotation); } catch (e) {
-      print('[MapService] deleteAnnotation error: $e');
+      debugPrint('[MapService] deleteAnnotation error: $e');
     }
   }
 }
