@@ -98,6 +98,8 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _mapboxApi = ref.read(mapboxApiProvider(_token));
     _navService = ref.read(navigationServiceProvider(_token));
     _voiceCmd = ref.read(voiceCommandServiceProvider);
+    _liveLocation = ref.read(liveLocationServiceProvider);
+    _friendsService = ref.read(friendsServiceProvider);
 
     ref.onDispose(_onDispose);
     return const MapState();
@@ -116,8 +118,8 @@ class MapController extends AutoDisposeNotifier<MapState> {
     await _initSpeech();
   }
 
-  final LiveLocationService _liveLocation = LiveLocationService();
-  final FriendsService _friendsService = FriendsService();
+  late final LiveLocationService _liveLocation;
+  late final FriendsService _friendsService;
   StreamSubscription? _friendsListSub;
   final Map<String, StreamSubscription> _friendLocationSubs = {};
   final Map<String, mapbox.PointAnnotation?> _friendAnnotations = {};
