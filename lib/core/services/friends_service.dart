@@ -27,10 +27,25 @@ class FriendsService {
   Future<String?> sendRequest(String toUid, String toUsername) async {
     if (toUid == _uid) return 'No puedes agregarte a ti mismo.';
 
-    final existingFriend = await _db
-        .collection('friendships').doc(_uid)
-        .collection('friends').doc(toUid).get();
-    if (existingFriend.exists) return 'Ya son amigos.';
+    final dup = await _db.collection('friendRequests')
+        .where('fromUid', isEqualTo: _uid)
+        .get();
+    final alreadySent = dup.docs.any((d) =>
+        d['toUid'] == toUid && d['status'] == 'pending');
+    if (alreadySent) return 'Ya le enviaste una solicitud.';
+
+    // Si la otra persona ya me había mandado una solicitud a mí,
+    // no crear una cruzada: simplemente aceptar la de ella.
+    final reverse = await _db.collection('friendRequests')
+        .where('fromUid', isEqualTo: toUid)
+        .where('toUid', isEqualTo: _uid)
+        .where('status', isEqualTo: 'pending')
+        .limit(1)
+        .get();
+    if (reverse.docs.isNotEmpty) {
+      await acceptRequest(reverse.docs.first.id, toUid, toUsername);
+      return '¡$toUsername ya te había agregado! Ahora son amigos.';
+    }
 
     final dup = await _db.collection('friendRequests')
         .where('fromUid', isEqualTo: _uid)
