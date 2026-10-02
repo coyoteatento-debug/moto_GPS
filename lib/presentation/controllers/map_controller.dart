@@ -910,6 +910,13 @@ class MapController extends AutoDisposeNotifier<MapState> {
     await _prefs.savePlaces(updated);
   }
 
+  String _normalizeForMatch(String text) {
+    var t = text.toLowerCase();
+    const accents = {'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ñ': 'n'};
+    accents.forEach((a, b) => t = t.replaceAll(a, b));
+    return t;
+  }
+  
   Future<void> removeSavedPlace(SavedPlaceRecord place) async {
     final updated = List<SavedPlaceRecord>.from(state.savedPlaces)
       ..removeWhere((p) => p.name == place.name && p.lat == place.lat && p.lng == place.lng);
@@ -924,7 +931,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
     }
     SavedPlaceRecord? match;
     for (final p in state.savedPlaces) {
-      final n = p.name.toLowerCase();
+      final n = _normalizeForMatch(p.name);
       if (n == spokenName || n.contains(spokenName) || spokenName.contains(n)) {
         match = p;
         break;
