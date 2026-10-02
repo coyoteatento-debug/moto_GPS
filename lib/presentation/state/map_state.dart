@@ -51,6 +51,8 @@ class MapState {
   final String? lastVoiceCommandMessage;
   final bool isSharingLocation;
   final List<SavedPlaceRecord> savedPlaces;
+  final Map<String, dynamic>? activeRide;
+  final Map<String, Map<String, dynamic>> rideParticipants;
 
   const MapState({
     this.currentSpeed = 0.0,
@@ -99,6 +101,8 @@ class MapState {
     this.lastVoiceCommandMessage,
     this.isSharingLocation = false,
     this.savedPlaces = const [],
+    this.activeRide,
+    this.rideParticipants = const {},
   });
 
   MapState copyWith({
@@ -148,6 +152,9 @@ class MapState {
     String? lastVoiceCommandMessage,
     bool? isSharingLocation,
     List<SavedPlaceRecord>? savedPlaces,
+    Map<String, dynamic>? activeRide,
+    Map<String, Map<String, dynamic>>? rideParticipants,
+    bool clearActiveRide = false,
     bool clearVoiceCommandMessage = false,
     bool clearCurrentPosition = false,
     bool clearSelectedPlace = false,
@@ -204,6 +211,8 @@ class MapState {
           : lastVoiceCommandMessage ?? this.lastVoiceCommandMessage,
       isSharingLocation: isSharingLocation ?? this.isSharingLocation,
       savedPlaces: savedPlaces ?? this.savedPlaces,
+      activeRide: clearActiveRide ? null : activeRide ?? this.activeRide,
+      rideParticipants: rideParticipants ?? this.rideParticipants,
     );
   }
 }
