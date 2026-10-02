@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/friends_service.dart';
+import '../../core/services/group_ride_service.dart';
+import '../../data/models/saved_place.dart';
+import '../controllers/map_controller.dart';
 
-class FriendsScreen extends StatefulWidget {
+class FriendsScreen extends ConsumerStatefulWidget {
   const FriendsScreen({super.key});
 
   @override
-  State<FriendsScreen> createState() => _FriendsScreenState();
+  ConsumerState<FriendsScreen> createState() => _FriendsScreenState();
 }
 
-class _FriendsScreenState extends State<FriendsScreen> {
+class _FriendsScreenState extends ConsumerState<FriendsScreen> {
   final _friendsService = FriendsService();
+  final _groupRideService = GroupRideService();
   final _searchCtrl = TextEditingController();
   List<Map<String, dynamic>> _searchResults = [];
   bool _searching = false;
@@ -36,6 +41,98 @@ class _FriendsScreenState extends State<FriendsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(error ?? 'Solicitud enviada a ${user['username']}'),
     ));
+  }
+
+  void _showStartRideDialog() {
+    final savedPlaces = ref.read(mapControllerProvider).savedPlaces;
+    if (savedPlaces.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Primero guarda un lugar favorito desde el mapa.'),
+      ));
+      return;
+    }
+    SavedPlaceRecord? selectedPlace;
+    final selectedFriends = <String, String>{};
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Iniciar rodada en grupo'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Destino:'),
+                DropdownButton<SavedPlaceRecord>(
+                  isExpanded: true,
+                  value: selectedPlace,
+                  hint: const Text('Elige un lugar guardado'),
+                  items: savedPlaces
+                      .map((p) => DropdownMenuItem(value: p, child: Text(p.name)))
+                      .toList(),
+                  onChanged: (p) => setDialogState(() => selectedPlace = p),
+                ),
+                const SizedBox(height: 16),
+                const Text('Invitar a:'),
+                StreamBuilder<List<Map<String, dynamic>>>(
+                  stream: _friendsService.myFriends(),
+                  builder: (context, snapshot) {
+                    final friends = snapshot.data ?? [];
+                    if (friends.isEmpty) {
+                      return const Text('No tienes amigos agregados todavía.',
+                          style: TextStyle(color: Colors.grey));
+                    }
+                    return Column(
+                      children: friends.map((f) {
+                        final uid = f['uid'] as String;
+                        final username = f['username'] as String? ?? 'Amigo';
+                        return CheckboxListTile(
+                          title: Text(username),
+                          value: selectedFriends.containsKey(uid),
+                          onChanged: (checked) => setDialogState(() {
+                            if (checked == true) {
+                              selectedFriends[uid] = username;
+                            } else {
+                              selectedFriends.remove(uid);
+                            }
+                          }),
+                        );
+                      }).toList(),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (selectedPlace == null || selectedFriends.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('Elige un destino y al menos un amigo.'),
+                  ));
+                  return;
+                }
+                await _groupRideService.createRide(
+                  destinationName: selectedPlace!.name,
+                  destLat: selectedPlace!.lat,
+                  destLng: selectedPlace!.lng,
+                  friendUids: selectedFriends.keys.toList(),
+                );
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: const Text('Iniciar'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -166,6 +263,19 @@ class _FriendsScreenState extends State<FriendsScreen> {
                     .toList(),
               );
             },
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _showStartRideDialog,
+              icon: const Icon(Icons.groups),
+              label: const Text('Iniciar rodada en grupo'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepOrange[700],
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
           ),
         ],
       ),
