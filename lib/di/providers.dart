@@ -16,6 +16,7 @@ import '../data/sources/prefs_source.dart';
 import '../core/services/voice_command_service.dart';
 import '../core/services/live_location_service.dart';
 import '../core/services/friends_service.dart';
+import '../core/services/group_ride_service.dart';
 
 final mapboxTokenProvider = Provider<String>((ref) {
   const token = String.fromEnvironment('MAPBOX_TOKEN', defaultValue: '');
@@ -33,6 +34,7 @@ final speedLimitServiceProvider = Provider<SpeedLimitService>((ref) => SpeedLimi
 final voiceCommandServiceProvider = Provider<VoiceCommandService>((ref) => VoiceCommandService());
 final liveLocationServiceProvider = Provider<LiveLocationService>((ref) => LiveLocationService());
 final friendsServiceProvider = Provider<FriendsService>((ref) => FriendsService());
+final groupRideServiceProvider = Provider<GroupRideService>((ref) => GroupRideService());
 final smoothLocationServiceProvider = Provider<SmoothLocationService>((ref) => SmoothLocationService());
 
 final tripServiceProvider = Provider<TripService>((ref) {
