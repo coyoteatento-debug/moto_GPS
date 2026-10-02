@@ -1,0 +1,73 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
+
+class GroupRideService {
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseDatabase _rtdb = FirebaseDatabase.instance;
+
+  String get _uid => _auth.currentUser!.uid;
+
+  Future<String> createRide({
+    required String destinationName,
+    required double destLat,
+    required double destLng,
+    required List<String> friendUids,
+  }) async {
+    final myUser = await _db.collection('users').doc(_uid).get();
+    final myUsername = myUser.data()?['username'] ?? 'Yo';
+
+    final participants = {_uid, ...friendUids}.toList();
+    final doc = await _db.collection('groupRides').add({
+      'hostUid': _uid,
+      'hostUsername': myUsername,
+      'destinationName': destinationName,
+      'destLat': destLat,
+      'destLng': destLng,
+      'participants': participants,
+      'active': true,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    return doc.id;
+  }
+
+  Future<void> endRide(String rideId) async {
+    await _db.collection('groupRides').doc(rideId).update({'active': false});
+    await _rtdb.ref('groupRideStatus/$rideId').remove();
+  }
+
+  Stream<Map<String, dynamic>?> myActiveRide() {
+    return _db
+        .collection('groupRides')
+        .where('participants', arrayContains: _uid)
+        .where('active', isEqualTo: true)
+        .snapshots()
+        .map((snap) {
+      if (snap.docs.isEmpty) return null;
+      final doc = snap.docs.first;
+      return {'id': doc.id, ...doc.data()};
+    });
+  }
+
+  Future<void> updateMyStatus(
+      String rideId, double lat, double lng, String username, bool moved) async {
+    final ref = _rtdb.ref('groupRideStatus/$rideId/$_uid');
+    final updates = <String, Object?>{
+      'lat': lat,
+      'lng': lng,
+      'username': username,
+      'updatedAt': ServerValue.timestamp,
+    };
+    if (moved) updates['lastMovedAt'] = ServerValue.timestamp;
+    await ref.update(updates);
+  }
+
+  Stream<Map<String, dynamic>> watchRideStatus(String rideId) {
+    return _rtdb.ref('groupRideStatus/$rideId').onValue.map((event) {
+      final data = event.snapshot.value;
+      if (data == null) return {};
+      return Map<String, dynamic>.from(data as Map);
+    });
+  }
+}
