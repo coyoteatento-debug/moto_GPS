@@ -87,7 +87,7 @@ class GpsService {
         _lastPosition = pos;
         return pos;
       } catch (e) {
-        print('[GpsService] getInitialPosition attempt $attempt failed: $e');
+        debugPrint('[GpsService] getInitialPosition attempt $attempt failed: $e');
         if (attempt == 3) return _lastPosition;
         await Future.delayed(Duration(seconds: attempt * 2));
       }
