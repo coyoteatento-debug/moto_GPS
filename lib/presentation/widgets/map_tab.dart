@@ -7,6 +7,7 @@ import '../../core/services/speed_limit_service.dart';
 import 'saved_points_sheet.dart';
 import '../../data/models/poi_record.dart';
 import '../../data/models/saved_place.dart';
+import '../../core/utils/geo_utils.dart';
 import '../controllers/map_controller.dart';
 
 // ── Botón de capas expandible ─────────────────────────
@@ -922,6 +923,9 @@ class MapTab extends StatelessWidget {
         isRecalculating: isRecalculating,
       ),
 
+// ── Panel de rodada en grupo ────────────────────────
+      const _GroupRidePanel(),
+      
       // ── Velocímetro modo libre ─────────────────────────
       if (!navigating && !routeDrawn && !showTapConfirm)
         Positioned(
@@ -990,6 +994,100 @@ class _SavePlaceButton extends ConsumerWidget {
         ],
       ),
     ).then((_) => nameCtrl.dispose());
+  }
+}
+
+class _GroupRidePanel extends ConsumerWidget {
+  const _GroupRidePanel();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ride = ref.watch(mapControllerProvider.select((s) => s.activeRide));
+    if (ride == null) return const SizedBox.shrink();
+    final participants = ref.watch(
+        mapControllerProvider.select((s) => s.rideParticipants));
+    final navigating = ref.watch(mapControllerProvider.select((s) => s.navigating));
+    final destLat = (ride['destLat'] as num).toDouble();
+    final destLng = (ride['destLng'] as num).toDouble();
+    final geo = GeoUtils();
+
+    return Positioned(
+      top: navigating ? 210 : 130,
+      left: 16, right: 16,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.black87,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: const [BoxShadow(
+              color: Colors.black38, blurRadius: 8, offset: Offset(0, 2))],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.groups, color: Colors.orange, size: 20),
+                const SizedBox(width: 6),
+                Expanded(child: Text('Rodada a ${ride['destinationName']}',
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold))),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.redAccent, size: 20),
+                  onPressed: () =>
+                      ref.read(mapControllerProvider.notifier).endActiveRide(),
+                ),
+              ],
+            ),
+            if (participants.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text('Esperando posiciones...',
+                    style: TextStyle(color: Colors.grey)),
+              )
+            else
+              ...participants.entries.map((e) {
+                final data = e.value;
+                final lat = (data['lat'] as num?)?.toDouble();
+                final lng = (data['lng'] as num?)?.toDouble();
+                final username = data['username'] as String? ?? 'Amigo';
+                String distanceText = '...';
+                if (lat != null && lng != null) {
+                  final meters = geo.distanceBetween(lat, lng, destLat, destLng);
+                  distanceText = meters >= 1000
+                      ? '${(meters / 1000).toStringAsFixed(1)} km'
+                      : '${meters.toStringAsFixed(0)} m';
+                }
+                var stalled = false;
+                final lastMovedAt = data['lastMovedAt'];
+                if (lastMovedAt is int) {
+                  final ageMs =
+                      DateTime.now().millisecondsSinceEpoch - lastMovedAt;
+                  stalled = ageMs > 5 * 60 * 1000;
+                }
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      if (stalled)
+                        const Icon(Icons.warning_amber,
+                            color: Colors.amber, size: 16)
+                      else
+                        const Icon(Icons.circle, color: Colors.green, size: 10),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(username,
+                          style: const TextStyle(color: Colors.white))),
+                      Text(distanceText,
+                          style: const TextStyle(color: Colors.white70)),
+                    ],
+                  ),
+                );
+              }),
+          ],
+        ),
+      ),
+    );
   }
 }
 
