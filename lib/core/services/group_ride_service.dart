@@ -9,6 +9,11 @@ class GroupRideService {
 
   String get _uid => _auth.currentUser!.uid;
 
+  Future<String> myUsername() async {
+    final doc = await _db.collection('users').doc(_uid).get();
+    return doc.data()?['username'] as String? ?? 'Yo';
+  }
+  
   Future<String> createRide({
     required String destinationName,
     required double destLat,
