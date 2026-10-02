@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/trip_record.dart';
 import '../models/poi_record.dart';
@@ -47,7 +48,7 @@ class PrefsSource {
       final data = json.decode(raw) as List;
       return data.map((e) => TripRecord.fromJson(e)).toList();
     } catch (e) {
-      print('[PrefsSource] Error leyendo trip_records: $e');
+      debugPrint('[PrefsSource] Error leyendo trip_records: $e');
       return [];
     }
   }
@@ -93,7 +94,7 @@ class PrefsSource {
       final data = json.decode(raw) as List;
       return data.map((e) => PoiRecord.fromJson(e)).toList();
     } catch (e) {
-      print('[PrefsSource] Error leyendo poi_records: $e');
+      debugPrint('[PrefsSource] Error leyendo poi_records: $e');
       return [];
     }
   }
@@ -112,7 +113,7 @@ class PrefsSource {
       final data = json.decode(raw) as List;
       return data.map((e) => Map<String, String>.from(e)).toList();
     } catch (e) {
-      print('[PrefsSource] Error leyendo offline_regions: $e');
+      debugPrint('[PrefsSource] Error leyendo offline_regions: $e');
       return [];
     }
   }
@@ -132,7 +133,7 @@ class PrefsSource {
       final data = json.decode(raw) as List;
       return data.map((e) => SavedPlaceRecord.fromJson(e)).toList();
     } catch (e) {
-      print('[PrefsSource] Error leyendo saved_places: $e');
+      debugPrint('[PrefsSource] Error leyendo saved_places: $e');
       return [];
     }
   }
