@@ -14,6 +14,8 @@ import '../core/utils/image_utils.dart';
 import '../data/sources/mapbox_api.dart';
 import '../data/sources/prefs_source.dart';
 import '../core/services/voice_command_service.dart';
+import '../core/services/live_location_service.dart';
+import '../core/services/friends_service.dart';
 
 final mapboxTokenProvider = Provider<String>((ref) {
   const token = String.fromEnvironment('MAPBOX_TOKEN', defaultValue: '');
@@ -29,6 +31,8 @@ final gpsServiceProvider = Provider<GpsService>((ref) => GpsService());
 final backgroundServiceProvider = Provider<BackgroundService>((ref) => BackgroundService());
 final speedLimitServiceProvider = Provider<SpeedLimitService>((ref) => SpeedLimitService());
 final voiceCommandServiceProvider = Provider<VoiceCommandService>((ref) => VoiceCommandService());
+final liveLocationServiceProvider = Provider<LiveLocationService>((ref) => LiveLocationService());
+final friendsServiceProvider = Provider<FriendsService>((ref) => FriendsService());
 final smoothLocationServiceProvider = Provider<SmoothLocationService>((ref) => SmoothLocationService());
 
 final tripServiceProvider = Provider<TripService>((ref) {
