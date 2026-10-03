@@ -18,6 +18,14 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _loading = false;
   String? _errorMessage;
 
+    @override
+    void initState() {
+      super.initState();
+      _authService.getLastEmail().then((email) {
+        if (email != null && mounted) _emailCtrl.text = email;
+      });
+    }
+  
   @override
   void dispose() {
     _emailCtrl.dispose();
@@ -42,7 +50,10 @@ class _AuthScreenState extends State<AuthScreen> {
       _loading = false;
       _errorMessage = error;
     });
-    if (error == null) Navigator.of(context).pop(true);
+    if (error == null) {
+      await _authService.saveLastEmail(_emailCtrl.text.trim());
+      if (mounted) Navigator.of(context).pop(true);
+    }
   }
 
   @override
@@ -64,6 +75,17 @@ class _AuthScreenState extends State<AuthScreen> {
                         fontSize: 22,
                         fontWeight: FontWeight.bold)),
                 const SizedBox(height: 32),
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 16),
+                  child: Text(
+                    'En algunos dispositivos Android (reportado en algunos Motorola) '
+                    'el sistema puede cerrar la sesión guardada al cerrar la app. '
+                    'Si te pide iniciar sesión seguido, es normal — tu correo '
+                    'queda recordado para que solo captures tu contraseña.',
+                    style: TextStyle(color: Colors.white38, fontSize: 11),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
                 if (_isRegisterMode)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
