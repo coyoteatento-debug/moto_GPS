@@ -71,6 +71,21 @@ class MainMenuScreen extends StatelessWidget {
           StreamBuilder<User?>(
             stream: FirebaseAuth.instance.authStateChanges(),
             builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Row(children: [
+                    SizedBox(
+                      width: 18, height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white54),
+                    ),
+                    SizedBox(width: 12),
+                    Text('Verificando sesión...',
+                        style: TextStyle(color: Colors.white54)),
+                  ]),
+                );
+              }
               final user = snapshot.data;
               if (user == null) {
                 return ListTile(
