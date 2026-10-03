@@ -43,12 +43,16 @@ class MainMenuScreen extends StatelessWidget {
             trailing:
                 const Icon(Icons.chevron_right, color: Colors.white54),
             onTap: () async {
+              // ignore: avoid_print
+              print('[DIAGNOSTICO] currentUser AL TOCAR = ${FirebaseAuth.instance.currentUser}');
               showDialog(
                 context: context,
                 barrierDismissible: false,
                 builder: (_) => const Center(child: CircularProgressIndicator()),
               );
               final user = await FirebaseAuth.instance.authStateChanges().first;
+              // ignore: avoid_print
+              print('[DIAGNOSTICO] user DESPUES de authStateChanges().first = $user');
               if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
 
               if (user == null) {
