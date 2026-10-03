@@ -85,6 +85,19 @@ class LocationForegroundService : Service() {
         super.onDestroy()
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // Detenerse de forma explícita e inmediata al cerrar la app
+        // (deslizar en apps recientes). Sin esto, Android mata el
+        // proceso de golpe, lo interpreta como un "crash" del servicio
+        // y lo reinicia solo en un proceso nuevo — lo cual además falla
+        // en Android 14+ porque no se puede arrancar un foreground
+        // service de ubicación desde segundo plano.
+        fusedClient.removeLocationUpdates(locationCallback)
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+        super.onTaskRemoved(rootIntent)
+    }
+    
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun startForegroundService() {
