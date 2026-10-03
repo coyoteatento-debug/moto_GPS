@@ -43,15 +43,18 @@ class GroupRideService {
   }
 
   Stream<Map<String, dynamic>?> myActiveRide() {
-    return _db
-        .collection('groupRides')
-        .where('participants', arrayContains: _uid)
-        .where('active', isEqualTo: true)
-        .snapshots()
-        .map((snap) {
-      if (snap.docs.isEmpty) return null;
-      final doc = snap.docs.first;
-      return {'id': doc.id, ...doc.data()};
+    return _auth.authStateChanges().asyncExpand((user) {
+      if (user == null) return Stream.value(null);
+      return _db
+          .collection('groupRides')
+          .where('participants', arrayContains: user.uid)
+          .where('active', isEqualTo: true)
+          .snapshots()
+          .map((snap) {
+        if (snap.docs.isEmpty) return null;
+        final doc = snap.docs.first;
+        return {'id': doc.id, ...doc.data()};
+      });
     });
   }
 
