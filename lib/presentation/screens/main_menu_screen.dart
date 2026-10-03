@@ -43,7 +43,16 @@ class MainMenuScreen extends StatelessWidget {
             trailing:
                 const Icon(Icons.chevron_right, color: Colors.white54),
             onTap: () async {
-              if (FirebaseAuth.instance.currentUser == null) {
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => const Center(child: CircularProgressIndicator()),
+              );
+              final user = await FirebaseAuth.instance.authStateChanges().first;
+              if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
+
+              if (user == null) {
+                if (!context.mounted) return;
                 final loggedIn = await Navigator.push<bool>(
                   context,
                   MaterialPageRoute(builder: (_) => const AuthScreen()),
