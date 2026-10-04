@@ -138,9 +138,13 @@ class MapController extends AutoDisposeNotifier<MapState> {
         return;
       }
       final rideId = ride['id'] as String;
-      if (state.activeRide?['id'] != rideId) {
-        state = state.copyWith(activeRide: ride);
-        _rideStatusSub?.cancel();
+      final myUid = FirebaseAuth.instance.currentUser?.uid;
+      final acceptedUids = List<String>.from(ride['acceptedUids'] ?? const []);
+      final hasAccepted = myUid != null && acceptedUids.contains(myUid);
+
+      state = state.copyWith(activeRide: ride);
+
+      if (hasAccepted && _rideStatusSub == null) {
         _rideStatusSub = _groupRide.watchRideStatus(rideId).listen((statusMap) {
           final participants = <String, Map<String, dynamic>>{};
           statusMap.forEach((uid, data) {
@@ -148,8 +152,31 @@ class MapController extends AutoDisposeNotifier<MapState> {
           });
           state = state.copyWith(rideParticipants: participants);
         });
+      } else if (!hasAccepted && _rideStatusSub != null) {
+        _rideStatusSub?.cancel();
+        _rideStatusSub = null;
       }
     });
+  }
+
+  Future<void> acceptRideInvite() async {
+    final rideId = state.activeRide?['id'] as String?;
+    if (rideId == null) return;
+    await _groupRide.acceptInvite(rideId);
+  }
+
+  Future<void> rejectRideInvite() async {
+    final rideId = state.activeRide?['id'] as String?;
+    if (rideId == null) return;
+    await _groupRide.rejectInvite(rideId);
+  }
+
+  bool get _hasAcceptedCurrentRide {
+    if (state.activeRide == null) return false;
+    final myUid = FirebaseAuth.instance.currentUser?.uid;
+    if (myUid == null) return false;
+    final acceptedUids = List<String>.from(state.activeRide!['acceptedUids'] ?? const []);
+    return acceptedUids.contains(myUid);
   }
 
   Future<void> endActiveRide() async {
@@ -430,7 +457,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
         }
       }
 
-      if (state.activeRide != null &&
+      if (state.activeRide != null && _hasAcceptedCurrentRide &&
           (_lastRideStatusWrite == null ||
               now.difference(_lastRideStatusWrite!).inSeconds >= 10)) {
         _lastRideStatusWrite = now;
