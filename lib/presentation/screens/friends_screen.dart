@@ -36,11 +36,51 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
   }
 
   Future<void> _sendRequest(Map<String, dynamic> user) async {
-    final error = await _friendsService.sendRequest(user['uid'], user['username']);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(error ?? 'Solicitud enviada a ${user['username']}'),
-    ));
+    try {
+      final error = await _friendsService.sendRequest(user['uid'], user['username']);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error ?? 'Solicitud enviada a ${user['username']}'),
+      ));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No se pudo enviar la solicitud. Revisa tu conexión.'),
+      ));
+    }
+  }
+
+  Future<void> _acceptRequest(String id, String fromUid, String fromUsername) async {
+    try {
+      await _friendsService.acceptRequest(id, fromUid, fromUsername);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No se pudo aceptar la solicitud. Revisa tu conexión.'),
+      ));
+    }
+  }
+
+  Future<void> _rejectRequest(String id) async {
+    try {
+      await _friendsService.rejectRequest(id);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No se pudo rechazar la solicitud. Revisa tu conexión.'),
+      ));
+    }
+  }
+
+  Future<void> _removeFriend(String uid) async {
+    try {
+      await _friendsService.removeFriend(uid);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No se pudo quitar al amigo. Revisa tu conexión.'),
+      ));
+    }
   }
 
   void _showStartRideDialog() {
@@ -119,13 +159,21 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
                   ));
                   return;
                 }
-                await _groupRideService.createRide(
-                  destinationName: selectedPlace!.name,
-                  destLat: selectedPlace!.lat,
-                  destLng: selectedPlace!.lng,
-                  friendUids: selectedFriends.keys.toList(),
-                );
-                if (ctx.mounted) Navigator.pop(ctx);
+                try {
+                  await _groupRideService.createRide(
+                    destinationName: selectedPlace!.name,
+                    destLat: selectedPlace!.lat,
+                    destLng: selectedPlace!.lng,
+                    friendUids: selectedFriends.keys.toList(),
+                  );
+                  if (ctx.mounted) Navigator.pop(ctx);
+                } catch (_) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                      content: Text('No se pudo iniciar la rodada. Revisa tu conexión.'),
+                    ));
+                  }
+                }
               },
               child: const Text('Iniciar'),
             ),
@@ -211,13 +259,12 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
                                 IconButton(
                                   icon: const Icon(Icons.check,
                                       color: Colors.green),
-                                  onPressed: () => _friendsService.acceptRequest(
+                                  onPressed: () => _acceptRequest(
                                       r['id'], r['fromUid'], r['fromUsername']),
                                 ),
                                 IconButton(
                                   icon: const Icon(Icons.close, color: Colors.red),
-                                  onPressed: () =>
-                                      _friendsService.rejectRequest(r['id']),
+                                  onPressed: () => _rejectRequest(r['id']),
                                 ),
                               ],
                             ),
@@ -255,8 +302,7 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
                             trailing: IconButton(
                               icon: const Icon(Icons.person_remove,
                                   color: Colors.redAccent),
-                              onPressed: () =>
-                                  _friendsService.removeFriend(f['uid']),
+                              onPressed: () => _removeFriend(f['uid']),
                             ),
                           ),
                         ))
