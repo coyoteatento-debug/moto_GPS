@@ -128,6 +128,10 @@ class MapController extends AutoDisposeNotifier<MapState> {
         _rideStatusSub?.cancel();
         _rideStatusSub = null;
         _lastRidePosition = null;
+        final previousRideId = state.activeRide?['id'] as String?;
+        if (previousRideId != null) {
+          _groupRide.removeMyStatus(previousRideId);
+        }
         if (state.activeRide != null) {
           state = state.copyWith(clearActiveRide: true, rideParticipants: const {});
         }
