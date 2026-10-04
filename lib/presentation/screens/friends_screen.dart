@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/friends_service.dart';
 import '../../core/services/group_ride_service.dart';
 import '../../data/models/saved_place.dart';
+import '../../di/providers.dart';
 import '../controllers/map_controller.dart';
 
 class FriendsScreen extends ConsumerStatefulWidget {
@@ -13,11 +14,18 @@ class FriendsScreen extends ConsumerStatefulWidget {
 }
 
 class _FriendsScreenState extends ConsumerState<FriendsScreen> {
-  final _friendsService = FriendsService();
-  final _groupRideService = GroupRideService();
+  late final FriendsService _friendsService;
+  late final GroupRideService _groupRideService;
   final _searchCtrl = TextEditingController();
   List<Map<String, dynamic>> _searchResults = [];
   bool _searching = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _friendsService = ref.read(friendsServiceProvider);
+    _groupRideService = ref.read(groupRideServiceProvider);
+  }
 
   @override
   void dispose() {
