@@ -44,7 +44,13 @@ class GroupRideService {
 
   Future<void> endRide(String rideId) async {
     await _db.collection('groupRides').doc(rideId).update({'active': false});
-    await _rtdb.ref('groupRideStatus/$rideId').remove();
+    await removeMyStatus(rideId);
+  }
+
+  Future<void> removeMyStatus(String rideId) async {
+    final uid = _uid;
+    if (uid == null) return;
+    await _rtdb.ref('groupRideStatus/$rideId/$uid').remove();
   }
 
   Stream<Map<String, dynamic>?> myActiveRide() {
