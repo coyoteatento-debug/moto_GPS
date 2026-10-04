@@ -59,6 +59,18 @@ class GroupRideService {
     });
   }
 
+  /// Salir de la rodada sin afectar a los demás participantes.
+  Future<void> leaveRide(String rideId) async {
+    final uid = _uid;
+    if (uid == null) return;
+    await _db.collection('groupRides').doc(rideId).update({
+      'participants': FieldValue.arrayRemove([uid]),
+      'acceptedUids': FieldValue.arrayRemove([uid]),
+    });
+    await removeMyStatus(rideId);
+  }
+
+  /// Termina la rodada para TODOS los participantes (solo el anfitrión).
   Future<void> endRide(String rideId) async {
     await _db.collection('groupRides').doc(rideId).update({'active': false});
     await removeMyStatus(rideId);
