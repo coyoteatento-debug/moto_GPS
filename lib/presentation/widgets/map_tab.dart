@@ -8,6 +8,7 @@ import 'saved_points_sheet.dart';
 import '../../data/models/poi_record.dart';
 import '../../data/models/saved_place.dart';
 import '../../core/utils/geo_utils.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../controllers/map_controller.dart';
 
 // ── Botón de capas expandible ─────────────────────────
@@ -1004,9 +1005,62 @@ class _GroupRidePanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ride = ref.watch(mapControllerProvider.select((s) => s.activeRide));
     if (ride == null) return const SizedBox.shrink();
+    final navigating = ref.watch(mapControllerProvider.select((s) => s.navigating));
+
+    final acceptedUids = List<String>.from(ride['acceptedUids'] ?? const []);
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    final hasAccepted = currentUid != null && acceptedUids.contains(currentUid);
+
+    if (!hasAccepted) {
+      return Positioned(
+        top: navigating ? 210 : 130,
+        left: 16, right: 16,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.deepOrange[800],
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: const [BoxShadow(
+                color: Colors.black38, blurRadius: 8, offset: Offset(0, 2))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(children: [
+                const Icon(Icons.groups, color: Colors.white, size: 22),
+                const SizedBox(width: 8),
+                Expanded(child: Text(
+                    '${ride['hostUsername']} te invitó a una rodada a ${ride['destinationName']}',
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold))),
+              ]),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(child: OutlinedButton(
+                  onPressed: () =>
+                      ref.read(mapControllerProvider.notifier).rejectRideInvite(),
+                  style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.white54)),
+                  child: const Text('Rechazar', style: TextStyle(color: Colors.white)),
+                )),
+                const SizedBox(width: 10),
+                Expanded(child: ElevatedButton(
+                  onPressed: () =>
+                      ref.read(mapControllerProvider.notifier).acceptRideInvite(),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.white),
+                  child: const Text('Aceptar',
+                      style: TextStyle(color: Colors.deepOrange)),
+                )),
+              ]),
+            ],
+          ),
+        ),
+      );
+    }
+
     final participants = ref.watch(
         mapControllerProvider.select((s) => s.rideParticipants));
-    final navigating = ref.watch(mapControllerProvider.select((s) => s.navigating));
     final destLat = (ride['destLat'] as num).toDouble();
     final destLng = (ride['destLng'] as num).toDouble();
     final geo = GeoUtils();
