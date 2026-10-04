@@ -184,6 +184,11 @@ class MapController extends AutoDisposeNotifier<MapState> {
     await _groupRide.endRide(state.activeRide!['id'] as String);
   }
 
+  Future<void> leaveActiveRide() async {
+    if (state.activeRide == null) return;
+    await _groupRide.leaveRide(state.activeRide!['id'] as String);
+  }
+
   late final LiveLocationService _liveLocation;
   late final FriendsService _friendsService;
   late final GroupRideService _groupRide;
