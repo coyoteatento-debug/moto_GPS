@@ -77,6 +77,7 @@ class VoiceCommandService {
 
   void stop() {
     _active = false;
+    _watchdogTimer?.cancel();
     _speech.stop();
     _onListeningChange?.call(false);
   }
@@ -88,14 +89,29 @@ class VoiceCommandService {
     }
   }
 
+  Timer? _watchdogTimer;
+  bool _restartScheduled = false;
+
   void _scheduleRestart() {
-    if (!_active) return;
-    Future.delayed(const Duration(milliseconds: 500), _listenCycle);
+    if (!_active || _restartScheduled) return;
+    _restartScheduled = true;
+    _watchdogTimer?.cancel();
+    Future.delayed(const Duration(milliseconds: 500), () {
+      _restartScheduled = false;
+      _listenCycle();
+    });
   }
 
   Future<void> _listenCycle() async {
     if (!_active) return;
     _commandHandledThisCycle = false;
+    // Respaldo: si el motor nunca avisa que terminó de escuchar
+    // (pasa en algunos dispositivos), este temporizador fuerza el
+    // reinicio de todas formas.
+    _watchdogTimer?.cancel();
+    _watchdogTimer = Timer(const Duration(seconds: 13), () {
+      if (_active) _scheduleRestart();
+    });
     await _speech.listen(
       onResult: _handleResult,
       localeId: _localeId,
@@ -116,6 +132,7 @@ class VoiceCommandService {
     _commandHandledThisCycle = true;
     _onCommand?.call(command);
     _speech.stop();
+    _scheduleRestart();
   }
 
   /// Reconoce comandos con la palabra de activación "gps" seguida de
