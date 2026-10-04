@@ -68,6 +68,8 @@ class AuthService {
       case 'wrong-password':
       case 'invalid-credential':
         return 'Correo o contraseña incorrectos.';
+      case 'network-request-failed':
+        return 'Sin conexión a internet. Verifica tu señal e intenta de nuevo.';
       default:
         return 'Error [$code]: ${message ?? "sin detalle"}';
     }
