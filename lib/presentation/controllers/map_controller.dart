@@ -171,7 +171,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _locationSubscription?.cancel();
     _smoothSub?.cancel();
     _rideStatusSub?.cancel();
-    _smoothSub?.cancel();
+    _activeRideSub?.cancel();
     _smoother.stop();
     _nightModeTimer?.cancel();
     _waypointArrivalTimer?.cancel();
