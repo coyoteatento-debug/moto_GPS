@@ -997,6 +997,14 @@ class MapController extends AutoDisposeNotifier<MapState> {
     state = state.copyWith(savedPois: pois);
   }
 
+  Future<void> removePoi(PoiRecord poi) async {
+    final updated = List<PoiRecord>.from(state.savedPois)
+      ..removeWhere((p) =>
+          p.date == poi.date && p.type == poi.type && p.lat == poi.lat && p.lng == poi.lng);
+    state = state.copyWith(savedPois: updated);
+    await _prefs.savePois(updated);
+  }
+
   Future<void> _loadSavedPlaces() async {
     final places = await _prefs.loadPlaces();
     state = state.copyWith(savedPlaces: places);
@@ -1632,6 +1640,13 @@ class MapController extends AutoDisposeNotifier<MapState> {
     }
   }
 
+  Future<void> removeTrip(TripRecord trip) async {
+    final updated = List<TripRecord>.from(state.trips)
+      ..removeWhere((t) => t.date == trip.date && t.destination == trip.destination);
+    state = state.copyWith(trips: updated);
+    await _prefs.saveTrips(updated);
+  }
+  
   Future<void> _loadTrips() async {
     final trips = await _prefs.loadTrips();
     state = state.copyWith(trips: trips);
