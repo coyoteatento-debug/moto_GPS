@@ -36,10 +36,27 @@ class GroupRideService {
       'destLat': destLat,
       'destLng': destLng,
       'participants': participants,
+      'acceptedUids': [uid], // el anfitrión queda auto-aceptado
       'active': true,
       'createdAt': FieldValue.serverTimestamp(),
     });
     return doc.id;
+  }
+
+  Future<void> acceptInvite(String rideId) async {
+    final uid = _uid;
+    if (uid == null) return;
+    await _db.collection('groupRides').doc(rideId).update({
+      'acceptedUids': FieldValue.arrayUnion([uid]),
+    });
+  }
+
+  Future<void> rejectInvite(String rideId) async {
+    final uid = _uid;
+    if (uid == null) return;
+    await _db.collection('groupRides').doc(rideId).update({
+      'participants': FieldValue.arrayRemove([uid]),
+    });
   }
 
   Future<void> endRide(String rideId) async {
