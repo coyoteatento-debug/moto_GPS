@@ -600,10 +600,10 @@ class MapTab extends StatelessWidget {
           ),
         ),
 
-// ── Botón GPS Interconectado ────────────────────────
+      // ── Botón GPS Interconectado ────────────────────────
       if (!navigating)
         const Positioned(
-          bottom: 290, right: 16,
+          bottom: 340, right: 16,
           child: _LocationShareButton(),
         ),
       
