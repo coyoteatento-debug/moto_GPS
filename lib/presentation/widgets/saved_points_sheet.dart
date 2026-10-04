@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../data/models/poi_record.dart';
 import '../../data/models/saved_place.dart';
+import '../controllers/map_controller.dart';
 
 void showSavedPointsSheet(
   BuildContext context,
@@ -21,7 +23,28 @@ void showSavedPointsSheet(
   );
 }
 
-class _SavedPointsSheet extends StatelessWidget {
+Future<bool> _confirmDelete(BuildContext context, String label) async {
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('¿Eliminar?'),
+      content: Text('Esto va a borrar "$label" permanentemente.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancelar'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+        ),
+      ],
+    ),
+  );
+  return confirm ?? false;
+}
+
+class _SavedPointsSheet extends ConsumerWidget {
   final List<PoiRecord> pois;
   final List<SavedPlaceRecord> places;
   final ValueChanged<SavedPlaceRecord> onGoToPlace;
@@ -36,7 +59,7 @@ class _SavedPointsSheet extends StatelessWidget {
       '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.8),
       decoration: BoxDecoration(
@@ -77,12 +100,25 @@ class _SavedPointsSheet extends StatelessWidget {
                         title: Text(p.name,
                             style: const TextStyle(fontWeight: FontWeight.w600)),
                         subtitle: Text(_formatDate(p.date)),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.navigation, color: Colors.blue),
-                          onPressed: () {
-                            Navigator.pop(context);
-                            onGoToPlace(p);
-                          },
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.navigation, color: Colors.blue),
+                              onPressed: () {
+                                Navigator.pop(context);
+                                onGoToPlace(p);
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                              onPressed: () async {
+                                if (await _confirmDelete(context, p.name)) {
+                                  ref.read(mapControllerProvider.notifier).removeSavedPlace(p);
+                                }
+                              },
+                            ),
+                          ],
                         ),
                       )),
                 const Divider(height: 32),
@@ -107,9 +143,22 @@ class _SavedPointsSheet extends StatelessWidget {
                         title: Text(poi.label,
                             style: const TextStyle(fontWeight: FontWeight.w600)),
                         subtitle: Text(_formatDate(poi.date)),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.share, color: Colors.blue),
-                          onPressed: () => Share.share(poi.shareText),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.share, color: Colors.blue),
+                              onPressed: () => Share.share(poi.shareText),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                              onPressed: () async {
+                                if (await _confirmDelete(context, poi.label)) {
+                                  ref.read(mapControllerProvider.notifier).removePoi(poi);
+                                }
+                              },
+                            ),
+                          ],
                         ),
                       )),
               ],
