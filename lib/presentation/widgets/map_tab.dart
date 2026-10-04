@@ -1064,6 +1064,7 @@ class _GroupRidePanel extends ConsumerWidget {
     final destLat = (ride['destLat'] as num).toDouble();
     final destLng = (ride['destLng'] as num).toDouble();
     final geo = GeoUtils();
+    final isHost = currentUid != null && currentUid == ride['hostUid'];
 
     return Positioned(
       top: navigating ? 210 : 130,
@@ -1089,8 +1090,38 @@ class _GroupRidePanel extends ConsumerWidget {
                         color: Colors.white, fontWeight: FontWeight.bold))),
                 IconButton(
                   icon: const Icon(Icons.close, color: Colors.redAccent, size: 20),
-                  onPressed: () =>
-                      ref.read(mapControllerProvider.notifier).endActiveRide(),
+                  tooltip: isHost ? 'Terminar rodada' : 'Salir de la rodada',
+                  onPressed: () async {
+                    if (!isHost) {
+                      ref.read(mapControllerProvider.notifier).leaveActiveRide();
+                      return;
+                    }
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        backgroundColor: const Color(0xFF1A1A1A),
+                        title: const Text('Terminar rodada',
+                            style: TextStyle(color: Colors.white)),
+                        content: const Text(
+                            'Eres el anfitrión: esto termina la rodada para todos los participantes, no solo para ti.',
+                            style: TextStyle(color: Colors.white70)),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancelar'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Terminar para todos',
+                                style: TextStyle(color: Colors.redAccent)),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) {
+                      ref.read(mapControllerProvider.notifier).endActiveRide();
+                    }
+                  },
                 ),
               ],
             ),
