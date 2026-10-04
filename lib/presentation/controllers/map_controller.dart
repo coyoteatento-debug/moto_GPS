@@ -414,30 +414,38 @@ class MapController extends AutoDisposeNotifier<MapState> {
         await _updateSpeedLimit(position.latitude, position.longitude);
       }
 
-            if (state.isSharingLocation &&
+      if (state.isSharingLocation &&
           (_lastLocationShareWrite == null ||
               now.difference(_lastLocationShareWrite!).inSeconds >= 12)) {
         _lastLocationShareWrite = now;
-        await _liveLocation.updateMyLocation(
-            position.latitude, position.longitude, position.heading);
+        try {
+          await _liveLocation.updateMyLocation(
+              position.latitude, position.longitude, position.heading);
+        } catch (e) {
+          debugPrint('[MapController] Error compartiendo ubicación: $e');
+        }
       }
 
       if (state.activeRide != null &&
           (_lastRideStatusWrite == null ||
               now.difference(_lastRideStatusWrite!).inSeconds >= 10)) {
         _lastRideStatusWrite = now;
-        bool moved = true;
-        if (_lastRidePosition != null) {
-          final d = _geo.distanceBetween(_lastRidePosition!['lat']!,
-              _lastRidePosition!['lng']!, position.latitude, position.longitude);
-          moved = d > 30;
+        try {
+          bool moved = true;
+          if (_lastRidePosition != null) {
+            final d = _geo.distanceBetween(_lastRidePosition!['lat']!,
+                _lastRidePosition!['lng']!, position.latitude, position.longitude);
+            moved = d > 30;
+          }
+          if (moved) {
+            _lastRidePosition = {'lat': position.latitude, 'lng': position.longitude};
+          }
+          _myRideUsername ??= await _groupRide.myUsername();
+          await _groupRide.updateMyStatus(state.activeRide!['id'] as String,
+              position.latitude, position.longitude, _myRideUsername!, moved);
+        } catch (e) {
+          debugPrint('[MapController] Error actualizando estado de rodada: $e');
         }
-        if (moved) {
-          _lastRidePosition = {'lat': position.latitude, 'lng': position.longitude};
-        }
-        _myRideUsername ??= await _groupRide.myUsername();
-        await _groupRide.updateMyStatus(state.activeRide!['id'] as String,
-            position.latitude, position.longitude, _myRideUsername!, moved);
       }
 
       if (!state.initialLocationSet && _mapboxMap != null) {
@@ -966,7 +974,10 @@ class MapController extends AutoDisposeNotifier<MapState> {
       lng: state.tappedLng!,
       date: DateTime.now(),
     );
-    final updated = List<SavedPlaceRecord>.from(state.savedPlaces)..insert(0, place);
+    final normalizedNew = _normalizeForMatch(name);
+    final updated = List<SavedPlaceRecord>.from(state.savedPlaces)
+      ..removeWhere((p) => _normalizeForMatch(p.name) == normalizedNew)
+      ..insert(0, place);
     state = state.copyWith(savedPlaces: updated);
     await _prefs.savePlaces(updated);
   }
@@ -991,11 +1002,21 @@ class MapController extends AutoDisposeNotifier<MapState> {
       return;
     }
     SavedPlaceRecord? match;
+    // Primero: coincidencia EXACTA en toda la lista (prioridad)
     for (final p in state.savedPlaces) {
-      final n = _normalizeForMatch(p.name);
-      if (n == spokenName || n.contains(spokenName) || spokenName.contains(n)) {
+      if (_normalizeForMatch(p.name) == spokenName) {
         match = p;
         break;
+      }
+    }
+    // Si no hubo exacta, recién ahí se usa coincidencia parcial
+    if (match == null) {
+      for (final p in state.savedPlaces) {
+        final n = _normalizeForMatch(p.name);
+        if (n.contains(spokenName) || spokenName.contains(n)) {
+          match = p;
+          break;
+        }
       }
     }
     if (match == null) {
