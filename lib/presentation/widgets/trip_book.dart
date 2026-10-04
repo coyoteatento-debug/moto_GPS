@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/trip_record.dart';
+import '../controllers/map_controller.dart';
 
-class TripBook extends StatelessWidget {
+class TripBook extends ConsumerWidget {
   final List<TripRecord> trips;
 
   const TripBook({super.key, required this.trips});
@@ -20,7 +22,6 @@ class TripBook extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Handle
             Container(
               width: 40, height: 4,
               decoration: BoxDecoration(
@@ -29,7 +30,6 @@ class TripBook extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            // Destino
             Row(children: [
               const Icon(Icons.location_on, color: Colors.red, size: 22),
               const SizedBox(width: 8),
@@ -44,7 +44,6 @@ class TripBook extends StatelessWidget {
               ),
             ]),
             const SizedBox(height: 24),
-            // Tarjetas de estadísticas
             Row(children: [
               _statCard(Icons.straighten,
                   '${trip.distanceKm} km', 'Distancia', Colors.blue),
@@ -95,8 +94,32 @@ class TripBook extends StatelessWidget {
            '${date.year}';
   }
 
+  Future<void> _confirmAndDelete(
+      BuildContext context, WidgetRef ref, TripRecord trip) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Eliminar viaje?'),
+        content: Text('Esto va a borrar el viaje a "${trip.destination}" permanentemente.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      ref.read(mapControllerProvider.notifier).removeTrip(trip);
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
@@ -126,8 +149,8 @@ class TripBook extends StatelessWidget {
           : ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: trips.length,
-              cacheExtent: 500,                    // ← AGREGADO
-              addRepaintBoundaries: true,           // ← AGREGADO
+              cacheExtent: 500,
+              addRepaintBoundaries: true,
               itemBuilder: (_, i) {
                 final trip = trips[i];
                 return RepaintBoundary(
@@ -159,6 +182,11 @@ class TripBook extends StatelessWidget {
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline,
+                                    color: Colors.redAccent, size: 20),
+                                onPressed: () => _confirmAndDelete(context, ref, trip),
                               ),
                             ],
                           ),
