@@ -7,10 +7,12 @@ class GroupRideService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseDatabase _rtdb = FirebaseDatabase.instance;
 
-  String get _uid => _auth.currentUser!.uid;
+  String? get _uid => _auth.currentUser?.uid;
 
   Future<String> myUsername() async {
-    final doc = await _db.collection('users').doc(_uid).get();
+    final uid = _uid;
+    if (uid == null) return 'Yo';
+    final doc = await _db.collection('users').doc(uid).get();
     return doc.data()?['username'] as String? ?? 'Yo';
   }
   
@@ -20,12 +22,15 @@ class GroupRideService {
     required double destLng,
     required List<String> friendUids,
   }) async {
-    final myUser = await _db.collection('users').doc(_uid).get();
+    final uid = _uid;
+    if (uid == null) throw Exception('Debes iniciar sesión para crear una rodada.');
+
+    final myUser = await _db.collection('users').doc(uid).get();
     final myUsername = myUser.data()?['username'] ?? 'Yo';
 
-    final participants = {_uid, ...friendUids}.toList();
+    final participants = {uid, ...friendUids}.toList();
     final doc = await _db.collection('groupRides').add({
-      'hostUid': _uid,
+      'hostUid': uid,
       'hostUsername': myUsername,
       'destinationName': destinationName,
       'destLat': destLat,
@@ -60,7 +65,9 @@ class GroupRideService {
 
   Future<void> updateMyStatus(
       String rideId, double lat, double lng, String username, bool moved) async {
-    final ref = _rtdb.ref('groupRideStatus/$rideId/$_uid');
+    final uid = _uid;
+    if (uid == null) return;
+    final ref = _rtdb.ref('groupRideStatus/$rideId/$uid');
     final updates = <String, Object?>{
       'lat': lat,
       'lng': lng,
