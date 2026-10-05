@@ -111,6 +111,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _smoother.start();
     _startNightModeTimer();
     await _loadTrips();
+    await _recoverInterruptedTrip();
     await _loadFuelSettings();
     await _loadUserAvatar();
     await _loadPois();
@@ -197,6 +198,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
   String? _myRideUsername;
   Map<String, double>? _lastRidePosition;
   DateTime? _lastRideStatusWrite;
+  DateTime? _lastTripCheckpointWrite;
   StreamSubscription? _friendsListSub;
   final Map<String, StreamSubscription> _friendLocationSubs = {};
   final Map<String, mapbox.PointAnnotation?> _friendAnnotations = {};
@@ -573,6 +575,11 @@ class MapController extends AutoDisposeNotifier<MapState> {
     }
 
     _tripService.accumulate(position.latitude, position.longitude);
+    if (_lastTripCheckpointWrite == null ||
+        DateTime.now().difference(_lastTripCheckpointWrite!).inSeconds >= 20) {
+      _lastTripCheckpointWrite = DateTime.now();
+      _tripService.saveCheckpoint(state.selectedPlace?['name'] ?? 'Destino');
+    }
     _checkRouteDeviation(position.latitude, position.longitude);
     await _updateRemainingRoute(position.latitude, position.longitude);
 
@@ -1640,6 +1647,33 @@ class MapController extends AutoDisposeNotifier<MapState> {
     }
   }
 
+  Future<void> _recoverInterruptedTrip() async {
+    final checkpoint = await _prefs.loadTripCheckpoint();
+    if (checkpoint == null) return;
+    try {
+      final startTime = DateTime.parse(checkpoint['startTime'] as String);
+      final distanceKm = (checkpoint['accumulatedDistance'] as num) / 1000;
+      final destination = checkpoint['destination'] as String? ?? 'Destino';
+      final durationMin = DateTime.now().difference(startTime).inMinutes;
+      if (distanceKm >= 0.1) {
+        final record = TripRecord(
+          destination: '$destination (interrumpido)',
+          distanceKm: double.parse(distanceKm.toStringAsFixed(2)),
+          durationMin: durationMin,
+          date: startTime,
+          routeCoords: const [],
+        );
+        final updated = [record, ...state.trips];
+        state = state.copyWith(trips: updated);
+        await _prefs.saveTrips(updated);
+      }
+    } catch (e) {
+      debugPrint('[MapController] Error recuperando viaje interrumpido: $e');
+    } finally {
+      await _prefs.clearTripCheckpoint();
+    }
+  }
+  
   Future<void> removeTrip(TripRecord trip) async {
     final updated = List<TripRecord>.from(state.trips)
       ..removeWhere((t) => t.date == trip.date && t.destination == trip.destination);
