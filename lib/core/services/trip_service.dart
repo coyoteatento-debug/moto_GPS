@@ -38,6 +38,16 @@ class TripService {
     _lastLng = lng;
   }
 
+  // ── Checkpoint periódico (para sobrevivir un cierre forzado) ──
+  Future<void> saveCheckpoint(String destination) async {
+    if (_startTime == null) return;
+    await _prefs.saveTripCheckpoint({
+      'destination': destination,
+      'startTime': _startTime!.toIso8601String(),
+      'accumulatedDistance': _accumulatedDistance,
+    });
+  }
+
   // ── Finalizar y guardar ───────────────────────────────
   Future<TripRecord?> finishAndSave({
     required String destination,
@@ -56,6 +66,7 @@ class TripService {
     );
     final updated = [record, ...existingTrips];
     await _prefs.saveTrips(updated);
+    await _prefs.clearTripCheckpoint();
     reset();
     return record;
   }
