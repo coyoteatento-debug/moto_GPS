@@ -53,6 +53,29 @@ class PrefsSource {
     }
   }
 
+  // ── Checkpoint de viaje en curso (para recuperar tras un cierre forzado) ──
+  Future<void> saveTripCheckpoint(Map<String, dynamic> checkpoint) async {
+    final prefs = await _instance;
+    await prefs.setString('trip_checkpoint', json.encode(checkpoint));
+  }
+
+  Future<Map<String, dynamic>?> loadTripCheckpoint() async {
+    final prefs = await _instance;
+    final raw = prefs.getString('trip_checkpoint');
+    if (raw == null) return null;
+    try {
+      return json.decode(raw) as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('[PrefsSource] Error leyendo trip_checkpoint: $e');
+      return null;
+    }
+  }
+
+  Future<void> clearTripCheckpoint() async {
+    final prefs = await _instance;
+    await prefs.remove('trip_checkpoint');
+  }
+
   // ── Combustible ───────────────────────────────────────
   Future<void> saveFuelSettings(double tankLiters, double autonomyKm) async {
     final prefs = await _instance;
