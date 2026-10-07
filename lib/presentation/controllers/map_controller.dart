@@ -426,6 +426,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
 
   Future<void> _startLocationTracking() async {
     if (_locationSubscription != null) return;
+    _startSmoothMarker(); // ← Inicia la suscripción del marcador inmediatamente al arrancar el GPS
     await _gpsService.startTracking();
     _locationSubscription = _gpsService.positionStream.listen((Position position) async {
       final speed = (position.speed < 0 ? 0 : position.speed) * 3.6;
@@ -593,12 +594,11 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _checkWaypointArrival(position.latitude, position.longitude);
 
     _smoother.updatePosition(
-      lat: position.latitude,
-      lng: position.longitude,
+      lat: snappedLat,  // ← Proyectado al centro de la ruta (igual que la cámara)
+      lng: snappedLng,  // ← Evita que la moto aparezca fuera de la carretera
       heading: bearing,
       speedMs: position.speed < 0 ? 0 : position.speed,
     );
-
     state = state.copyWith(isProgrammaticMove: true);
     _flyTo(
       lat: snappedLat,
@@ -608,8 +608,9 @@ class MapController extends AutoDisposeNotifier<MapState> {
       pitch: 50.0,
     );
   }
-
   Future<void> onAppBackground() async {
+    _smoothSub?.cancel(); // ← Pausa la animación del marcador en segundo plano para ahorrar batería
+    _smoothSub = null;
     if (_locationSubscription != null) {
       final permission = await Geolocator.checkPermission();
       final hasPermission = permission == LocationPermission.always ||
