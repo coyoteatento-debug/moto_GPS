@@ -83,9 +83,10 @@ class NavigationService {
     double lng,
     List<List<double>> routeCoords, {
     double thresholdMeters = 55,
+    int? lastIdx,
   }) {
     if (routeCoords.isEmpty) return false;
-    final dist = _geo.distanceToRoute(lat, lng, routeCoords);
+    final dist = _geo.distanceToRoute(lat, lng, routeCoords, lastIdx: lastIdx);
     return dist > thresholdMeters;
   }
 
