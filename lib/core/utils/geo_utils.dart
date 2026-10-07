@@ -75,24 +75,41 @@ class GeoUtils {
     return idx;
   }
 
-  // ── Snap del usuario al segmento más cercano ──────────
+   // ── Snap del usuario al segmento más cercano ──────────
   List<double> snapToRoute(
-      double lat, double lng, List<List<double>> routeCoords) {
+      double lat, double lng, List<List<double>> routeCoords, {int? lastIdx}) {
     if (routeCoords.length < 2) return [lng, lat];
+
+    // Optimización: si hay un índice previo y la ruta es extensa, buscar en ventana local
+    if (lastIdx != null && routeCoords.length > 50) {
+      final start = (lastIdx - 15).clamp(0, routeCoords.length - 2);
+      final end   = (lastIdx + 35).clamp(0, routeCoords.length - 1);
+      final localSnapped = _snapSegmentRange(lat, lng, routeCoords, start, end);
+      if (distanceBetween(lat, lng, localSnapped[1], localSnapped[0]) <= 120) {
+        return localSnapped;
+      }
+    }
+
+    // Búsqueda completa si no hay índice previo o hubo un salto/desvío
+    return _snapSegmentRange(lat, lng, routeCoords, 0, routeCoords.length - 1);
+  }
+
+  List<double> _snapSegmentRange(
+      double lat, double lng, List<List<double>> routeCoords, int start, int end) {
     double minDist = double.infinity;
     List<double> snapped = [lng, lat];
-    final cosLat = cos(lat * pi / 180);           // ← AGREGADO
-    for (int i = 0; i < routeCoords.length - 1; i++) {
+    final cosLat = cos(lat * pi / 180);
+    for (int i = start; i < end; i++) {
       final a = routeCoords[i];
       final b = routeCoords[i + 1];
-      final abX = (b[0] - a[0]) * cosLat;         // ← cosLat aplicado
+      final abX = (b[0] - a[0]) * cosLat;
       final abY = b[1] - a[1];
-      final apX = (lng - a[0]) * cosLat;           // ← cosLat aplicado
+      final apX = (lng - a[0]) * cosLat;
       final apY = lat - a[1];
       final ab2 = abX * abX + abY * abY;
       if (ab2 == 0) continue;
       final t = ((apX * abX + apY * abY) / ab2).clamp(0.0, 1.0);
-      final pLng = a[0] + t * (b[0] - a[0]);      // ← sin cosLat para el resultado
+      final pLng = a[0] + t * (b[0] - a[0]);
       final pLat = a[1] + t * (b[1] - a[1]);
       final d = distanceBetween(lat, lng, pLat, pLng);
       if (d < minDist) {
@@ -104,15 +121,29 @@ class GeoUtils {
   }
 
   double distanceToRoute(
-      double lat, double lng, List<List<double>> routeCoords) {
+      double lat, double lng, List<List<double>> routeCoords, {int? lastIdx}) {
+    if (routeCoords.length < 2) return double.infinity;
+
+    if (lastIdx != null && routeCoords.length > 50) {
+      final start = (lastIdx - 15).clamp(0, routeCoords.length - 2);
+      final end   = (lastIdx + 35).clamp(0, routeCoords.length - 1);
+      final localDist = _distSegmentRange(lat, lng, routeCoords, start, end);
+      if (localDist <= 120) return localDist;
+    }
+
+    return _distSegmentRange(lat, lng, routeCoords, 0, routeCoords.length - 1);
+  }
+
+  double _distSegmentRange(
+      double lat, double lng, List<List<double>> routeCoords, int start, int end) {
     double minDist = double.infinity;
-    final cosLat = cos(lat * pi / 180);           // ← AGREGADO
-    for (int i = 0; i < routeCoords.length - 1; i++) {
+    final cosLat = cos(lat * pi / 180);
+    for (int i = start; i < end; i++) {
       final a = routeCoords[i];
       final b = routeCoords[i + 1];
-      final abX = (b[0] - a[0]) * cosLat;         // ← cosLat aplicado
+      final abX = (b[0] - a[0]) * cosLat;
       final abY = b[1] - a[1];
-      final apX = (lng - a[0]) * cosLat;           // ← cosLat aplicado
+      final apX = (lng - a[0]) * cosLat;
       final apY = lat - a[1];
       final ab2 = abX * abX + abY * abY;
       if (ab2 == 0) continue;
