@@ -27,6 +27,7 @@ class SmoothLocationService {
   Timer? _timer;
   StreamController<SmoothPosition>? _controller;
   bool _isRunning = false;
+  bool _isStationaryEmitted = false; // ← Control de reposo
 
   // ── API pública ──────────────────────────────────────
 
@@ -40,7 +41,7 @@ class SmoothLocationService {
     _isRunning = true;
     _controller ??= StreamController<SmoothPosition>.broadcast();
     _timer = Timer.periodic(
-      const Duration(milliseconds: 33),
+      const Duration(milliseconds: 66), // ~15 FPS: óptimo para batería y fluidez
       (_) => _onTick(),
     );
   }
@@ -79,10 +80,12 @@ class SmoothLocationService {
 
     _animDuration = _calcDuration(speedMs);
     _animStartTime = now;
+    _isStationaryEmitted = false; // ← Reactiva la emisión al llegar nuevo movimiento
   }
 
   Future<void> stop() async {
     _isRunning = false;
+    _isStationaryEmitted = false;
     _timer?.cancel();
     _timer = null;
     _fromLat = _fromLng = _fromHeading = null;
@@ -103,6 +106,19 @@ class SmoothLocationService {
     final now = DateTime.now();
 
     final progress = _currentProgress(now);
+
+    // Optimización en reposo: si ya llegó al destino y está detenido (< 0.5 m/s), no enviar eventos repetidos
+    if (progress >= 1.0 && _speedMs <= 0.5) {
+      if (!_isStationaryEmitted) {
+        _isStationaryEmitted = true;
+        _controller!.add(SmoothPosition(
+          latitude: _toLat!,
+          longitude: _toLng!,
+          heading: _toHeading!,
+        ));
+      }
+      return;
+    }
 
     double lat = _lerp(_fromLat!, _toLat!, progress);
     double lng = _lerpLng(_fromLng!, _toLng!, progress);
