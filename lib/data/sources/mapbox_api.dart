@@ -33,12 +33,28 @@ class MapboxApi {
       bbox = '&bbox=$minLng,$minLat,$maxLng,$maxLat';
     }
 
-    final local = await _fetchPlaces(query, proximity, bbox);
-    if (local.isNotEmpty) return local;
+    // Se consultan ambas en paralelo: la local (con bbox, para
+    // direcciones/negocios cercanos) y la nacional (sin bbox, para
+    // ciudades o municipios lejanos que la caja de ~50km excluiría).
+    // Antes, si la búsqueda local encontraba ALGO (aunque fuera una
+    // calle con nombre parecido), la nacional nunca se intentaba y
+    // la ciudad real quedaba oculta.
+    final results = await Future.wait([
+      _fetchPlaces(query, proximity, bbox),
+      _fetchPlaces(query, proximity, ''),
+    ]);
+    final local = results[0];
+    final national = results[1];
 
-    // Fallback: sin bbox, pero restringido a México — por si el
-    // lugar buscado está en otra ciudad del país.
-    return _fetchPlaces(query, proximity, '');
+    final merged = <Map<String, dynamic>>[...local];
+    for (final place in national) {
+      final isDuplicate = merged.any((m) =>
+          m['name'] == place['name'] &&
+          ((m['lat'] as double) - (place['lat'] as double)).abs() < 0.01 &&
+          ((m['lng'] as double) - (place['lng'] as double)).abs() < 0.01);
+      if (!isDuplicate) merged.add(place);
+    }
+    return merged.take(7).toList();
   }
 
   Future<List<Map<String, dynamic>>> _fetchPlaces(
