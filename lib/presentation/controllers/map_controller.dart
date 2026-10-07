@@ -55,6 +55,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
   final Completer<void> _mapReadyCompleter = Completer();
 
   int _deviationCount = 0;
+  int _lastCoordIndex = 0;
   DateTime? _lastRecalcTime;
   DateTime? _lastSpeedLimitCall;
   int _searchToken = 0;
@@ -556,16 +557,18 @@ class MapController extends AutoDisposeNotifier<MapState> {
   }
   
   Future<void> _handleNavigationUpdate(Position position) async {
-    final snapped = _geo.snapToRoute(
-      position.latitude, position.longitude, state.routeCoordinates,
-    );
-    final snappedLng = snapped[0];
-    final snappedLat = snapped[1];
     final idx = _geo.findClosestPointIndex(
       position.latitude, position.longitude,
       state.routeCoordinates,
-      lastIdx: state.currentStepIndex,
+      lastIdx: _lastCoordIndex,
     );
+    _lastCoordIndex = idx;
+    final snapped = _geo.snapToRoute(
+      position.latitude, position.longitude, state.routeCoordinates,
+      lastIdx: _lastCoordIndex,
+    );
+    final snappedLng = snapped[0];
+    final snappedLat = snapped[1];
 
     double bearing = position.heading;
     if (idx < state.routeCoordinates.length - 1) {
@@ -1272,7 +1275,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
       await _handleArrival();
       return;
     }
-    final idx = _geo.findClosestPointIndex(lat, lng, state.routeCoordinates, lastIdx: state.currentStepIndex);
+    final idx = _geo.findClosestPointIndex(lat, lng, state.routeCoordinates, lastIdx: _lastCoordIndex);
     final remaining = state.routeCoordinates.sublist(idx);
     await _mapService.updateRemainingRoute(_mapboxMap!, remaining);
   }
@@ -1387,6 +1390,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
       await _bgService.stop();
       await WakelockPlus.disable();
       _speedLimitService.clearCache();
+      _lastCoordIndex = 0;
     
       // FIX: Resetear completamente el estado de ruta
       state = state.copyWith(
@@ -1434,7 +1438,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
     if (_lastRecalcTime != null &&
         DateTime.now().difference(_lastRecalcTime!).inSeconds < 20) return;
 
-    if (_navService.isDeviated(lat, lng, state.routeCoordinates)) {
+    if (_navService.isDeviated(lat, lng, state.routeCoordinates, lastIdx: _lastCoordIndex)) {
       _deviationCount++;
       if (_deviationCount >= 3) {
         _deviationCount = 0;
