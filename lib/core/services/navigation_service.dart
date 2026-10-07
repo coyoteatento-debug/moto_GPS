@@ -19,11 +19,9 @@ class RouteData {
 
 class NavigationService {
   // ── Umbrales de anuncio TTS ───────────────────────────
-  static const double kAnnounceEarlyDist  = 150.0; // anuncio temprano (m)
-  static const double kAnnounceEarlyMin   = 120.0; // mínimo para anuncio temprano
-  static const double kAnnounceFinalDist  =  50.0; // anuncio final (m)
-  static const double kAnnounceFinalMin   =  30.0; // mínimo para anuncio final
-  static const double kAdvanceStepDist    =  15.0; // avanzar al siguiente paso
+  static const double kAnnounceEarlyDist  = 180.0; // umbral para anuncio temprano (m)
+  static const double kAnnounceFinalDist  =  50.0; // umbral para anuncio final (m)
+  static const double kAdvanceStepDist    =  25.0; // umbral para avanzar de paso (m)
   
   final MapboxApi  _api;
   final GeoUtils   _geo;
@@ -124,18 +122,20 @@ class NavigationService {
     final dist    = _geo.distanceBetween(lat, lng, stepLat, stepLng);
 
     String? announceText;
-    if (dist < 150 && dist >= 120 && !_announcedEarly) {
-      _announcedEarly = true;
-      announceText = 'En 150 metros, ${step['instruction']}';
-    } else if (dist < 50 && dist >= 30 && !_announcedFinal) {
+    // 1. Evaluar primero el aviso final si la moto ya entró directo a la zona de giro
+    if (dist <= kAnnounceFinalDist && !_announcedFinal) {
       _announcedFinal = true;
+      _announcedEarly = true; // Si entró directo por alta velocidad, no repetir aviso previo
       announceText = step['instruction'] as String;
+    } else if (dist <= kAnnounceEarlyDist && !_announcedEarly) {
+      _announcedEarly = true;
+      final metersRounded = (dist / 10).round() * 10;
+      announceText = 'En $metersRounded metros, ${step['instruction']}';
     }
-
-    // Avanzar al siguiente paso
+    // Avanzar al siguiente paso (umbral ampliado a 25m para no perder giros en carriles anchos)
     int nextIndex = currentStepIndex;
     String? nextInstruction;
-    if (dist < 15 && currentStepIndex < steps.length - 1) {
+    if (dist <= kAdvanceStepDist && currentStepIndex < steps.length - 1) {
       nextIndex       = currentStepIndex + 1;
       nextInstruction = steps[nextIndex]['instruction'] as String;
     }
