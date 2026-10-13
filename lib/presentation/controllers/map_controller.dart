@@ -845,8 +845,9 @@ class MapController extends AutoDisposeNotifier<MapState> {
     await _tts.init();
   }
 
-  Future<void> _speak(String text) async {
-    await _tts.speak(text);
+  Future<void> _speak(String text,
+      {TtsPriority priority = TtsPriority.normal}) async {
+    await _tts.speak(text, priority: priority);
   }
 
   Future<bool> ensureSpeechAvailable() async => _speechAvailable;
@@ -1429,7 +1430,9 @@ class MapController extends AutoDisposeNotifier<MapState> {
       currentStepIndex: update.nextStepIndex,
       currentInstruction: update.nextInstruction,
     );
-    if (update.announceText != null) _speak(update.announceText!);
+    if (update.announceText != null) {
+      _speak(update.announceText!, priority: TtsPriority.high);
+    }
   }
 
   void _checkRouteDeviation(double lat, double lng) {
