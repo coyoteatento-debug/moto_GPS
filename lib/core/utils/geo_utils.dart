@@ -154,6 +154,54 @@ class GeoUtils {
     return minDist;
   }
 
+  // ── Progreso a lo largo de la ruta (metros desde el inicio) ──────────
+  /// Metros recorridos sobre la ruta hasta la proyección del GPS en ella.
+  /// [cum] es la distancia acumulada por vértice (cum[0] = 0). Interpola
+  /// dentro del segmento más cercano, así no depende de qué tan separados
+  /// estén los vértices en tramos rectos. Usa ventana local con respaldo
+  /// global, igual que snapToRoute.
+  double progressAlongRoute(
+      double lat, double lng, List<List<double>> routeCoords, List<double> cum,
+      {int? lastIdx}) {
+    if (routeCoords.length < 2 || cum.length != routeCoords.length) return 0;
+
+    if (lastIdx != null && routeCoords.length > 50) {
+      final start = (lastIdx - 15).clamp(0, routeCoords.length - 2);
+      final end   = (lastIdx + 35).clamp(0, routeCoords.length - 1);
+      final local = _progressSegmentRange(lat, lng, routeCoords, cum, start, end);
+      if (local[0] <= 120) return local[1];
+    }
+    return _progressSegmentRange(
+        lat, lng, routeCoords, cum, 0, routeCoords.length - 1)[1];
+  }
+
+  /// Devuelve una lista con la distancia al segmento y el progreso en metros
+  /// del mejor segmento entre start y end (sin incluir end).
+  List<double> _progressSegmentRange(double lat, double lng,
+      List<List<double>> routeCoords, List<double> cum, int start, int end) {
+    double minDist = double.infinity;
+    double progress = 0;
+    final cosLat = cos(lat * pi / 180);
+    for (int i = start; i < end; i++) {
+      final a = routeCoords[i];
+      final b = routeCoords[i + 1];
+      final abX = (b[0] - a[0]) * cosLat;
+      final abY = b[1] - a[1];
+      final apX = (lng - a[0]) * cosLat;
+      final apY = lat - a[1];
+      final ab2 = abX * abX + abY * abY;
+      if (ab2 == 0) continue;
+      final t = ((apX * abX + apY * abY) / ab2).clamp(0.0, 1.0);
+      final d = distanceBetween(
+          lat, lng, a[1] + t * (b[1] - a[1]), a[0] + t * (b[0] - a[0]));
+      if (d < minDist) {
+        minDist = d;
+        progress = cum[i] + t * (cum[i + 1] - cum[i]);
+      }
+    }
+    return [minDist, progress];
+  }
+  
   // ── Zoom dinámico según velocidad ─────────────────────
   double calculateDynamicZoom(double speedKmh) {
     if (speedKmh < 20) return 16.0;
