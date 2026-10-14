@@ -57,6 +57,12 @@ class MapController extends AutoDisposeNotifier<MapState> {
   int _deviationCount = 0;
   int _lastCoordIndex = 0;
   bool _markerOffRoute = false; // true = el marcador usa el GPS real, no la ruta
+
+  // Distancia a lo largo de la ruta (no en línea recta), para los avisos de giro
+  List<double> _routeCum = const [];          // metros acumulados por vértice
+  List<double> _stepOffsets = const [];       // metros desde el inicio hasta cada giro
+  List<List<double>>? _metricsCoords;         // ruta para la que se calcularon
+  List<Map<String, dynamic>>? _metricsSteps;
   DateTime? _lastRecalcTime;
   DateTime? _lastSpeedLimitCall;
   int _searchToken = 0;
@@ -1411,6 +1417,10 @@ class MapController extends AutoDisposeNotifier<MapState> {
       _speedLimitService.clearCache();
       _lastCoordIndex = 0;
       _markerOffRoute = false;
+      _routeCum = const [];
+      _stepOffsets = const [];
+      _metricsCoords = null;
+      _metricsSteps = null;
     
       // FIX: Resetear completamente el estado de ruta
       state = state.copyWith(
@@ -1439,9 +1449,62 @@ class MapController extends AutoDisposeNotifier<MapState> {
       );
     }
 
+  /// Calcula (una sola vez por ruta) la distancia acumulada por vértice y el
+  /// punto de la ruta donde ocurre cada giro. Las distancias de los pasos
+  /// vienen de Mapbox, así que se escalan a la longitud geométrica de la ruta.
+  void _buildRouteMetrics() {
+    final coords = state.routeCoordinates;
+    final steps = state.routeSteps;
+    _metricsCoords = coords;
+    _metricsSteps = steps;
+
+    final cum = List<double>.filled(coords.length, 0.0);
+    for (int i = 1; i < coords.length; i++) {
+      cum[i] = cum[i - 1] +
+          _geo.distanceBetween(
+              coords[i - 1][1], coords[i - 1][0], coords[i][1], coords[i][0]);
+    }
+
+    double stepsTotal = 0;
+    for (final s in steps) {
+      stepsTotal += (s['distance'] as num).toDouble();
+    }
+    final scale =
+        (stepsTotal > 0 && cum.isNotEmpty) ? cum.last / stepsTotal : 1.0;
+
+    final offsets = <double>[];
+    double acc = 0;
+    for (final s in steps) {
+      offsets.add(acc * scale);
+      acc += (s['distance'] as num).toDouble();
+    }
+    _routeCum = cum;
+    _stepOffsets = offsets;
+  }
+
+  /// Metros que faltan POR LA CARRETERA hasta el próximo giro. Null si no hay
+  /// datos suficientes (entonces se usa la distancia en línea recta).
+  double? _alongRouteDistanceToManeuver(double lat, double lng) {
+    final coords = state.routeCoordinates;
+    final steps = state.routeSteps;
+    if (coords.length < 2 || steps.isEmpty) return null;
+    if (!identical(_metricsCoords, coords) ||
+        !identical(_metricsSteps, steps)) {
+      _buildRouteMetrics();
+    }
+    final j = state.currentStepIndex;
+    if (_routeCum.length != coords.length || j >= _stepOffsets.length) {
+      return null;
+    }
+    final progress = _geo.progressAlongRoute(
+        lat, lng, coords, _routeCum, lastIdx: _lastCoordIndex);
+    return _stepOffsets[j] - progress;
+  }
+
   void _updateTurnByTurn(double lat, double lng) {
     final update = _navService.updateTurn(
       lat, lng, state.routeSteps, state.currentStepIndex,
+      alongRouteDistance: _alongRouteDistanceToManeuver(lat, lng),
     );
     if (update == null) return;
     state = state.copyWith(
