@@ -56,6 +56,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
 
   int _deviationCount = 0;
   int _lastCoordIndex = 0;
+  bool _markerOffRoute = false; // true = el marcador usa el GPS real, no la ruta
   DateTime? _lastRecalcTime;
   DateTime? _lastSpeedLimitCall;
   int _searchToken = 0;
@@ -596,18 +597,35 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _updateTurnByTurn(position.latitude, position.longitude);
     _checkWaypointArrival(position.latitude, position.longitude);
 
+    // Si el GPS está cerca de la ruta, se proyecta sobre ella (evita que la
+    // moto aparezca fuera de la carretera por ruido del GPS). Si estás
+    // realmente lejos (te desviaste), se muestra tu posición REAL para que
+    // se vea el desvío. Histéresis: se despega a >40 m y se vuelve a pegar
+    // a <=25 m, así no parpadea en el límite.
+    final offRouteMeters = _geo.distanceBetween(
+      position.latitude, position.longitude, snappedLat, snappedLng,
+    );
+    if (_markerOffRoute) {
+      if (offRouteMeters <= 25) _markerOffRoute = false;
+    } else if (offRouteMeters > 40) {
+      _markerOffRoute = true;
+    }
+    final shownLat = _markerOffRoute ? position.latitude : snappedLat;
+    final shownLng = _markerOffRoute ? position.longitude : snappedLng;
+    final shownBearing = _markerOffRoute ? position.heading : bearing;
+
     _smoother.updatePosition(
-      lat: snappedLat,  // ← Proyectado al centro de la ruta (igual que la cámara)
-      lng: snappedLng,  // ← Evita que la moto aparezca fuera de la carretera
-      heading: bearing,
+      lat: shownLat,
+      lng: shownLng,
+      heading: shownBearing,
       speedMs: position.speed < 0 ? 0 : position.speed,
     );
     state = state.copyWith(isProgrammaticMove: true);
     _flyTo(
-      lat: snappedLat,
-      lng: snappedLng,
+      lat: shownLat,
+      lng: shownLng,
       zoom: 17.0,
-      bearing: bearing,
+      bearing: shownBearing,
       pitch: 50.0,
     );
   }
@@ -1392,6 +1410,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
       await WakelockPlus.disable();
       _speedLimitService.clearCache();
       _lastCoordIndex = 0;
+      _markerOffRoute = false;
     
       // FIX: Resetear completamente el estado de ruta
       state = state.copyWith(
