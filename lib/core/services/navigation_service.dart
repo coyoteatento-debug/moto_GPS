@@ -105,8 +105,9 @@ class NavigationService {
     double lat,
     double lng,
     List<Map<String, dynamic>> steps,
-    int currentStepIndex,
-  ) {
+    int currentStepIndex, {
+    double? alongRouteDistance,
+  }) {
     if (steps.isEmpty || currentStepIndex >= steps.length) return null;
 
     // Resetear flags cuando cambia el paso
@@ -120,18 +121,28 @@ class NavigationService {
     final loc     = step['location'] as List;
     final stepLng = (loc[0] as num).toDouble();
     final stepLat = (loc[1] as num).toDouble();
-    final dist    = _geo.distanceBetween(lat, lng, stepLat, stepLng);
+    final straightDist = _geo.distanceBetween(lat, lng, stepLat, stepLng);
+    // Si se conoce la distancia a lo largo de la ruta se usa esa: en curvas
+    // cerradas (horquillas de sierra) la distancia en línea recta es mucho
+    // menor que la real y avisaría/avanzaría antes de tiempo. Negativa =
+    // ya se pasó el punto del giro.
+    final dist = alongRouteDistance ?? straightDist;
 
     String? announceText;
-    // 1. Evaluar primero el aviso final si la moto ya entró directo a la zona de giro
-    if (dist <= kAnnounceFinalDist && !_announcedFinal) {
-      _announcedFinal = true;
-      _announcedEarly = true; // Si entró directo por alta velocidad, no repetir aviso previo
-      announceText = step['instruction'] as String;
-    } else if (dist <= kAnnounceEarlyDist && !_announcedEarly) {
-      _announcedEarly = true;
-      final metersRounded = (dist / 10).round() * 10;
-      announceText = 'En $metersRounded metros, ${step['instruction']}';
+    // Si el giro ya quedó atrás por más de 30 m (p. ej. salto de GPS) no se
+    // anuncia nada: sería una indicación vieja. Solo se avanza de paso.
+    final alreadyPassed = dist < -30;
+    if (!alreadyPassed) {
+      // 1. Evaluar primero el aviso final si la moto ya entró directo a la zona de giro
+      if (dist <= kAnnounceFinalDist && !_announcedFinal) {
+        _announcedFinal = true;
+        _announcedEarly = true; // Si entró directo por alta velocidad, no repetir aviso previo
+        announceText = step['instruction'] as String;
+      } else if (dist <= kAnnounceEarlyDist && !_announcedEarly) {
+        _announcedEarly = true;
+        final metersRounded = (dist / 10).round() * 10;
+        announceText = 'En $metersRounded metros, ${step['instruction']}';
+      }
     }
     // Avanzar al siguiente paso (umbral ampliado a 25m para no perder giros en carriles anchos)
     int nextIndex = currentStepIndex;
@@ -142,7 +153,7 @@ class NavigationService {
     }
     
     return TurnUpdate(
-      distanceToManeuver: dist,
+      distanceToManeuver: dist < 0 ? 0.0 : dist,
       announceText:       announceText,
       nextStepIndex:      nextIndex,
       nextInstruction:    nextInstruction ?? step['instruction'] as String,
