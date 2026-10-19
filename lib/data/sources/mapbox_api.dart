@@ -46,15 +46,25 @@ class MapboxApi {
     final local = results[0];
     final national = results[1];
 
-    final merged = <Map<String, dynamic>>[...local];
-    for (final place in national) {
+    // Mezcla (máximo 7) sin que un lado desplace por completo al otro:
+    // primero hasta 4 locales (lo cercano suele ser lo buscado), luego los
+    // nacionales (ciudades/municipios) y, si sobran lugares, el resto de
+    // los locales. Antes los locales iban primero y, si eran 7, la ciudad
+    // real quedaba fuera de la lista.
+    final merged = <Map<String, dynamic>>[];
+    void addUnique(Map<String, dynamic> place) {
+      if (merged.length >= 7) return;
       final isDuplicate = merged.any((m) =>
           m['name'] == place['name'] &&
           ((m['lat'] as double) - (place['lat'] as double)).abs() < 0.01 &&
           ((m['lng'] as double) - (place['lng'] as double)).abs() < 0.01);
       if (!isDuplicate) merged.add(place);
     }
-    return merged.take(7).toList();
+
+    local.take(4).forEach(addUnique);
+    national.forEach(addUnique);
+    local.skip(4).forEach(addUnique);
+    return merged;
   }
 
   Future<List<Map<String, dynamic>>> _fetchPlaces(
