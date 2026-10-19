@@ -1265,6 +1265,11 @@ class MapController extends AutoDisposeNotifier<MapState> {
 
       debugPrint('[MapController] Rutas encontradas: ${routes.length}');
 
+      // Ruta nueva (ruta inicial o recálculo por desvío): su lista de
+      // coordenadas empieza de cero, así que el índice de progreso de la
+      // ruta anterior ya no sirve. Se reinicia junto con la asignación.
+      _lastCoordIndex = 0;
+
       state = state.copyWith(
         routeDrawn: true,
         routeDistance: routes[0].distance,
@@ -1347,6 +1352,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
     final r = state.alternateRoutes[index];
     final steps = (r['steps'] as List).cast<Map<String, dynamic>>();
     final coords = (r['coords'] as List).map((c) => (c as List).cast<double>()).toList();
+    _lastCoordIndex = 0; // ruta distinta: el progreso previo no aplica
     state = state.copyWith(
       selectedRouteIndex: index,
       routeDistance: r['distance'] as String,
