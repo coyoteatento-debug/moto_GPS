@@ -248,7 +248,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
               );
               _searchController.clear();
             },
-            onSearchChanged: controller.searchPlaces,
+            onSearchChanged: controller.searchPlacesDebounced,
             onSearchSelect: controller.selectSearchResult,
             onRecenter: controller.recenter,
             onAvatarPick: () async {
