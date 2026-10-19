@@ -680,7 +680,43 @@ class MapController extends AutoDisposeNotifier<MapState> {
   
     bool _creatingMotoMarker = false;
 
-    Future<void> _updateMotoMarker(double lat, double lng, double bearing) async {
+    // ── Actualización serializada del marcador de la moto ───────────────
+    // El suavizador emite ~15 posiciones por segundo. Si cada una lanzara su
+    // propia actualización, se encimarían (y al crearse/recrearse el marcador
+    // podían pisarse entre sí). Aquí solo corre UNA a la vez y, mientras
+    // tanto, se guarda únicamente la posición más reciente: las intermedias
+    // ya no sirven. Quien haga `await` espera hasta que se aplique.
+    List<double>? _pendingMotoUpdate;
+    Completer<void>? _motoUpdateDone;
+
+    Future<void> _updateMotoMarker(double lat, double lng, double bearing) {
+      _pendingMotoUpdate = [lat, lng, bearing];
+      final running = _motoUpdateDone;
+      if (running != null) return running.future;
+      final done = Completer<void>();
+      _motoUpdateDone = done;
+      _runMotoUpdates(done);
+      return done.future;
+    }
+
+    Future<void> _runMotoUpdates(Completer<void> done) async {
+      try {
+        while (_pendingMotoUpdate != null) {
+          final next = _pendingMotoUpdate!;
+          _pendingMotoUpdate = null;
+          try {
+            await _applyMotoMarker(next[0], next[1], next[2]);
+          } catch (e) {
+            debugPrint('[MapController] Error aplicando marcador: $e');
+          }
+        }
+      } finally {
+        _motoUpdateDone = null;
+        done.complete();
+      }
+    }
+
+    Future<void> _applyMotoMarker(double lat, double lng, double bearing) async {
       final markerImage = state.userAvatarImage ?? state.pinImage;
       if (_annotationManager == null || markerImage == null) return;
     
