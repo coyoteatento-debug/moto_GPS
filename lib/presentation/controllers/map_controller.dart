@@ -66,6 +66,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
   DateTime? _lastRecalcTime;
   DateTime? _lastSpeedLimitCall;
   int _searchToken = 0;
+  Timer? _searchDebounce;
   bool _isListening = false;
 
   late final String _token;
@@ -222,6 +223,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _nightModeTimer?.cancel();
     _waypointArrivalTimer?.cancel();
     _lowFuelWarningTimer?.cancel();
+    _searchDebounce?.cancel();
     _voiceCmd.stop();
     _stopWatchingFriends();
     if (_liveLocation.isSharing) await _liveLocation.stopSharing();
@@ -1129,9 +1131,27 @@ class MapController extends AutoDisposeNotifier<MapState> {
     }
   }
 
-  Future<void> searchPlaces(String query) async {
+  /// Para el campo de texto: espera a que dejes de escribir (400 ms) antes
+  /// de consultar, para no lanzar una búsqueda por cada letra.
+  void searchPlacesDebounced(String query) {
+    _searchDebounce?.cancel();
     if (query.trim().length < 3) {
-      state = state.copyWith(searchResults: const []);
+      searchPlaces(query); // limpia resultados al instante
+      return;
+    }
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 400),
+      () => searchPlaces(query),
+    );
+  }
+
+  Future<void> searchPlaces(String query) async {
+    _searchDebounce?.cancel();
+    if (query.trim().length < 3) {
+      // Invalida cualquier respuesta en vuelo para que no reaparezcan
+      // resultados viejos después de borrar el texto.
+      _searchToken++;
+      state = state.copyWith(searchResults: const [], searchLoading: false);
       return;
     }
     final token = ++_searchToken;
