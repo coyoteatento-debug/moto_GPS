@@ -134,6 +134,12 @@ class MapController extends AutoDisposeNotifier<MapState> {
   void _startWatchingActiveRide() {
     _activeRideSub?.cancel();
     _activeRideSub = _groupRide.myActiveRide().listen((ride) {
+      // Una vez por sesión: borra restos de rodadas que terminaron mientras
+      // la app estaba cerrada.
+      if (!_endedRidesCleaned && FirebaseAuth.instance.currentUser != null) {
+        _endedRidesCleaned = true;
+        _groupRide.cleanupMyEndedRides();
+      }
       if (ride == null) {
         _rideStatusSub?.cancel();
         _rideStatusSub = null;
@@ -203,6 +209,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
   late final FriendsService _friendsService;
   late final GroupRideService _groupRide;
   StreamSubscription? _activeRideSub;
+  bool _endedRidesCleaned = false;
   StreamSubscription? _rideStatusSub;
   String? _myRideUsername;
   Map<String, double>? _lastRidePosition;
