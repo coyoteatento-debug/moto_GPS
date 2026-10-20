@@ -70,10 +70,39 @@ class GroupRideService {
     await removeMyStatus(rideId);
   }
 
-  /// Termina la rodada para TODOS los participantes (solo el anfitrión).
   Future<void> endRide(String rideId) async {
     await _db.collection('groupRides').doc(rideId).update({'active': false});
-    await removeMyStatus(rideId);
+    // Limpia el estado en tiempo real de TODOS los participantes (los que
+    // tengan la app cerrada no podrían borrarlo ellos mismos). Si las reglas
+    // de la base de datos no permiten borrar el nodo completo, al menos se
+    // borra el propio.
+    try {
+      await _rtdb.ref('groupRideStatus/$rideId').remove();
+    } catch (_) {
+      await removeMyStatus(rideId);
+    }
+  }
+
+  /// Borra mi estado en tiempo real de rodadas que ya terminaron (por si la
+  /// app estaba cerrada cuando terminó y no alcanzó a limpiarlo).
+  Future<void> cleanupMyEndedRides() async {
+    final uid = _uid;
+    if (uid == null) return;
+    try {
+      final snap = await _db
+          .collection('groupRides')
+          .where('participants', arrayContains: uid)
+          .where('active', isEqualTo: false)
+          .limit(20)
+          .get();
+      for (final doc in snap.docs) {
+        final ref = _rtdb.ref('groupRideStatus/${doc.id}/$uid');
+        final existing = await ref.get();
+        if (existing.exists) await ref.remove();
+      }
+    } catch (_) {
+      // Limpieza de cortesía: si falla (sin señal, reglas, índice), no pasa nada.
+    }
   }
 
   Future<void> removeMyStatus(String rideId) async {
