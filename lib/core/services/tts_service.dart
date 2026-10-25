@@ -13,11 +13,15 @@ class _Utterance {
   final TtsPriority priority;
   final DateTime enqueuedAt = DateTime.now();
 
-  _Utterance(this.text, this.priority);
+  final Duration? maxAgeOverride;
+  final double pitch;
+
+  _Utterance(this.text, this.priority, {this.maxAgeOverride, this.pitch = 1.0});
 
   /// Tiempo máximo que un mensaje puede esperar en cola. Pasado ese
   /// tiempo ya no sirve (un "gira a la derecha" tardío confunde).
   Duration get maxAge {
+    if (maxAgeOverride != null) return maxAgeOverride!;
     switch (priority) {
       case TtsPriority.high:
         return const Duration(seconds: 12);
@@ -67,6 +71,8 @@ class TtsService {
   Future<void> speak(
     String text, {
     TtsPriority priority = TtsPriority.normal,
+    Duration? maxAge, // sobrescribe cuánto puede esperar en cola
+    double pitch = 1.0, // tono de voz (más grave = distinto a las indicaciones)
   }) async {
     if (!_ttsAvailable) return;
     final clean = text.trim();
@@ -75,7 +81,8 @@ class TtsService {
     if (_current?.text == clean) return;
     if (_queue.any((u) => u.text == clean)) return;
 
-    final utterance = _Utterance(clean, priority);
+    final utterance =
+        _Utterance(clean, priority, maxAgeOverride: maxAge, pitch: pitch);
 
     // Insertar por prioridad (FIFO dentro de la misma prioridad)
     final insertAt =
@@ -121,6 +128,10 @@ class TtsService {
     // Respaldo por si el motor de voz nunca avisa que terminó
     _safetyTimer?.cancel();
     _safetyTimer = Timer(_safetyDuration(next.text), _onFinished);
+
+    try {
+      await _tts.setPitch(next.pitch);
+    } catch (_) {}
 
     try {
       await _tts.speak(next.text);
