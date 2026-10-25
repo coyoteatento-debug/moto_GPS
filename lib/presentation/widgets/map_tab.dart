@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
 import 'search_modal.dart';
 import '../../core/services/speed_limit_service.dart';
+import '../../core/services/ride_chat_service.dart';
 import 'saved_points_sheet.dart';
 import '../../data/models/poi_record.dart';
 import '../../data/models/saved_place.dart';
@@ -1065,6 +1066,10 @@ class _GroupRidePanel extends ConsumerWidget {
     final destLng = (ride['destLng'] as num).toDouble();
     final geo = GeoUtils();
     final isHost = currentUid != null && currentUid == ride['hostUid'];
+    final lastMsg =
+        ref.watch(mapControllerProvider.select((s) => s.lastRideMessage));
+    final muted =
+        ref.watch(mapControllerProvider.select((s) => s.rideMessagesMuted));
 
     return Positioned(
       top: navigating ? 210 : 130,
@@ -1088,6 +1093,20 @@ class _GroupRidePanel extends ConsumerWidget {
                 Expanded(child: Text('Rodada a ${ride['destinationName']}',
                     style: const TextStyle(
                         color: Colors.white, fontWeight: FontWeight.bold))),
+                IconButton(
+                  icon: Icon(muted ? Icons.volume_off : Icons.volume_up,
+                      color: muted ? Colors.grey : Colors.orange, size: 20),
+                  tooltip: muted ? 'Activar mensajes' : 'Silenciar mensajes',
+                  onPressed: () => ref
+                      .read(mapControllerProvider.notifier)
+                      .toggleRideMessagesMuted(),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chat_bubble_outline,
+                      color: Colors.orange, size: 20),
+                  tooltip: 'Mensaje al grupo',
+                  onPressed: () => _showRideQuickMessages(context, ref),
+                ),
                 IconButton(
                   icon: const Icon(Icons.close, color: Colors.redAccent, size: 20),
                   tooltip: isHost ? 'Terminar rodada' : 'Salir de la rodada',
@@ -1125,6 +1144,30 @@ class _GroupRidePanel extends ConsumerWidget {
                 ),
               ],
             ),
+            if (lastMsg != null)
+              Container(
+                margin: const EdgeInsets.only(top: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color:
+                      lastMsg.isDanger ? Colors.red[900] : Colors.orange[900],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(children: [
+                  Icon(
+                      lastMsg.isDanger
+                          ? Icons.warning_amber
+                          : Icons.chat_bubble,
+                      color: Colors.white,
+                      size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: Text('${lastMsg.username}: ${lastMsg.text}',
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 13))),
+                ]),
+              ),
             if (participants.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 8),
@@ -1476,4 +1519,48 @@ class _FuelGaugeConsumer extends ConsumerWidget {
       autonomyCtrl.dispose();
     });
   }
+}
+/// Hoja con los mensajes rápidos de la rodada (un toque = se envía y se lee
+/// al resto del grupo).
+void _showRideQuickMessages(BuildContext context, WidgetRef ref) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: const Color(0xFF1A1A1A),
+    shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    builder: (sheetContext) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Mensaje al grupo',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16)),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: kRideQuickMessages
+                  .map((m) => ActionChip(
+                        backgroundColor: Colors.orange[800],
+                        label: Text(m.label,
+                            style: const TextStyle(color: Colors.white)),
+                        onPressed: () {
+                          Navigator.pop(sheetContext);
+                          ref
+                              .read(mapControllerProvider.notifier)
+                              .sendRideQuickMessage(m);
+                        },
+                      ))
+                  .toList(),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
