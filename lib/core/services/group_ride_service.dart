@@ -81,6 +81,10 @@ class GroupRideService {
     } catch (_) {
       await removeMyStatus(rideId);
     }
+    // Los mensajes de la rodada también se borran al terminar.
+    try {
+      await _rtdb.ref('groupRideMessages/$rideId').remove();
+    } catch (_) {}
   }
 
   /// Borra mi estado en tiempo real de rodadas que ya terminaron (por si la
