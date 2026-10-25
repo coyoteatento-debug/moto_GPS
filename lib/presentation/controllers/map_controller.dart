@@ -24,6 +24,7 @@ import '../../core/services/voice_command_service.dart';
 import '../../core/services/live_location_service.dart';
 import '../../core/services/friends_service.dart';
 import '../../core/services/group_ride_service.dart';
+import '../../core/services/ride_chat_service.dart';
 import '../../core/utils/geo_utils.dart';
 import '../../core/utils/image_utils.dart';
 import '../../data/models/trip_record.dart';
@@ -111,6 +112,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _liveLocation = ref.read(liveLocationServiceProvider);
     _friendsService = ref.read(friendsServiceProvider);
     _groupRide = ref.read(groupRideServiceProvider);
+    _rideChat = ref.read(rideChatServiceProvider);
 
     ref.onDispose(_onDispose);
     return const MapState();
@@ -143,13 +145,19 @@ class MapController extends AutoDisposeNotifier<MapState> {
       if (ride == null) {
         _rideStatusSub?.cancel();
         _rideStatusSub = null;
+        _rideChatSub?.cancel();
+        _rideChatSub = null;
+        _rideChatRideId = null;
         _lastRidePosition = null;
         final previousRideId = state.activeRide?['id'] as String?;
         if (previousRideId != null) {
           _groupRide.removeMyStatus(previousRideId);
         }
         if (state.activeRide != null) {
-          state = state.copyWith(clearActiveRide: true, rideParticipants: const {});
+          state = state.copyWith(
+              clearActiveRide: true,
+              rideParticipants: const {},
+              clearLastRideMessage: true);
         }
         return;
       }
@@ -171,6 +179,18 @@ class MapController extends AutoDisposeNotifier<MapState> {
       } else if (!hasAccepted && _rideStatusSub != null) {
         _rideStatusSub?.cancel();
         _rideStatusSub = null;
+      }
+
+      // Mensajes de la rodada (solo si ya aceptaste; se reconecta si cambia
+      // el id de la rodada)
+      if (hasAccepted && (_rideChatSub == null || _rideChatRideId != rideId)) {
+        _rideChatSub?.cancel();
+        _rideChatRideId = rideId;
+        _rideChatSub = _rideChat.watchMessages(rideId).listen(_onRideMessage);
+      } else if (!hasAccepted && _rideChatSub != null) {
+        _rideChatSub?.cancel();
+        _rideChatSub = null;
+        _rideChatRideId = null;
       }
     });
   }
@@ -195,6 +215,64 @@ class MapController extends AutoDisposeNotifier<MapState> {
     return acceptedUids.contains(myUid);
   }
 
+  // ── Mensajes de voz de la rodada ──────────────────────
+  void _onRideMessage(RideChatMessage msg) {
+    final myUid = FirebaseAuth.instance.currentUser?.uid;
+    if (msg.uid == myUid) return; // mis propios mensajes no se leen
+    _lastHeardRideMessage = msg;
+
+    // Aviso en pantalla (se oculta solo a los 10 s)
+    state = state.copyWith(lastRideMessage: msg);
+    _rideMessageTimer?.cancel();
+    _rideMessageTimer = Timer(const Duration(seconds: 10), () {
+      state = state.copyWith(clearLastRideMessage: true);
+    });
+
+    if (state.rideMessagesMuted) return;
+    _speakRideMessage(msg);
+  }
+
+  void _speakRideMessage(RideChatMessage msg) {
+    // Los peligros tienen prioridad normal (interrumpen a un mensaje común,
+    // pero nunca a una indicación de giro). Tono más grave para distinguirlos.
+    _speak('${msg.username} dice: ${msg.text}',
+        priority: msg.isDanger ? TtsPriority.normal : TtsPriority.low,
+        maxAge: const Duration(seconds: 30),
+        pitch: 0.85);
+  }
+
+  Future<void> sendRideQuickMessage(RideQuickMessage message) async {
+    final ride = state.activeRide;
+    if (ride == null) return;
+    _myRideUsername ??= await _groupRide.myUsername();
+    final result = await _rideChat.send(
+        ride['id'] as String, _myRideUsername!, message.text);
+    switch (result) {
+      case RideChatSendResult.sent:
+        _speak('Enviado al grupo');
+        break;
+      case RideChatSendResult.tooFast:
+        _speak('Espera un momento');
+        break;
+      case RideChatSendResult.failed:
+        _speak('No se pudo enviar, revisa tu señal');
+        break;
+    }
+  }
+
+  void toggleRideMessagesMuted() {
+    state = state.copyWith(rideMessagesMuted: !state.rideMessagesMuted);
+  }
+
+  void repeatLastRideMessage() {
+    final msg = _lastHeardRideMessage;
+    if (msg == null) {
+      _speak('No hay mensajes recientes');
+      return;
+    }
+    _speakRideMessage(msg);
+  }
+  
   Future<void> endActiveRide() async {
     if (state.activeRide == null) return;
     await _groupRide.endRide(state.activeRide!['id'] as String);
@@ -208,10 +286,15 @@ class MapController extends AutoDisposeNotifier<MapState> {
   late final LiveLocationService _liveLocation;
   late final FriendsService _friendsService;
   late final GroupRideService _groupRide;
+  late final RideChatService _rideChat;
   StreamSubscription? _activeRideSub;
   bool _endedRidesCleaned = false;
   StreamSubscription? _rideStatusSub;
   String? _myRideUsername;
+  StreamSubscription<RideChatMessage>? _rideChatSub;
+  String? _rideChatRideId;
+  Timer? _rideMessageTimer;
+  RideChatMessage? _lastHeardRideMessage;
   Map<String, double>? _lastRidePosition;
   DateTime? _lastRideStatusWrite;
   DateTime? _lastTripCheckpointWrite;
@@ -225,6 +308,8 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _locationSubscription?.cancel();
     _smoothSub?.cancel();
     _rideStatusSub?.cancel();
+    _rideChatSub?.cancel();
+    _rideMessageTimer?.cancel();
     _activeRideSub?.cancel();
     _smoother.stop();
     _nightModeTimer?.cancel();
@@ -915,8 +1000,10 @@ class MapController extends AutoDisposeNotifier<MapState> {
   }
 
   Future<void> _speak(String text,
-      {TtsPriority priority = TtsPriority.normal}) async {
-    await _tts.speak(text, priority: priority);
+      {TtsPriority priority = TtsPriority.normal,
+      Duration? maxAge,
+      double pitch = 1.0}) async {
+    await _tts.speak(text, priority: priority, maxAge: maxAge, pitch: pitch);
   }
 
   Future<bool> ensureSpeechAvailable() async => _speechAvailable;
