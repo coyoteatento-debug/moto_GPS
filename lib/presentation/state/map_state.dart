@@ -3,6 +3,7 @@ import 'package:geolocator/geolocator.dart';
 import '../../data/models/trip_record.dart';
 import '../../data/models/poi_record.dart';
 import '../../data/models/saved_place.dart';
+import '../../core/services/ride_chat_service.dart';
 
 class MapState {
   final double currentSpeed;
@@ -53,6 +54,8 @@ class MapState {
   final List<SavedPlaceRecord> savedPlaces;
   final Map<String, dynamic>? activeRide;
   final Map<String, Map<String, dynamic>> rideParticipants;
+  final RideChatMessage? lastRideMessage;
+  final bool rideMessagesMuted;
 
   const MapState({
     this.currentSpeed = 0.0,
@@ -103,6 +106,8 @@ class MapState {
     this.savedPlaces = const [],
     this.activeRide,
     this.rideParticipants = const {},
+    this.lastRideMessage,
+    this.rideMessagesMuted = false,
   });
 
   MapState copyWith({
@@ -154,6 +159,9 @@ class MapState {
     List<SavedPlaceRecord>? savedPlaces,
     Map<String, dynamic>? activeRide,
     Map<String, Map<String, dynamic>>? rideParticipants,
+    RideChatMessage? lastRideMessage,
+    bool? rideMessagesMuted,
+    bool clearLastRideMessage = false,
     bool clearActiveRide = false,
     bool clearVoiceCommandMessage = false,
     bool clearCurrentPosition = false,
@@ -213,6 +221,9 @@ class MapState {
       savedPlaces: savedPlaces ?? this.savedPlaces,
       activeRide: clearActiveRide ? null : activeRide ?? this.activeRide,
       rideParticipants: rideParticipants ?? this.rideParticipants,
+      lastRideMessage:
+          clearLastRideMessage ? null : lastRideMessage ?? this.lastRideMessage,
+      rideMessagesMuted: rideMessagesMuted ?? this.rideMessagesMuted,
     );
   }
 }
