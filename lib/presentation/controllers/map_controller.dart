@@ -69,6 +69,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
   int _searchToken = 0;
   Timer? _searchDebounce;
   bool _isListening = false;
+  VoidCallback? _onVoiceStopped;
   bool _trackingStarting = false;
 
   late final String _token;
@@ -130,7 +131,6 @@ class MapController extends AutoDisposeNotifier<MapState> {
     await _loadSavedPlaces();
     await _loadImages(); // Carga las imágenes primero
     await _initTts();
-    await _initSpeech();
     _startWatchingActiveRide();
   }
 
@@ -481,6 +481,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
     try {
       final granted = await _requestLocationPermissions();
       if (!granted) return false;
+      await _requestNotificationPermission();
       await _mapReadyCompleter.future.timeout(
         const Duration(seconds: 15),
         onTimeout: () {},
@@ -494,6 +495,15 @@ class MapController extends AutoDisposeNotifier<MapState> {
     }
   }
 
+  Future<void> _requestNotificationPermission() async {
+    try {
+      final status = await Permission.notification.status;
+      if (status.isDenied) await Permission.notification.request();
+    } catch (e) {
+      debugPrint('[MapController] Error pidiendo notificaciones: $e');
+    }
+  }
+  
   Future<bool> _requestLocationPermissions() async {
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.deniedForever) {
@@ -1029,18 +1039,39 @@ class MapController extends AutoDisposeNotifier<MapState> {
     await _tts.speak(text, priority: priority, maxAge: maxAge, pitch: pitch);
   }
 
-  Future<bool> ensureSpeechAvailable() async => _speechAvailable;
+  Future<bool> ensureSpeechAvailable() async {
+    if (_speechAvailable) return true;
+    return _initSpeech();
+  }
 
-    Future<void> _initSpeech() async {
-      // Solicitar permiso de micrófono primero
-      final status = await Permission.microphone.request();
-      if (status.isGranted) {
-        _speechAvailable = await _speech.initialize();
-      } else {
-        _speechAvailable = false;
-        debugPrint('[MapController] Permiso de micrófono denegado');
-      }
+  Future<bool> _initSpeech() async {
+    final status = await Permission.microphone.request();
+    if (!status.isGranted) {
+      _speechAvailable = false;
+      debugPrint('[MapController] Permiso de micrófono denegado');
+      return false;
     }
+    _speechAvailable = await _speech.initialize(
+      onStatus: _onSpeechStatus,
+      onError: _onSpeechError,
+    );
+    return _speechAvailable;
+  }
+
+  void _onSpeechStatus(String status) {
+    if ((status == 'done' || status == 'notListening') && _isListening) {
+      _isListening = false;
+      _onVoiceStopped?.call();
+    }
+  }
+
+  void _onSpeechError(dynamic error) {
+    debugPrint('[MapController] Error de voz: $error');
+    if (_isListening) {
+      _isListening = false;
+      _onVoiceStopped?.call();
+    }
+  }
 
   Future<String?> getBestSpeechLocale() async {
     final locales = await _speech.locales();
@@ -1068,6 +1099,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
       return;
     }
     _isListening = true;
+    _onVoiceStopped = onListeningStopped;
     onListeningStarted();
 
     await _speech.listen(
@@ -1150,7 +1182,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
     final pos = state.currentPosition!;
     final idx = _geo.findClosestPointIndex(
         pos.latitude, pos.longitude, state.routeCoordinates,
-        lastIdx: state.currentStepIndex);
+        lastIdx: _lastCoordIndex);
     final remaining = state.routeCoordinates.sublist(idx);
 
     double meters = 0;
