@@ -69,6 +69,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
   int _searchToken = 0;
   Timer? _searchDebounce;
   bool _isListening = false;
+  bool _trackingStarting = false;
 
   late final String _token;
   late final PrefsSource _prefs;
@@ -304,29 +305,42 @@ class MapController extends AutoDisposeNotifier<MapState> {
   final Map<String, Map<String, dynamic>> _friendLastKnown = {};
   DateTime? _lastLocationShareWrite;
 
-  Future<void> _onDispose() async {
+    Future<void> _onDispose() async {
     _locationSubscription?.cancel();
+    _locationSubscription = null;
     _smoothSub?.cancel();
     _rideStatusSub?.cancel();
     _rideChatSub?.cancel();
     _rideMessageTimer?.cancel();
     _activeRideSub?.cancel();
-    _smoother.stop();
     _nightModeTimer?.cancel();
     _waypointArrivalTimer?.cancel();
     _lowFuelWarningTimer?.cancel();
     _searchDebounce?.cancel();
-    _voiceCmd.stop();
-    _stopWatchingFriends();
-    if (_liveLocation.isSharing) await _liveLocation.stopSharing();
-    await _gpsService.dispose();
-    _mapboxApi.dispose();
-    _navService.disposeApi();
-    await _tts.stop();
-    await _bgService.stop();
-    await WakelockPlus.disable();
+
+    // Cada paso en su propio try/catch: si uno falla, los demás igual se ejecutan
+    await _safe('smoother', () => _smoother.stop());
+    await _safe('voiceCmd', () => _voiceCmd.stop());
+    await _safe('speech', () => _speech.cancel());
+    await _safe('friends', () => _stopWatchingFriends());
+    await _safe('liveLocation', () async {
+      if (_liveLocation.isSharing) await _liveLocation.stopSharing();
+    });
+    await _safe('gps', () => _gpsService.dispose());
+    await _safe('mapboxApi', () => _mapboxApi.dispose());
+    await _safe('navApi', () => _navService.disposeApi());
+    await _safe('tts', () => _tts.stop());
+    await _safe('bgService', () => _bgService.stop());
+    await _safe('wakelock', () => WakelockPlus.disable());
   }
 
+  Future<void> _safe(String name, FutureOr<void> Function() action) async {
+    try {
+      await action();
+    } catch (e) {
+      debugPrint('[MapController] dispose($name): $e');
+    }
+  }
   // ── GPS Interconectado ─────────────────────────────────
   Future<void> toggleLocationSharing() async {
     if (FirebaseAuth.instance.currentUser == null) {
@@ -527,9 +541,16 @@ class MapController extends AutoDisposeNotifier<MapState> {
    }
 
   Future<void> _startLocationTracking() async {
-    if (_locationSubscription != null) return;
+    if (_locationSubscription != null || _trackingStarting) return;
+    _trackingStarting = true;
     _startSmoothMarker(); // ← Inicia la suscripción del marcador inmediatamente al arrancar el GPS
-    await _gpsService.startTracking();
+    try {
+      await _gpsService.startTracking();
+    } catch (e) {
+      _trackingStarting = false;
+      debugPrint('[MapController] Error iniciando GPS: $e');
+      return;
+    }
     _locationSubscription = _gpsService.positionStream.listen((Position position) async {
       final speed = (position.speed < 0 ? 0 : position.speed) * 3.6;
       state = state.copyWith(
@@ -613,6 +634,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
         }
       }
     });
+    _trackingStarting = false;
   }
 
 // ── Combustible ────────────────────────────────────────
@@ -756,10 +778,11 @@ class MapController extends AutoDisposeNotifier<MapState> {
       if (!state.navigating) {
         await _bgService.stop(); // si no hay navegación activa, apaga el servicio nativo al volver a foreground
       }
-    } else {
+    } else if (!_permissionFlowRunning && !_trackingStarting) {
       await _mapReadyCompleter.future;
+      if (_locationSubscription != null || _trackingStarting) return;
       await _getInitialPosition();
-      _startLocationTracking();
+      await _startLocationTracking();
     }
   }
 
@@ -1426,15 +1449,18 @@ class MapController extends AutoDisposeNotifier<MapState> {
       // FIX: Dibujar la ruta en el mapa
       await _drawRouteOnMap(routes[0].geometry);
 
-      if (state.currentPosition != null) {
-        _smoother.updatePosition(
-          lat: state.currentPosition!.latitude,
-          lng: state.currentPosition!.longitude,
-          heading: state.currentPosition!.heading,
-          speedMs: 0,
-        );
-      }
-      _fitRouteBounds(destLat, destLng);
+      // Solo encuadrar la ruta y fijar el suavizador en la vista previa.
+      // Durante la navegación (recálculo por desvío) NO se toca la cámara.
+      if (!state.navigating) {
+        if (state.currentPosition != null) {
+          _smoother.updatePosition(
+            lat: state.currentPosition!.latitude,
+            lng: state.currentPosition!.longitude,
+            heading: state.currentPosition!.heading,
+            speedMs: 0,
+          );
+        }
+        _fitRouteBounds(destLat, destLng);
     } catch (e) {
       debugPrint('[MapController] Error en _getRoute: $e');
     }
@@ -1788,31 +1814,28 @@ class MapController extends AutoDisposeNotifier<MapState> {
     );
   }
 
-  Future<void> _applyNightOrDayStyle() async {
-    if (_mapboxMap == null) return;
-    if (state.nightModeManual) return;
-    final isNight = _isNightTime();
-    if (state.isNightMode == isNight) return;
-    state = state.copyWith(isNightMode: isNight);
-    await _mapboxMap!.loadStyleURI(
-      isNight
-          ? 'mapbox://styles/mapbox/navigation-night-v1'
-          : 'mapbox://styles/mapbox/streets-v12',
-    );
-    if (!isNight) await _applyCustomRoadStyle();
-    await _recreateAnnotationsAfterStyleChange();
+  static const _styleDay   = 'mapbox://styles/mapbox/streets-v12';
+  static const _styleNight = 'mapbox://styles/mapbox/navigation-night-v1';
+  static const _styleSat   = 'mapbox://styles/mapbox/satellite-streets-v12';
+
+  // Cola: evita que el timer y un toggle manual recarguen el estilo a la vez
+  Future<void> _styleQueue = Future.value();
+
+  Future<void> _reloadStyle(String uri, {required bool roadStyle}) {
+    return _styleQueue = _styleQueue
+        .then((_) => _doReloadStyle(uri, roadStyle))
+        .catchError((e) {
+      debugPrint('[MapController] Error recargando estilo: $e');
+    });
   }
 
-  Future<void> toggleNightMode() async {
-    final newNight = !state.isNightMode;
-    state = state.copyWith(isNightMode: newNight, nightModeManual: true);
-    await _mapboxMap?.loadStyleURI(
-      newNight
-          ? 'mapbox://styles/mapbox/navigation-night-v1'
-          : 'mapbox://styles/mapbox/streets-v12',
-    );
-    if (!newNight) await _applyCustomRoadStyle();
-    await Future.delayed(const Duration(milliseconds: 1500));
+  Future<void> _doReloadStyle(String uri, bool roadStyle) async {
+    final map = _mapboxMap;
+    if (map == null) return;
+    await map.loadStyleURI(uri);
+    await _waitForStyleLoaded();
+    if (roadStyle) await _applyCustomRoadStyle();
+    // loadStyleURI borra las capas/fuentes de la ruta: hay que redibujarlas
     if (state.routeDrawn && state.routeCoordinates.isNotEmpty) {
       await _drawRouteOnMap({
         'type': 'LineString',
@@ -1820,6 +1843,35 @@ class MapController extends AutoDisposeNotifier<MapState> {
       });
     }
     await _recreateAnnotationsAfterStyleChange();
+  }
+
+  /// Espera a que el estilo nuevo esté cargado (máx. ~8 s) en vez de dormir 1500 ms a ciegas.
+  Future<void> _waitForStyleLoaded() async {
+    final map = _mapboxMap;
+    if (map == null) return;
+    for (var i = 0; i < 40; i++) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      try {
+        if (await map.style.isStyleLoaded()) return;
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _applyNightOrDayStyle() async {
+    if (_mapboxMap == null) return;
+    if (state.nightModeManual) return;
+    if (state.isSatellite) return;            // ← NUEVO: el timer ya no pisa el satélite
+    final isNight = _isNightTime();
+    if (state.isNightMode == isNight) return;
+    state = state.copyWith(isNightMode: isNight);
+    await _reloadStyle(isNight ? _styleNight : _styleDay, roadStyle: !isNight);
+  }
+
+  Future<void> toggleNightMode() async {
+    final newNight = !state.isNightMode;
+    state = state.copyWith(
+        isNightMode: newNight, nightModeManual: true, isSatellite: false);
+    await _reloadStyle(newNight ? _styleNight : _styleDay, roadStyle: !newNight);
   }
 
   void resetNightModeManual() => state = state.copyWith(nightModeManual: false);
@@ -1828,20 +1880,9 @@ class MapController extends AutoDisposeNotifier<MapState> {
     final newValue = !state.isSatellite;
     state = state.copyWith(isSatellite: newValue);
     resetNightModeManual();
-    await _mapboxMap?.loadStyleURI(
-      newValue
-          ? 'mapbox://styles/mapbox/satellite-streets-v12'
-          : 'mapbox://styles/mapbox/streets-v12',
-    );
-    if (!newValue) await _applyCustomRoadStyle();
-    await Future.delayed(const Duration(milliseconds: 1500));
-    if (state.routeDrawn && state.routeCoordinates.isNotEmpty) {
-      await _drawRouteOnMap({
-        'type': 'LineString',
-        'coordinates': state.routeCoordinates,
-      });
-    }
-    await _recreateAnnotationsAfterStyleChange();
+    // Al salir del satélite respeta si es de noche (antes siempre volvía a "día")
+    final uri = newValue ? _styleSat : (state.isNightMode ? _styleNight : _styleDay);
+    await _reloadStyle(uri, roadStyle: !newValue && !state.isNightMode);
   }
 
   Future<void> _applyCustomRoadStyle() async {
@@ -1851,6 +1892,16 @@ class MapController extends AutoDisposeNotifier<MapState> {
 
   Future<void> _recreateAnnotationsAfterStyleChange() async {
     if (_mapboxMap == null) return;
+
+    // ── NUEVO: elimina el manager anterior para no dejar duplicados ──
+    final oldManager = _annotationManager;
+    if (oldManager != null) {
+      try {
+        await _mapboxMap!.annotations.removeAnnotationManager(oldManager);
+      } catch (_) {}
+    }
+    // ─────────────────────────────────────────────────────────────────
+    
     _annotationManager = await _mapboxMap!.annotations.createPointAnnotationManager();
     _motoAnnotation = null;
     _destinationAnnotation = null;
