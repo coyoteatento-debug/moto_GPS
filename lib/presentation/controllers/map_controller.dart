@@ -1461,6 +1461,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
           );
         }
         _fitRouteBounds(destLat, destLng);
+      }
     } catch (e) {
       debugPrint('[MapController] Error en _getRoute: $e');
     }
