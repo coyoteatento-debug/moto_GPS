@@ -1321,12 +1321,53 @@ class _SpeedometerConsumer extends ConsumerWidget {
 
 IconData _maneuverIcon(String instruction) {
   final i = instruction.toLowerCase();
-  if (i.contains('izquierda'))                         return Icons.turn_left;
-  if (i.contains('derecha'))                           return Icons.turn_right;
-  if (i.contains('gira'))                              return Icons.turn_slight_right;
-  if (i.contains('rotonda') || i.contains('redondel')) return Icons.roundabout_left;
-  if (i.contains('destino') || i.contains('llegada'))  return Icons.flag;
-  if (i.contains('continúa') || i.contains('sigue'))   return Icons.straight;
+  final left = i.contains('izquierda');
+  final right = i.contains('derecha');
+
+  // 1. Llegada primero: "Llegaste a tu destino, a la derecha" no es un giro.
+  if (i.contains('destino') ||
+      i.contains('llegada') ||
+      i.contains('llegaste') ||
+      i.contains('has llegado')) {
+    return Icons.flag;
+  }
+  // 2. Rotondas (antes de izquierda/derecha: "sal por la derecha" no es un giro)
+  if (i.contains('rotonda') ||
+      i.contains('glorieta') ||
+      i.contains('redondel')) {
+    return Icons.roundabout_left;
+  }
+  // 3. Cambio de sentido
+  if (i.contains('cambio de sentido') ||
+      i.contains('en u') ||
+      i.contains('da la vuelta')) {
+    return Icons.u_turn_left;
+  }
+  // 4. Bifurcaciones y salidas
+  if (i.contains('mantente') || i.contains('mantén')) {
+    if (left) return Icons.fork_left;
+    if (right) return Icons.fork_right;
+  }
+  if (i.contains('salida')) {
+    if (left) return Icons.ramp_left;
+    if (right) return Icons.ramp_right;
+  }
+  // 5. Giros suaves
+  if (i.contains('ligeramente') ||
+      i.contains('levemente') ||
+      i.contains('suave')) {
+    if (left) return Icons.turn_slight_left;
+    if (right) return Icons.turn_slight_right;
+  }
+  // 6. Giros normales
+  if (left) return Icons.turn_left;
+  if (right) return Icons.turn_right;
+  if (i.contains('continúa') ||
+      i.contains('continua') ||
+      i.contains('sigue') ||
+      i.contains('recto')) {
+    return Icons.straight;
+  }
   return Icons.navigation;
 }
 
