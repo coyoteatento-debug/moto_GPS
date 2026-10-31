@@ -966,36 +966,17 @@ class _SavePlaceButton extends ConsumerWidget {
     );
   }
 
-  void _showNameDialog(BuildContext context, WidgetRef ref) {
-    final nameCtrl = TextEditingController();
-    showDialog(
+  Future<void> _showNameDialog(BuildContext context, WidgetRef ref) async {
+    // Se toma el controller ANTES del await: ref ya no es seguro de usar
+    // si el widget se desmonta mientras el diálogo está abierto.
+    final controller = ref.read(mapControllerProvider.notifier);
+    final name = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Guardar lugar'),
-        content: TextField(
-          controller: nameCtrl,
-          autofocus: true,
-          decoration: const InputDecoration(
-              hintText: 'Ej. Casa, Trabajo, Taller...'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final name = nameCtrl.text.trim();
-              if (name.isNotEmpty) {
-                ref.read(mapControllerProvider.notifier).saveTappedAsFavorite(name);
-              }
-              Navigator.pop(ctx);
-            },
-            child: const Text('Guardar'),
-          ),
-        ],
-      ),
-    ).then((_) => nameCtrl.dispose());
+      builder: (_) => const _NameDialog(),
+    );
+    if (name != null && name.isNotEmpty) {
+      controller.saveTappedAsFavorite(name);
+    }
   }
 }
 
@@ -1494,71 +1475,28 @@ class _FuelGaugeConsumer extends ConsumerWidget {
     );
   }
 
-  void _showFuelDialog(
+  Future<void> _showFuelDialog(
     BuildContext context,
     WidgetRef ref,
     double tankLiters,
     double autonomyKm,
     bool configured,
-  ) {
+  ) async {
     final controller = ref.read(mapControllerProvider.notifier);
-    final litersCtrl = TextEditingController(
-        text: tankLiters > 0 ? tankLiters.toStringAsFixed(0) : '');
-    final autonomyCtrl = TextEditingController(
-        text: autonomyKm > 0 ? autonomyKm.toStringAsFixed(0) : '');
-
-    showDialog(
+    final result = await showDialog<_FuelDialogResult>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Combustible'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: litersCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                  labelText: 'Capacidad del tanque (litros)'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: autonomyCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                  labelText: 'Autonomía con tanque lleno (km)'),
-            ),
-          ],
-        ),
-        actions: [
-          if (configured)
-            TextButton(
-              onPressed: () {
-                controller.markFuelRefueled();
-                Navigator.pop(ctx);
-              },
-              child: const Text('Tanque lleno ⛽'),
-            ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final liters = double.tryParse(litersCtrl.text) ?? 0.0;
-              final autonomy = double.tryParse(autonomyCtrl.text) ?? 0.0;
-              if (liters > 0 && autonomy > 0) {
-                controller.saveFuelSettings(liters, autonomy);
-              }
-              Navigator.pop(ctx);
-            },
-            child: const Text('Guardar'),
-          ),
-        ],
+      builder: (_) => _FuelDialog(
+        tankLiters: tankLiters,
+        autonomyKm: autonomyKm,
+        configured: configured,
       ),
-    ).then((_) {
-      litersCtrl.dispose();
-      autonomyCtrl.dispose();
-    });
+    );
+    if (result == null) return;
+    if (result.refueled) {
+      controller.markFuelRefueled();
+    } else {
+      controller.saveFuelSettings(result.liters!, result.autonomy!);
+    }
   }
 }
 /// Hoja con los mensajes rápidos de la rodada (un toque = se envía y se lee
@@ -1604,4 +1542,169 @@ void _showRideQuickMessages(BuildContext context, WidgetRef ref) {
       ),
     ),
   );
+}
+// ─────────────────────────────────────────────────────────────
+// Diálogos con controllers propios (se liberan en su dispose)
+// ─────────────────────────────────────────────────────────────
+
+class _NameDialog extends StatefulWidget {
+  const _NameDialog();
+
+  @override
+  State<_NameDialog> createState() => _NameDialogState();
+}
+
+class _NameDialogState extends State<_NameDialog> {
+  final TextEditingController _ctrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() => Navigator.pop(context, _ctrl.text.trim());
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Guardar lugar'),
+      content: TextField(
+        controller: _ctrl,
+        autofocus: true,
+        textInputAction: TextInputAction.done,
+        onSubmitted: (_) => _submit(),
+        decoration: const InputDecoration(
+            hintText: 'Ej. Casa, Trabajo, Taller...'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        ElevatedButton(
+          onPressed: _submit,
+          child: const Text('Guardar'),
+        ),
+      ],
+    );
+  }
+}
+
+class _FuelDialogResult {
+  final bool refueled;
+  final double? liters;
+  final double? autonomy;
+
+  const _FuelDialogResult.refueled()
+      : refueled = true,
+        liters = null,
+        autonomy = null;
+
+  const _FuelDialogResult.save(this.liters, this.autonomy) : refueled = false;
+}
+
+class _FuelDialog extends StatefulWidget {
+  final double tankLiters;
+  final double autonomyKm;
+  final bool configured;
+
+  const _FuelDialog({
+    required this.tankLiters,
+    required this.autonomyKm,
+    required this.configured,
+  });
+
+  @override
+  State<_FuelDialog> createState() => _FuelDialogState();
+}
+
+class _FuelDialogState extends State<_FuelDialog> {
+  late final TextEditingController _litersCtrl;
+  late final TextEditingController _autonomyCtrl;
+  bool _showErrors = false;
+
+  // Muestra "12" o "12.5" (antes un tanque de 12.5 L aparecía como "13")
+  static String _fmt(double v) =>
+      v <= 0 ? '' : (v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString());
+
+  // Acepta coma o punto decimal ("12,5" y "12.5")
+  static double? _parse(String s) =>
+      double.tryParse(s.trim().replaceAll(',', '.'));
+
+  @override
+  void initState() {
+    super.initState();
+    _litersCtrl = TextEditingController(text: _fmt(widget.tankLiters));
+    _autonomyCtrl = TextEditingController(text: _fmt(widget.autonomyKm));
+  }
+
+  @override
+  void dispose() {
+    _litersCtrl.dispose();
+    _autonomyCtrl.dispose();
+    super.dispose();
+  }
+
+  String? _errorFor(TextEditingController c) {
+    if (!_showErrors) return null;
+    final v = _parse(c.text);
+    return (v == null || v <= 0) ? 'Ingresa un número mayor a 0' : null;
+  }
+
+  void _save() {
+    final liters = _parse(_litersCtrl.text);
+    final autonomy = _parse(_autonomyCtrl.text);
+    if (liters == null || liters <= 0 || autonomy == null || autonomy <= 0) {
+      setState(() => _showErrors = true); // antes se descartaba en silencio
+      return;
+    }
+    Navigator.pop(context, _FuelDialogResult.save(liters, autonomy));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const decimalKeyboard = TextInputType.numberWithOptions(decimal: true);
+    return AlertDialog(
+      title: const Text('Combustible'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _litersCtrl,
+            keyboardType: decimalKeyboard,
+            decoration: InputDecoration(
+              labelText: 'Capacidad del tanque (litros)',
+              errorText: _errorFor(_litersCtrl),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _autonomyCtrl,
+            keyboardType: decimalKeyboard,
+            decoration: InputDecoration(
+              labelText: 'Autonomía con tanque lleno (km)',
+              errorText: _errorFor(_autonomyCtrl),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        if (widget.configured)
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(context, const _FuelDialogResult.refueled()),
+            child: const Text('Tanque lleno ⛽'),
+          ),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        ElevatedButton(
+          onPressed: _save,
+          child: const Text('Guardar'),
+        ),
+      ],
+    );
+  }
 }
