@@ -134,6 +134,17 @@ class MapController extends AutoDisposeNotifier<MapState> {
     _startWatchingActiveRide();
   }
 
+  /// Ejecuta una tarea sin esperarla y sin dejar que un error escape a la zona.
+  void _fireAndForget(String name, Future<dynamic> Function() action) {
+    unawaited(() async {
+      try {
+        await action();
+      } catch (e) {
+        debugPrint('[MapController] $name: $e');
+      }
+    }());
+  }
+
   void _startWatchingActiveRide() {
     _activeRideSub?.cancel();
     _activeRideSub = _groupRide.myActiveRide().listen((ride) {
@@ -141,18 +152,21 @@ class MapController extends AutoDisposeNotifier<MapState> {
       // la app estaba cerrada.
       if (!_endedRidesCleaned && FirebaseAuth.instance.currentUser != null) {
         _endedRidesCleaned = true;
-        _groupRide.cleanupMyEndedRides();
+        _fireAndForget(
+            'cleanupMyEndedRides', () => _groupRide.cleanupMyEndedRides());
       }
       if (ride == null) {
         _rideStatusSub?.cancel();
         _rideStatusSub = null;
+        _rideStatusRideId = null;
         _rideChatSub?.cancel();
         _rideChatSub = null;
         _rideChatRideId = null;
         _lastRidePosition = null;
         final previousRideId = state.activeRide?['id'] as String?;
         if (previousRideId != null) {
-          _groupRide.removeMyStatus(previousRideId);
+          _fireAndForget(
+              'removeMyStatus', () => _groupRide.removeMyStatus(previousRideId));
         }
         if (state.activeRide != null) {
           state = state.copyWith(
@@ -169,17 +183,29 @@ class MapController extends AutoDisposeNotifier<MapState> {
 
       state = state.copyWith(activeRide: ride);
 
-      if (hasAccepted && _rideStatusSub == null) {
+      // Estado de participantes: se reconecta también si cambia el id de la rodada
+      if (hasAccepted && (_rideStatusSub == null || _rideStatusRideId != rideId)) {
+        _rideStatusSub?.cancel();
+        _rideStatusRideId = rideId;
+        state = state.copyWith(rideParticipants: const {});
         _rideStatusSub = _groupRide.watchRideStatus(rideId).listen((statusMap) {
-          final participants = <String, Map<String, dynamic>>{};
-          statusMap.forEach((uid, data) {
-            participants[uid as String] = Map<String, dynamic>.from(data as Map);
-          });
-          state = state.copyWith(rideParticipants: participants);
+          try {
+            final participants = <String, Map<String, dynamic>>{};
+            statusMap.forEach((uid, data) {
+              participants[uid as String] =
+                  Map<String, dynamic>.from(data as Map);
+            });
+            state = state.copyWith(rideParticipants: participants);
+          } catch (e) {
+            debugPrint('[MapController] Error leyendo estado de rodada: $e');
+          }
+        }, onError: (e) {
+          debugPrint('[MapController] watchRideStatus error: $e');
         });
       } else if (!hasAccepted && _rideStatusSub != null) {
         _rideStatusSub?.cancel();
         _rideStatusSub = null;
+        _rideStatusRideId = null;
       }
 
       // Mensajes de la rodada (solo si ya aceptaste; se reconecta si cambia
@@ -187,25 +213,42 @@ class MapController extends AutoDisposeNotifier<MapState> {
       if (hasAccepted && (_rideChatSub == null || _rideChatRideId != rideId)) {
         _rideChatSub?.cancel();
         _rideChatRideId = rideId;
-        _rideChatSub = _rideChat.watchMessages(rideId).listen(_onRideMessage);
+        _rideChatSub = _rideChat.watchMessages(rideId).listen(
+          _onRideMessage,
+          onError: (e) {
+            debugPrint('[MapController] watchMessages error: $e');
+          },
+        );
       } else if (!hasAccepted && _rideChatSub != null) {
         _rideChatSub?.cancel();
         _rideChatSub = null;
         _rideChatRideId = null;
       }
+    }, onError: (e) {
+      debugPrint('[MapController] myActiveRide error: $e');
     });
   }
 
   Future<void> acceptRideInvite() async {
     final rideId = state.activeRide?['id'] as String?;
     if (rideId == null) return;
-    await _groupRide.acceptInvite(rideId);
+    try {
+      await _groupRide.acceptInvite(rideId);
+    } catch (e) {
+      debugPrint('[MapController] acceptInvite: $e');
+      _speak('No pude aceptar la invitación. Revisa tu conexión');
+    }
   }
 
   Future<void> rejectRideInvite() async {
     final rideId = state.activeRide?['id'] as String?;
     if (rideId == null) return;
-    await _groupRide.rejectInvite(rideId);
+    try {
+      await _groupRide.rejectInvite(rideId);
+    } catch (e) {
+      debugPrint('[MapController] rejectInvite: $e');
+      _speak('No pude rechazar la invitación. Revisa tu conexión');
+    }
   }
 
   bool get _hasAcceptedCurrentRide {
@@ -291,6 +334,7 @@ class MapController extends AutoDisposeNotifier<MapState> {
   StreamSubscription? _activeRideSub;
   bool _endedRidesCleaned = false;
   StreamSubscription? _rideStatusSub;
+  String? _rideStatusRideId;
   String? _myRideUsername;
   StreamSubscription<RideChatMessage>? _rideChatSub;
   String? _rideChatRideId;
@@ -380,18 +424,26 @@ class MapController extends AutoDisposeNotifier<MapState> {
           if (loc == null) {
             _friendLastKnown.remove(uid);
             _removeFriendMarker(uid);
-          } else {
-            final lat = (loc['lat'] as num).toDouble();
-            final lng = (loc['lng'] as num).toDouble();
-            _friendLastKnown[uid] = {
-              'username': username,
-              'lat': lat,
-              'lng': lng,
-            };
-            _updateFriendMarker(uid, username, lat, lng);
+            return;
           }
+          // Si faltan datos, se ignora el evento en vez de lanzar una excepción
+          final latN = loc['lat'] as num?;
+          final lngN = loc['lng'] as num?;
+          if (latN == null || lngN == null) return;
+          final lat = latN.toDouble();
+          final lng = lngN.toDouble();
+          _friendLastKnown[uid] = {
+            'username': username,
+            'lat': lat,
+            'lng': lng,
+          };
+          _updateFriendMarker(uid, username, lat, lng);
+        }, onError: (e) {
+          debugPrint('[MapController] watchFriendLocation($uid) error: $e');
         });
       }
+    }, onError: (e) {
+      debugPrint('[MapController] myFriends error: $e');
     });
   }
 
