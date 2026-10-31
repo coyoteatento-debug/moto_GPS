@@ -66,6 +66,8 @@ class MapController extends AutoDisposeNotifier<MapState> {
   List<Map<String, dynamic>>? _metricsSteps;
   DateTime? _lastRecalcTime;
   DateTime? _lastSpeedLimitCall;
+  int _speedLimitMisses = 0;
+  DateTime? _lastSpeedingAlert;
   int _searchToken = 0;
   Timer? _searchDebounce;
   bool _isListening = false;
@@ -1878,10 +1880,29 @@ class MapController extends AutoDisposeNotifier<MapState> {
   Future<void> _updateSpeedLimit(double lat, double lng) async {
     final speedAtRequest = state.currentSpeed;
     final limit = await _speedLimitService.getSpeedLimit(lat, lng);
-    state = state.copyWith(speedLimit: limit);
-    final status = SpeedStatus.evaluate(speedAtRequest, limit);
+
+    if (limit != null) {
+      _speedLimitMisses = 0;
+      state = state.copyWith(speedLimit: limit);
+    } else {
+      // Sin dato: tolera fallos puntuales de red (Overpass falla seguido),
+      // pero tras 3 consultas seguidas (~15 s) deja de mostrar un límite viejo.
+      _speedLimitMisses++;
+      if (_speedLimitMisses >= 3 && state.speedLimit != null) {
+        state = state.copyWith(clearSpeedLimit: true);
+      }
+    }
+
+    final status = SpeedStatus.evaluate(speedAtRequest, state.speedLimit);
     if (status.level == SpeedAlertLevel.danger) {
-      _speak('Exceso de velocidad');
+      // Cooldown: el TTS solo evita repetir mientras habla o está en cola,
+      // así que sin esto lo diría cada 5 s.
+      final now = DateTime.now();
+      if (_lastSpeedingAlert == null ||
+          now.difference(_lastSpeedingAlert!).inSeconds >= 30) {
+        _lastSpeedingAlert = now;
+        _speak('Exceso de velocidad');
+      }
     }
   }
 
